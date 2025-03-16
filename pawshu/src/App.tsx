@@ -11,6 +11,7 @@ import Products from './pages/Products';
 import Cart from './pages/Cart';
 import Booking from './pages/Booking';
 import LostFound from './pages/LostFound';
+import Donate from './pages/Donate';
 import Wishlist from './pages/Wishlist';
 import Checkout from './pages/Checkout';
 import AdminLayout from './components/AdminLayout';
@@ -173,6 +174,7 @@ function App() {
             <Route path="/cart" element={<UserLayout><Cart /></UserLayout>} />
             <Route path="/booking" element={<UserLayout><Booking /></UserLayout>} />
             <Route path="/lost-found" element={<UserLayout><LostFound /></UserLayout>} />
+            <Route path="/donate" element={<UserLayout><Donate /></UserLayout>} />
             <Route path="/wishlist" element={<UserLayout><Wishlist /></UserLayout>} />
             <Route path="/checkout" element={<UserLayout><Checkout /></UserLayout>} />
           </Routes>

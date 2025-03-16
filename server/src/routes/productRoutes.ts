@@ -1,7 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import Product, { IProduct, ProductImage } from '../models/Product';
 import { uploadImage, deleteImage } from '../utils/cloudinary';
-import { auth, adminAuth, AuthRequest } from '../middleware/auth';
+import { verifyToken, adminAuth, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -233,8 +233,8 @@ const deleteProduct = async (req: AuthRequest, res: Response) => {
 // Register routes
 router.get('/', getAllProducts as any);
 router.get('/:id', getProductById as any);
-router.post('/', adminAuth as any, createProduct as any);
-router.put('/:id', adminAuth as any, updateProduct as any);
-router.delete('/:id', adminAuth as any, deleteProduct as any);
+router.post('/', verifyToken, adminAuth as any, createProduct as any);
+router.put('/:id', verifyToken, adminAuth as any, updateProduct as any);
+router.delete('/:id', verifyToken, adminAuth as any, deleteProduct as any);
 
 export default router; 

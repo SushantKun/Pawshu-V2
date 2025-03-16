@@ -1,15 +1,18 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import Appointment, { IAppointment } from '../models/Appointment';
-import { auth, adminAuth, doctorAuth, AuthRequest } from '../middleware/auth';
+import { verifyToken, adminAuth, doctorAuth, AuthRequest } from '../middleware/auth';
 
 const router = express.Router();
 
 // @route   POST /api/appointments
 // @desc    Create a new appointment
 // @access  Private (User)
-router.post('/', auth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+router.post('/', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
-    console.log('POST /api/appointments - Creating new appointment');
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
     const { doctor, date, timeSlot, petName, petType, reason } = req.body;
     
     // Validate input
@@ -19,13 +22,8 @@ router.post('/', auth as RequestHandler, (async (req: AuthRequest, res: Response
     
     // Create new appointment
     const appointment = new Appointment({
-      user: req.user?.id,
-      doctor,
-      date,
-      timeSlot,
-      petName,
-      petType,
-      reason,
+      ...req.body,
+      user: req.user._id,
       status: 'pending'
     });
     
@@ -42,16 +40,19 @@ router.post('/', auth as RequestHandler, (async (req: AuthRequest, res: Response
 // @route   GET /api/appointments
 // @desc    Get all appointments for the logged-in user
 // @access  Private (User)
-router.get('/', auth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+router.get('/my-appointments', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
-    console.log('GET /api/appointments - Fetching user appointments');
-    const appointments = await Appointment.find({ user: req.user?.id })
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    const appointments = await Appointment.find({ user: req.user._id })
       .populate('doctor', 'firstName lastName specialization')
-      .sort({ date: -1 });
-    
+      .sort({ date: 1 });
+
     res.json(appointments);
   } catch (error) {
-    console.error('Error fetching appointments:', error);
+    console.error('Error fetching user appointments:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
@@ -59,10 +60,10 @@ router.get('/', auth as RequestHandler, (async (req: AuthRequest, res: Response)
 // @route   GET /api/appointments/doctor
 // @desc    Get all appointments for the logged-in doctor
 // @access  Private (Doctor)
-router.get('/doctor', doctorAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+router.get('/doctor', doctorAuth, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/appointments/doctor - Fetching doctor appointments');
-    const appointments = await Appointment.find({ doctor: req.user?.id })
+    const appointments = await Appointment.find({ doctor: req.user?._id })
       .populate('user', 'name email')
       .sort({ date: -1 });
     
@@ -76,14 +77,13 @@ router.get('/doctor', doctorAuth as RequestHandler, (async (req: AuthRequest, re
 // @route   GET /api/appointments/admin/all
 // @desc    Get all appointments (admin only)
 // @access  Private (Admin)
-router.get('/admin/all', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+router.get('/all', verifyToken, adminAuth, (async (req: AuthRequest, res: Response) => {
   try {
-    console.log('GET /api/appointments/admin/all - Fetching all appointments');
     const appointments = await Appointment.find()
       .populate('user', 'name email')
       .populate('doctor', 'firstName lastName specialization')
-      .sort({ date: -1 });
-    
+      .sort({ date: 1 });
+
     res.json(appointments);
   } catch (error) {
     console.error('Error fetching all appointments:', error);
@@ -94,7 +94,7 @@ router.get('/admin/all', adminAuth as RequestHandler, (async (req: AuthRequest, 
 // @route   GET /api/appointments/:id
 // @desc    Get appointment by ID
 // @access  Private (User or Doctor)
-router.get('/:id', auth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+router.get('/:id', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
     console.log(`GET /api/appointments/${req.params.id} - Fetching appointment by ID`);
     const appointment = await Appointment.findById(req.params.id)
@@ -107,9 +107,9 @@ router.get('/:id', auth as RequestHandler, (async (req: AuthRequest, res: Respon
     
     // Check if the user is authorized to view this appointment
     if (
-      req.user?.role !== 'admin' && 
-      appointment.user.toString() !== req.user?.id && 
-      appointment.doctor.toString() !== req.user?.id
+      !req.user?.isAdmin && 
+      appointment.user.toString() !== req.user?._id.toString() && 
+      appointment.doctor.toString() !== req.user?._id.toString()
     ) {
       return res.status(403).json({ message: 'Not authorized to view this appointment' });
     }
@@ -124,35 +124,28 @@ router.get('/:id', auth as RequestHandler, (async (req: AuthRequest, res: Respon
 // @route   PUT /api/appointments/:id
 // @desc    Update appointment status
 // @access  Private (Doctor or Admin)
-router.put('/:id', auth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+router.put('/:id/status', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
-    console.log(`PUT /api/appointments/${req.params.id} - Updating appointment`);
-    const { status, notes } = req.body;
-    
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
     const appointment = await Appointment.findById(req.params.id);
-    
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
-    
-    // Check if the user is authorized to update this appointment
-    if (
-      req.user?.role !== 'admin' && 
-      appointment.doctor.toString() !== req.user?.id
-    ) {
+
+    // Only allow doctors and admins to update status
+    if (!req.user.isAdmin && appointment.doctor.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Not authorized to update this appointment' });
     }
-    
-    // Update fields
-    if (status) appointment.status = status;
-    if (notes) appointment.notes = notes;
-    
+
+    appointment.status = req.body.status;
     await appointment.save();
-    console.log('Appointment updated successfully:', appointment._id);
-    
+
     res.json(appointment);
   } catch (error) {
-    console.error('Error updating appointment:', error);
+    console.error('Error updating appointment status:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
@@ -160,32 +153,28 @@ router.put('/:id', auth as RequestHandler, (async (req: AuthRequest, res: Respon
 // @route   DELETE /api/appointments/:id
 // @desc    Cancel appointment
 // @access  Private (User, Doctor, or Admin)
-router.delete('/:id', auth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+router.delete('/:id', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
-    console.log(`DELETE /api/appointments/${req.params.id} - Cancelling appointment`);
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
     const appointment = await Appointment.findById(req.params.id);
-    
     if (!appointment) {
       return res.status(404).json({ message: 'Appointment not found' });
     }
-    
-    // Check if the user is authorized to cancel this appointment
-    if (
-      req.user?.role !== 'admin' && 
-      appointment.user.toString() !== req.user?.id && 
-      appointment.doctor.toString() !== req.user?.id
-    ) {
-      return res.status(403).json({ message: 'Not authorized to cancel this appointment' });
+
+    // Only allow the user who created the appointment, the assigned doctor, or an admin to delete it
+    if (!req.user.isAdmin && 
+        appointment.user.toString() !== req.user._id.toString() && 
+        appointment.doctor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to delete this appointment' });
     }
-    
-    // Update status to cancelled instead of deleting
-    appointment.status = 'cancelled';
-    await appointment.save();
-    
-    console.log('Appointment cancelled successfully:', appointment._id);
-    res.json({ message: 'Appointment cancelled successfully' });
+
+    await appointment.deleteOne();
+    res.json({ message: 'Appointment deleted successfully' });
   } catch (error) {
-    console.error('Error cancelling appointment:', error);
+    console.error('Error deleting appointment:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);

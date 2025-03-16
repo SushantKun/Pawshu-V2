@@ -4,11 +4,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { auth, adminAuth, AuthRequest } from './middleware/auth';
+import { verifyToken, adminAuth, AuthRequest } from './middleware/auth';
 import productRoutes from './routes/productRoutes';
 import doctorRoutes from './routes/doctorRoutes';
 import appointmentRoutes from './routes/appointmentRoutes';
 import adminRoutes from './routes/adminRoutes';
+import donationRoutes from './routes/donations';
 import { v2 as cloudinary } from 'cloudinary';
 
 // Load environment variables
@@ -17,7 +18,12 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // Frontend URL
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json({ limit: '50mb' })); // Increased limit for image uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -79,7 +85,12 @@ const registerHandler = async (req: Request, res: Response) => {
 
     // Create JWT token
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      { 
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.role === 'admin'
+      },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
     );
@@ -87,10 +98,10 @@ const registerHandler = async (req: Request, res: Response) => {
     res.status(201).json({
       token,
       user: {
-        id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        isAdmin: user.role === 'admin'
       }
     });
   } catch (error) {
@@ -119,7 +130,12 @@ const loginHandler = async (req: Request, res: Response) => {
 
     // Create JWT token
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      { 
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.role === 'admin'
+      },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
     );
@@ -127,10 +143,10 @@ const loginHandler = async (req: Request, res: Response) => {
     res.json({
       token,
       user: {
-        id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        isAdmin: user.role === 'admin'
       }
     });
   } catch (error) {
@@ -150,7 +166,7 @@ const adminLoginHandler = async (req: Request, res: Response) => {
     // Check if user exists
     const user = await User.findOne({ email });
     console.log('User found:', user ? {
-      id: user._id,
+      _id: user._id,
       email: user.email,
       role: user.role,
       name: user.name
@@ -180,10 +196,10 @@ const adminLoginHandler = async (req: Request, res: Response) => {
     // Create JWT token with explicit role information
     const token = jwt.sign(
       { 
-        id: user._id, 
-        role: user.role,
+        _id: user._id,
+        name: user.name,
         email: user.email,
-        name: user.name
+        isAdmin: true
       },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
@@ -193,10 +209,10 @@ const adminLoginHandler = async (req: Request, res: Response) => {
     res.json({
       token,
       user: {
-        id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        isAdmin: true
       }
     });
   } catch (error) {
@@ -213,7 +229,7 @@ const profileHandler = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Not authorized' });
     }
     
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findById(req.user._id).select('-password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -229,7 +245,7 @@ const profileHandler = async (req: AuthRequest, res: Response) => {
 const getAllUsersHandler = async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/auth/users - Fetching all users');
-    if (!req.user || req.user.role !== 'admin') {
+    if (!req.user || !req.user.isAdmin) {
       return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
     }
     
@@ -261,11 +277,11 @@ app.get('/api/auth/debug-user/:email', (async (req: Request, res: Response) => {
 }) as RequestHandler);
 
 // Register routes
-app.post('/api/auth/register', registerHandler as any);
-app.post('/api/auth/login', loginHandler as any);
-app.post('/api/auth/admin/login', adminLoginHandler as any);
-app.get('/api/auth/profile', auth as any, profileHandler as any);
-app.get('/api/auth/users', auth as any, getAllUsersHandler as any);
+app.post('/api/auth/register', registerHandler as RequestHandler);
+app.post('/api/auth/login', loginHandler as RequestHandler);
+app.post('/api/auth/admin/login', adminLoginHandler as RequestHandler);
+app.get('/api/auth/profile', verifyToken as RequestHandler, profileHandler as RequestHandler);
+app.get('/api/auth/users', verifyToken as RequestHandler, getAllUsersHandler as RequestHandler);
 
 // Product routes
 app.use('/api/products', productRoutes);
@@ -278,6 +294,9 @@ app.use('/api/appointments', appointmentRoutes);
 
 // Admin routes
 app.use('/api/admin', adminRoutes);
+
+// Donation routes
+app.use('/api/donations', donationRoutes);
 
 // Start server
 const PORT = process.env.PORT || 5000;

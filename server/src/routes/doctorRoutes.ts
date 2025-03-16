@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Doctor, { IDoctor } from '../models/Doctor';
 import Appointment from '../models/Appointment';
-import { auth, doctorAuth, AuthRequest } from '../middleware/auth';
+import { verifyToken, doctorAuth, AuthRequest } from '../middleware/auth';
 import { uploadImage } from '../utils/cloudinary';
 
 const router = express.Router();
@@ -55,95 +55,93 @@ router.post('/login', (async (req: Request, res: Response) => {
   }
 }) as RequestHandler);
 
-// @route   GET /api/doctors/profile
-// @desc    Get doctor profile
-// @access  Private (Doctor only)
-router.get('/profile', auth as RequestHandler, doctorAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+// Get doctor profile
+router.get('/profile', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
   try {
-    const doctorId = req.user?.id;
-
-    if (!doctorId) {
+    if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    const doctor = await Doctor.findById(doctorId).select('-password');
+    const doctor = await Doctor.findById(req.user._id).select('-password');
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
 
     res.json(doctor);
   } catch (error) {
-    console.error('Get doctor profile error:', error);
+    console.error('Error fetching doctor profile:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
 
-// @route   PUT /api/doctors/profile
-// @desc    Update doctor profile
-// @access  Private (Doctor only)
-router.put('/profile', auth as RequestHandler, doctorAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+// Update doctor profile
+router.put('/profile', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
   try {
-    const doctorId = req.user?.id;
-
-    if (!doctorId) {
+    if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    const { firstName, lastName, specialization, experience, bio, availability, profileImage } = req.body;
-
-    // Find doctor
-    const doctor = await Doctor.findById(doctorId);
+    const doctor = await Doctor.findById(req.user._id);
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
 
-    // Update fields
-    if (firstName) doctor.firstName = firstName;
-    if (lastName) doctor.lastName = lastName;
-    if (specialization) doctor.specialization = specialization;
-    if (experience !== undefined) doctor.experience = experience;
-    if (bio) doctor.bio = bio;
-    if (availability) doctor.availability = availability;
-
-    // Handle profile image upload
-    if (profileImage && profileImage.startsWith('data:image')) {
-      const uploadResult = await uploadImage(profileImage);
-      if (uploadResult) {
-        doctor.profileImage = {
-          public_id: uploadResult.public_id,
-          url: uploadResult.url
-        };
+    // Update doctor fields
+    const updates = req.body;
+    Object.keys(updates).forEach((update) => {
+      if (update !== '_id' && update !== 'password') {
+        (doctor as any)[update] = updates[update];
       }
-    }
+    });
 
     await doctor.save();
-
-    // Return updated doctor (excluding password)
-    const updatedDoctor = await Doctor.findById(doctorId).select('-password');
+    const updatedDoctor = await Doctor.findById(req.user._id).select('-password');
     res.json(updatedDoctor);
   } catch (error) {
-    console.error('Update doctor profile error:', error);
+    console.error('Error updating doctor profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
+
+// Get all doctors
+router.get('/', (async (req: Request, res: Response) => {
+  try {
+    const doctors = await Doctor.find().select('-password');
+    res.json(doctors);
+  } catch (error) {
+    console.error('Error fetching doctors:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
+
+// Get doctor by ID
+router.get('/:id', (async (req: Request, res: Response) => {
+  try {
+    const doctor = await Doctor.findById(req.params.id).select('-password');
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+    res.json(doctor);
+  } catch (error) {
+    console.error('Error fetching doctor:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
 
 // Get doctor's appointments
-router.get('/appointments', auth as RequestHandler, doctorAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+router.get('/appointments', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
   try {
-    const doctorId = req.user?.id;
-
-    if (!doctorId) {
+    if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    const appointments = await Appointment.find({ doctor: doctorId })
-      .populate('user', 'firstName lastName email')
-      .populate('doctor', 'firstName lastName specialization')
-      .sort({ date: 1, timeSlot: 1 });
-
+    const appointments = await Appointment.find({ doctor: req.user._id })
+      .populate('user', 'name email')
+      .sort({ date: 1 });
+    
     res.json(appointments);
   } catch (error) {
-    console.error('Get doctor appointments error:', error);
+    console.error('Error fetching doctor appointments:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
@@ -200,39 +198,6 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
     res.json({ availableSlots: finalAvailableSlots });
   } catch (error) {
     console.error('Get available slots error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
-
-// @route   GET /api/doctors
-// @desc    Get all doctors (for public listing)
-// @access  Public
-router.get('/', (async (req: Request, res: Response) => {
-  try {
-    console.log('GET /api/doctors - Fetching all doctors');
-    const doctors = await Doctor.find().select('-password');
-    res.json(doctors);
-  } catch (error) {
-    console.error('Error fetching doctors:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
-
-// @route   GET /api/doctors/:id
-// @desc    Get doctor by ID (for public profile)
-// @access  Public
-router.get('/:id', (async (req: Request, res: Response) => {
-  try {
-    console.log(`GET /api/doctors/${req.params.id} - Fetching doctor by ID`);
-    const doctor = await Doctor.findById(req.params.id).select('-password');
-    
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-    
-    res.json(doctor);
-  } catch (error) {
-    console.error('Error fetching doctor by ID:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);

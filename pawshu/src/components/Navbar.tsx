@@ -42,7 +42,7 @@ const Navbar = () => {
               <Link to="/lost-found" className="text-gray-600 hover:text-blue-600">
                 Lost & Found
               </Link>
-              <Link to="/donation" className="text-gray-600 hover:text-blue-600">
+              <Link to="/donate" className="text-gray-600 hover:text-blue-600">
                 Donate
               </Link>
             </div>
@@ -161,7 +161,7 @@ const Navbar = () => {
               <Link to="/lost-found" className="text-gray-600 hover:text-blue-600 px-4 py-2">
                 Lost & Found
               </Link>
-              <Link to="/donation" className="text-gray-600 hover:text-blue-600 px-4 py-2">
+              <Link to="/donate" className="text-gray-600 hover:text-blue-600 px-4 py-2">
                 Donate
               </Link>
               {!user && !loading && (

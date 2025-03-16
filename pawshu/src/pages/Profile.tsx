@@ -1,7 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/axios';
 
 interface Appointment {
   _id: string;
@@ -23,30 +23,35 @@ interface Appointment {
   createdAt: string;
 }
 
-const API_URL = 'http://localhost:5000/api';
+interface Donation {
+  _id: string;
+  charityId: string;
+  charityName: string;
+  amount: number;
+  date: string;
+  status: string;
+}
 
 const Profile = () => {
   const { user, loading } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [donations, setDonations] = useState<Donation[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [donationsLoading, setDonationsLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('profile');
 
   useEffect(() => {
     if (user) {
       fetchAppointments();
+      fetchDonations();
     }
   }, [user]);
 
   const fetchAppointments = async () => {
     setAppointmentsLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/appointments`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await api.get('/appointments/my-appointments');
       setAppointments(response.data);
       setError('');
     } catch (err: any) {
@@ -54,6 +59,18 @@ const Profile = () => {
       setError(err.response?.data?.message || 'Failed to fetch appointments');
     } finally {
       setAppointmentsLoading(false);
+    }
+  };
+
+  const fetchDonations = async () => {
+    setDonationsLoading(true);
+    try {
+      const response = await api.get(`/donations/user/${user?._id}`);
+      setDonations(response.data);
+    } catch (err: any) {
+      console.error('Error fetching donations:', err);
+    } finally {
+      setDonationsLoading(false);
     }
   };
 
@@ -123,6 +140,16 @@ const Profile = () => {
                 }`}
               >
                 Appointment History
+              </button>
+              <button
+                onClick={() => setActiveTab('donations')}
+                className={`py-4 px-6 text-center border-b-2 font-medium text-sm ${
+                  activeTab === 'donations'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Donation History
               </button>
             </nav>
           </div>
@@ -220,6 +247,72 @@ const Profile = () => {
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(appointment.status)}`}>
                                 {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'donations' && (
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Your Donations</h3>
+                
+                {donationsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  </div>
+                ) : donations.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">You haven't made any donations yet.</p>
+                    <a href="/donate" className="mt-2 inline-block text-blue-600 hover:text-blue-800">
+                      Make a donation
+                    </a>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Charity
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Amount
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Date
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {donations.map((donation) => (
+                          <tr key={donation._id}>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                {donation.charityName}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                Rs. {donation.amount.toLocaleString()}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">
+                                {new Date(donation.date).toLocaleDateString()}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(donation.status || 'pending')}`}>
+                                {donation.status ? donation.status.charAt(0).toUpperCase() + donation.status.slice(1) : 'Pending'}
                               </span>
                             </td>
                           </tr>
