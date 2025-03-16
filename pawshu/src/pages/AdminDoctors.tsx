@@ -74,16 +74,41 @@ const AdminDoctors = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('adminToken');
+      
+      if (!token) {
+        setError('Admin authentication required');
+        setLoading(false);
+        // Redirect to admin login
+        window.location.href = '/admin/login';
+        return;
+      }
+
+      console.log('Fetching doctors with token:', token ? 'Token present' : 'No token');
       const response = await axios.get('http://localhost:5000/api/admin/doctors', {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-      setDoctors(response.data);
-      setError('');
-    } catch (err) {
+      
+      if (response.data) {
+        console.log('Doctors fetched successfully:', response.data.length);
+        setDoctors(response.data);
+        setError('');
+      } else {
+        console.error('No data received from server');
+        setError('No data received from server');
+      }
+    } catch (err: any) {
       console.error('Error fetching doctors:', err);
-      setError('Failed to fetch doctors. Please try again.');
+      if (err.response?.status === 401) {
+        setError('Admin authentication required. Please log in again.');
+        // Clear invalid token
+        localStorage.removeItem('adminToken');
+        // Redirect to admin login
+        window.location.href = '/admin/login';
+      } else {
+        setError('Failed to fetch doctors. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

@@ -31,7 +31,11 @@ const AdminLogin = () => {
       // Redirect to admin dashboard
       navigate('/admin/dashboard');
     } catch (err: any) {
-      console.error('Login error details:', err.response?.data || err.message);
+      console.error('Login error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);

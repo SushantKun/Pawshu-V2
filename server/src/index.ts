@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction, RequestHandler } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -144,31 +144,52 @@ const adminLoginHandler = async (req: Request, res: Response) => {
   try {
     console.log('POST /api/auth/admin/login - Admin login attempt');
     const { email, password } = req.body;
+    
+    console.log('Login attempt for email:', email);
 
     // Check if user exists
     const user = await User.findOne({ email });
+    console.log('User found:', user ? {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      name: user.name
+    } : 'No');
+    
     if (!user) {
+      console.log('User not found with email:', email);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     // Validate password
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log('Password match:', isMatch);
+    
     if (!isMatch) {
+      console.log('Invalid password for user:', email);
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
     // Check if user is admin
+    console.log('User role:', user.role);
     if (user.role !== 'admin') {
+      console.log('User is not an admin:', email);
       return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
     }
 
-    // Create JWT token
+    // Create JWT token with explicit role information
     const token = jwt.sign(
-      { id: user._id, role: user.role },
+      { 
+        id: user._id, 
+        role: user.role,
+        email: user.email,
+        name: user.name
+      },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
     );
 
+    console.log('Admin login successful for:', email);
     res.json({
       token,
       user: {
@@ -219,6 +240,25 @@ const getAllUsersHandler = async (req: AuthRequest, res: Response) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Debug route to check user details
+app.get('/api/auth/debug-user/:email', (async (req: Request, res: Response) => {
+  try {
+    const { email } = req.params;
+    const user = await User.findOne({ email });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Return user details without password
+    const { password, ...userDetails } = user.toObject();
+    res.json(userDetails);
+  } catch (error) {
+    console.error('Debug user error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
 
 // Register routes
 app.post('/api/auth/register', registerHandler as any);

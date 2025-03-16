@@ -62,16 +62,32 @@ const AdminUsers = () => {
         return;
       }
       
+      console.log('Fetching users with token:', token ? 'Token present' : 'No token');
       const response = await axios.get(`${API_URL}/auth/users`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-      setUsers(response.data);
-      setError('');
+      
+      if (response.data) {
+        console.log('Users fetched successfully:', response.data.length);
+        setUsers(response.data);
+        setError('');
+      } else {
+        console.error('No data received from server');
+        setError('No data received from server');
+      }
     } catch (err: any) {
       console.error('Error fetching users:', err);
-      setError(err.response?.data?.message || 'Failed to fetch users');
+      if (err.response?.status === 401) {
+        setError('Admin authentication required. Please log in again.');
+        // Clear invalid token
+        localStorage.removeItem('adminToken');
+        // Redirect to admin login
+        window.location.href = '/admin/login';
+      } else {
+        setError(err.response?.data?.message || 'Failed to fetch users');
+      }
     } finally {
       setLoading(false);
     }

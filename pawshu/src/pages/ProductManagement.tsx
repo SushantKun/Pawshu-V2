@@ -336,7 +336,7 @@ const ProductManagement = () => {
     }));
   }, []);
 
-  return (
+    return (
     <div>
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-2xl font-bold">Manage Products</h1>
@@ -671,8 +671,8 @@ const ProductManagement = () => {
           </div>
         </div>
       )}
-    </div>
-  );
-};
-
-export default ProductManagement;
+      </div>
+    );
+  };
+  
+  export default ProductManagement;
