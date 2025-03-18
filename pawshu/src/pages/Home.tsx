@@ -5,9 +5,11 @@ import {
   ArrowRightIcon, 
   ShoppingBagIcon, 
   HeartIcon, 
-  UserGroupIcon 
+  UserGroupIcon,
+  ChevronDownIcon 
 } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
+import './Home.css';
 
 // Define hero images
 const PlaceholderImage = '/placeholder.svg';
@@ -26,6 +28,7 @@ const ArrowRightIconComponent = ArrowRightIcon as IconComponent;
 const ShoppingBagIconComponent = ShoppingBagIcon as IconComponent;
 const HeartIconComponent = HeartIcon as IconComponent;
 const UserGroupIconComponent = UserGroupIcon as IconComponent;
+const ChevronDownIconComponent = ChevronDownIcon as IconComponent;
 
 interface Product {
   _id: string;
@@ -135,11 +138,18 @@ const Home = () => {
     return PlaceholderImage;
   };
 
+  const scrollToProducts = () => {
+    const productsSection = document.querySelector('.featured-products');
+    if (productsSection) {
+      productsSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
-    <div className="bg-white dark:bg-gray-900">
-      {/* Hero Section - Extend to top of page */}
-      <section className="relative h-[600px] bg-gradient-to-r from-blue-600 to-purple-600 overflow-hidden mt-[-88px]">
-        <div className="container mx-auto px-4 h-full flex items-center">
+    <div className="home-page bg-white dark:bg-gray-900">
+      {/* Hero Section - Full viewport height */}
+      <section className="hero-section">
+        <div className="hero-content container mx-auto px-4 h-full flex items-center">
           {/* Left side content */}
           <div className="w-full lg:w-1/2 z-10">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
@@ -151,7 +161,7 @@ const Home = () => {
             <div className="flex flex-wrap gap-4">
               <Link 
                 to="/products" 
-                className="px-6 py-3 bg-white text-blue-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200 inline-flex items-center"
+                className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200 inline-flex items-center"
               >
                 Shop Now
                 <ShoppingBagIconComponent className="w-5 h-5 ml-2" />
@@ -167,7 +177,7 @@ const Home = () => {
 
           {/* Right side image slideshow */}
           <div className="hidden lg:block w-1/2 h-full relative">
-            <div className="absolute right-12 top-1/2 -translate-y-1/2">
+            <div className="absolute right-12 top-1/2 -translate-y-1/3">
               <div className="relative w-[500px] h-[400px] perspective-[2000px]">
                 {heroImages.map((img, index) => {
                   // Calculate the position of each image relative to the current image
@@ -187,12 +197,12 @@ const Home = () => {
                   } else if (position === heroImages.length - 1) {
                     // Next image - subtle peek from behind on the right
                     transform = 'translateX(15%) translateZ(-50px) translateY(0) rotateY(-5deg)';
-                    opacity = 0.3;
+                    opacity = 0.15;
                     scale = 0.95;
                   } else if (position === 1) {
                     // Previous image - subtle peek from behind on the left
                     transform = 'translateX(-15%) translateZ(-50px) translateY(0) rotateY(5deg)';
-                    opacity = 0.3;
+                    opacity = 0.15;
                     scale = 0.95;
                   } else {
                     // Other images - hidden behind
@@ -254,10 +264,15 @@ const Home = () => {
             </div>
           </div>
         </div>
+
+        {/* Add scroll indicator with click handler */}
+        <div className="scroll-indicator" onClick={scrollToProducts}>
+          <ChevronDownIconComponent className="w-8 h-8 text-white animate-bounce" />
+        </div>
       </section>
 
       {/* Featured Products Section */}
-      <section className="py-16 bg-gray-50 dark:bg-gray-800">
+      <section className="featured-products py-16 bg-gray-50 dark:bg-gray-800">
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Featured Products</h2>

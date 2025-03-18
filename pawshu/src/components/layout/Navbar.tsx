@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import PawshuLogo from '../../assets/images/pawshu-logo.png';
 import LogoWhite from '../../assets/images/pawshu-logo-white.png';
 import MobileMenu from './MobileMenu';
+import './Navbar.css';
 
 // Type cast icon components to fix TypeScript errors
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
@@ -81,24 +82,24 @@ const Navbar = () => {
   }
 
   return (
-    <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'shadow-md' : ''}`}>
-      <nav className={`backdrop-blur-md transition-all duration-300 ${isScrolled ? 'py-2' : 'py-4'} ${darkMode ? 'bg-gray-900/80' : 'bg-white/80'}`}>
-        <div className="container mx-auto px-4 flex justify-between items-center">
+    <header className="navbar">
+      <nav className={`navbar-bg ${isScrolled ? 'py-2' : 'py-4'} ${darkMode ? 'bg-gray-900/80' : 'bg-white/80'}`}>
+        <div className="navbar-content flex justify-between items-center">
           {/* Logo */}
           <Link to="/" className="flex items-center">
             <img 
               src={darkMode ? LogoWhite : PawshuLogo} 
               alt="Pawshu Logo" 
-              className="h-8 w-auto" 
+              className="navbar-logo" 
             />
-            <span className="ml-2 text-xl font-bold text-blue-600 dark:text-blue-400">Pawshu</span>
+            <span className="navbar-brand ml-2 font-bold text-blue-600 dark:text-blue-400">Pawshu</span>
           </Link>
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
             <Link 
               to="/" 
-              className={`text-sm font-medium transition-colors duration-200 ${
+              className={`navbar-link transition-colors duration-200 ${
                 isActive('/') 
                   ? 'text-blue-600 dark:text-blue-400' 
                   : 'text-gray-700 hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400'
@@ -108,7 +109,7 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/products" 
-              className={`text-sm font-medium transition-colors duration-200 ${
+              className={`navbar-link transition-colors duration-200 ${
                 isActive('/products') 
                   ? 'text-blue-600 dark:text-blue-400' 
                   : 'text-gray-700 hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400'
@@ -118,7 +119,7 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/services" 
-              className={`text-sm font-medium transition-colors duration-200 ${
+              className={`navbar-link transition-colors duration-200 ${
                 isActive('/services') 
                   ? 'text-blue-600 dark:text-blue-400' 
                   : 'text-gray-700 hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400'
@@ -128,7 +129,7 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/about" 
-              className={`text-sm font-medium transition-colors duration-200 ${
+              className={`navbar-link transition-colors duration-200 ${
                 isActive('/about') 
                   ? 'text-blue-600 dark:text-blue-400' 
                   : 'text-gray-700 hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400'
@@ -138,7 +139,7 @@ const Navbar = () => {
             </Link>
             <Link 
               to="/contact" 
-              className={`text-sm font-medium transition-colors duration-200 ${
+              className={`navbar-link transition-colors duration-200 ${
                 isActive('/contact') 
                   ? 'text-blue-600 dark:text-blue-400' 
                   : 'text-gray-700 hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400'
@@ -157,9 +158,9 @@ const Navbar = () => {
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {darkMode ? (
-                <SunIconComponent className="h-5 w-5" />
+                <SunIconComponent className="navbar-icon" />
               ) : (
-                <MoonIconComponent className="h-5 w-5" />
+                <MoonIconComponent className="navbar-icon" />
               )}
             </button>
 
@@ -169,7 +170,7 @@ const Navbar = () => {
               className="p-2 rounded-full text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors duration-200 relative"
               aria-label="Shopping cart"
             >
-              <ShoppingCartIconComponent className="h-5 w-5" />
+              <ShoppingCartIconComponent className="navbar-icon" />
               {cartItemsCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
                   {cartItemsCount}

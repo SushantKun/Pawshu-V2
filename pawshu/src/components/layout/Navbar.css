@@ -1,0 +1,93 @@
+.navbar {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 50;
+  transition: all 0.3s ease;
+}
+
+.navbar-content {
+  max-width: 1000px; /* Decreased from 1200px */
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.navbar-link {
+  font-size: 1.125rem; /* Increased from 1rem */
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  transition: all 0.2s ease;
+  color: #f8fafc; /* Always light text */
+}
+
+.navbar-link:hover {
+  color: #5eead4; /* Teal 300 */
+}
+
+.dark .navbar-link {
+  color: #f8fafc; /* Slate 50 */
+}
+
+.dark .navbar-link:hover {
+  color: #22d3ee; /* Cyan 400 */
+}
+
+.navbar-icon {
+  width: 1.75rem; /* Increased from 1.5rem */
+  height: 1.75rem;
+  transition: all 0.2s ease;
+  color: #f8fafc; /* Always light text */
+}
+
+.navbar-icon:hover {
+  transform: scale(1.1);
+  color: #5eead4; /* Teal 300 */
+}
+
+.dark .navbar-icon {
+  color: #f8fafc; /* Slate 50 */
+}
+
+.dark .navbar-icon:hover {
+  color: #22d3ee; /* Cyan 400 */
+}
+
+.navbar-logo {
+  height: 2.5rem; /* Increased from 2.25rem */
+  width: auto;
+}
+
+.navbar-brand {
+  font-size: 1.75rem; /* Increased from 1.5rem */
+  color: #f8fafc; /* Always light text */
+}
+
+.dark .navbar-brand {
+  color: #f8fafc; /* Slate 50 */
+}
+
+/* Navbar background with new teal color scheme */
+.navbar-bg {
+  backdrop-filter: blur(8px);
+  background: rgba(15, 118, 110, 0.3); /* Teal 700 with low opacity */
+  border: 1px solid rgba(94, 234, 212, 0.1); /* Teal 300 very subtle border */
+  border-radius: 9999px;
+  margin: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.dark .navbar-bg {
+  background: linear-gradient(to right,
+    rgba(8, 145, 178, 0.1), /* Cyan 600 */
+    rgba(13, 148, 136, 0.1), /* Teal 600 */
+    rgba(5, 150, 105, 0.1)  /* Green 600 */
+  );
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Add red accent for notification badges */
+.notification-badge {
+  background-color: #ef4444; /* Red 500 */
+  color: white;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+} 
