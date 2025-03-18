@@ -106,6 +106,12 @@ interface DashboardStats {
       email: string;
       createdAt: string;
     }>;
+    orders: Array<{
+      _id: string;
+      userId: { name: string };
+      totalAmount: number;
+      createdAt: string;
+    }>;
   };
 }
 
@@ -158,13 +164,19 @@ const AdminDashboard = () => {
     recent: {
       donations: [],
       appointments: [],
-      users: []
+      users: [],
+      orders: []
     }
+  });
+  const [chartData, setChartData] = useState({
+    revenueData: [],
+    userGrowthData: []
   });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardStats();
+    fetchChartData();
   }, []);
 
   const fetchDashboardStats = async () => {
@@ -178,6 +190,32 @@ const AdminDashboard = () => {
       setError(err.response?.data?.message || 'Failed to fetch dashboard statistics');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchChartData = async () => {
+    try {
+      const response = await api.get('/admin/chart-stats');
+      const { userRegistrationTrends, orderTrends } = response.data;
+
+      // Format revenue data
+      const revenueData = orderTrends.map((trend: any) => ({
+        date: `${trend._id.year}-${trend._id.month}`,
+        amount: trend.totalAmount
+      }));
+
+      // Format user growth data
+      const userGrowthData = userRegistrationTrends.map((trend: any) => ({
+        date: `${trend._id.year}-${trend._id.month}`,
+        users: trend.count
+      }));
+
+      setChartData({
+        revenueData,
+        userGrowthData
+      });
+    } catch (err) {
+      console.error('Error fetching chart data:', err);
     }
   };
 
@@ -233,7 +271,7 @@ const AdminDashboard = () => {
         />
         <StatCard
           title="Total Revenue"
-          value={`Rs. ${(stats?.counts?.orders?.revenue || 0).toLocaleString()}`}
+          value={`Rs. ${(stats?.revenue || 0).toLocaleString()}`}
           icon={<CurrencyDollarIconComponent className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />}
           color="text-yellow-600 dark:text-yellow-400"
         />
@@ -248,35 +286,22 @@ const AdminDashboard = () => {
       {/* Quick Stats */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
         <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Quick Stats</h2>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div>
-              <h3 className="font-medium text-gray-900 dark:text-white">Pending Appointments</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{stats?.counts?.appointments?.pending || 0} appointments</p>
-            </div>
-            <div className="text-yellow-600 dark:text-yellow-400">
-              <ClockIconComponent className="h-6 w-6" />
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Pending Appointments</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.appointments?.pending || 0}</p>
           </div>
-          <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div>
-              <h3 className="font-medium text-gray-900 dark:text-white">Active Charities</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{stats?.counts?.charities || 0} charities</p>
-            </div>
-            <div className="text-blue-600 dark:text-blue-400">
-              <BuildingOfficeIconComponent className="h-6 w-6" />
-            </div>
+          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Completed Appointments</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.appointments?.completed || 0}</p>
           </div>
-          <div className="flex justify-between items-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <div>
-              <h3 className="font-medium text-gray-900 dark:text-white">Average Donation</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Rs. {(stats?.counts?.donations?.avgAmount || 0).toLocaleString()}
-              </p>
-            </div>
-            <div className="text-green-600 dark:text-green-400">
-              <CurrencyDollarIconComponent className="h-6 w-6" />
-            </div>
+          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Doctors</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.doctors || 0}</p>
+          </div>
+          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Charities</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.charities || 0}</p>
           </div>
         </div>
       </div>
@@ -288,10 +313,17 @@ const AdminDashboard = () => {
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Revenue Overview</h2>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={stats?.revenueData || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="date" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
+              <LineChart data={chartData.revenueData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
+                <XAxis 
+                  dataKey="date" 
+                  className="text-gray-500 dark:text-gray-400"
+                  tick={{ fill: '#9CA3AF' }}
+                />
+                <YAxis 
+                  className="text-gray-500 dark:text-gray-400"
+                  tick={{ fill: '#9CA3AF' }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#1F2937',
@@ -299,8 +331,15 @@ const AdminDashboard = () => {
                     borderRadius: '0.5rem',
                     color: '#F9FAFB'
                   }}
+                  labelStyle={{ color: '#F9FAFB' }}
                 />
-                <Line type="monotone" dataKey="amount" stroke="#3B82F6" strokeWidth={2} />
+                <Line 
+                  type="monotone" 
+                  dataKey="amount" 
+                  stroke="#3B82F6" 
+                  strokeWidth={2}
+                  dot={{ fill: '#3B82F6', strokeWidth: 2 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -311,10 +350,17 @@ const AdminDashboard = () => {
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">User Growth</h2>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats?.userGrowthData || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="date" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
+              <AreaChart data={chartData.userGrowthData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
+                <XAxis 
+                  dataKey="date" 
+                  className="text-gray-500 dark:text-gray-400"
+                  tick={{ fill: '#9CA3AF' }}
+                />
+                <YAxis 
+                  className="text-gray-500 dark:text-gray-400"
+                  tick={{ fill: '#9CA3AF' }}
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#1F2937',
@@ -322,8 +368,16 @@ const AdminDashboard = () => {
                     borderRadius: '0.5rem',
                     color: '#F9FAFB'
                   }}
+                  labelStyle={{ color: '#F9FAFB' }}
                 />
-                <Area type="monotone" dataKey="users" stroke="#10B981" fill="#059669" fillOpacity={0.2} />
+                <Area 
+                  type="monotone" 
+                  dataKey="users" 
+                  stroke="#10B981" 
+                  fill="#059669" 
+                  fillOpacity={0.2}
+                  dot={{ fill: '#10B981', strokeWidth: 2 }}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -335,94 +389,40 @@ const AdminDashboard = () => {
         {/* Recent Orders */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
           <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recent Orders</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Order ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {(stats?.recentOrders || []).map((order) => (
-                  <tr key={order._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      #{order._id.slice(-6)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {order.user?.name || 'Unknown'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      Rs. {(order.total || 0).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        order.status === 'completed'
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                          : order.status === 'processing'
-                          ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300'
-                          : 'bg-gray-100 dark:bg-gray-600 text-gray-800 dark:text-gray-300'
-                      }`}>
-                        {(order.status || 'pending').charAt(0).toUpperCase() + (order.status || 'pending').slice(1)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-4">
+            {stats?.recent?.orders?.map((order: any) => (
+              <div key={order._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">{order.userId?.name || 'Unknown User'}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Order #{order._id.slice(-6)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium text-gray-900 dark:text-white">Rs. {order.totalAmount.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Recent Donations */}
+        {/* Recent Appointments */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recent Donations</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-700">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Donor
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Charity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {(stats?.recent?.donations || []).map((donation) => (
-                  <tr key={donation._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {donation.userName || 'Anonymous'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {donation.charityName || 'Unknown Charity'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      Rs. {(donation.amount || 0).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {donation.date ? new Date(donation.date).toLocaleDateString() : 'N/A'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recent Appointments</h2>
+          <div className="space-y-4">
+            {stats?.recent?.appointments?.map((appointment: any) => (
+              <div key={appointment._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <div>
+                  <p className="font-medium text-gray-900 dark:text-white">{appointment.user?.name}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Dr. {appointment.doctor?.firstName} {appointment.doctor?.lastName}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium text-gray-900 dark:text-white">{appointment.status}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(appointment.date).toLocaleDateString()}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

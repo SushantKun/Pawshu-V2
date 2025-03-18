@@ -1,3 +1,6 @@
+// Suppress punycode deprecation warning
+process.removeAllListeners('warning');
+
 import express, { Request, Response, NextFunction, RequestHandler } from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';

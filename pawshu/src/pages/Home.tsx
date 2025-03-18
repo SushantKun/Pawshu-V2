@@ -139,46 +139,119 @@ const Home = () => {
     <div className="bg-white dark:bg-gray-900">
       {/* Hero Section - Extend to top of page */}
       <section className="relative h-[600px] bg-gradient-to-r from-blue-600 to-purple-600 overflow-hidden mt-[-88px]">
-        <div className="absolute inset-0">
-          {heroImages.map((img, index) => (
-            <img 
-              key={img}
-              src={img} 
-              alt={`Hero ${index + 1}`}
-              className={`w-full h-full object-cover object-center transition-opacity duration-1000 absolute inset-0 ${
-                index === currentHeroImage ? 'opacity-60' : 'opacity-0'
-              }`} 
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.onerror = null;
-                target.src = PlaceholderImage;
-              }}
-            />
-          ))}
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/60 to-purple-600/60 mix-blend-multiply" />
-        </div>
-        
-        <div className="relative container mx-auto px-4 h-full flex flex-col justify-center">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 max-w-3xl">
-            Everything Your Pet Needs in One Place
-          </h1>
-          <p className="text-xl text-white/90 mb-8 max-w-2xl">
-            Discover premium products, quality healthcare, and essential services for your furry friends.
-          </p>
-          <div className="flex flex-wrap gap-4">
-            <Link 
-              to="/products" 
-              className="px-6 py-3 bg-white text-blue-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200 inline-flex items-center"
-            >
-              Shop Now
-              <ShoppingBagIconComponent className="w-5 h-5 ml-2" />
-            </Link>
-            <Link 
-              to="/booking" 
-              className="px-6 py-3 bg-transparent border-2 border-white text-white rounded-md font-medium hover:bg-white/10 transition-colors duration-200"
-            >
-              Book Services
-            </Link>
+        <div className="container mx-auto px-4 h-full flex items-center">
+          {/* Left side content */}
+          <div className="w-full lg:w-1/2 z-10">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
+              Everything Your Pet Needs in One Place
+            </h1>
+            <p className="text-xl text-white/90 mb-8">
+              Discover premium products, quality healthcare, and essential services for your furry friends.
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <Link 
+                to="/products" 
+                className="px-6 py-3 bg-white text-blue-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200 inline-flex items-center"
+              >
+                Shop Now
+                <ShoppingBagIconComponent className="w-5 h-5 ml-2" />
+              </Link>
+              <Link 
+                to="/booking" 
+                className="px-6 py-3 bg-transparent border-2 border-white text-white rounded-md font-medium hover:bg-white/10 transition-colors duration-200"
+              >
+                Book Services
+              </Link>
+            </div>
+          </div>
+
+          {/* Right side image slideshow */}
+          <div className="hidden lg:block w-1/2 h-full relative">
+            <div className="absolute right-12 top-1/2 -translate-y-1/2">
+              <div className="relative w-[500px] h-[400px] perspective-[2000px]">
+                {heroImages.map((img, index) => {
+                  // Calculate the position of each image relative to the current image
+                  const position = (index - currentHeroImage + heroImages.length) % heroImages.length;
+                  // Calculate the z-index to ensure proper stacking
+                  const zIndex = position === 0 ? heroImages.length : heroImages.length - position;
+                  
+                  // Define transformations based on position
+                  let transform = '';
+                  let opacity = 1;
+                  let scale = 1;
+                  
+                  if (position === 0) {
+                    // Current image - lifted up and forward
+                    transform = 'translateX(0) translateZ(100px) translateY(-20px) rotateX(5deg)';
+                    scale = 1;
+                  } else if (position === heroImages.length - 1) {
+                    // Next image - subtle peek from behind on the right
+                    transform = 'translateX(15%) translateZ(-50px) translateY(0) rotateY(-5deg)';
+                    opacity = 0.3;
+                    scale = 0.95;
+                  } else if (position === 1) {
+                    // Previous image - subtle peek from behind on the left
+                    transform = 'translateX(-15%) translateZ(-50px) translateY(0) rotateY(5deg)';
+                    opacity = 0.3;
+                    scale = 0.95;
+                  } else {
+                    // Other images - hidden behind
+                    transform = 'translateZ(-200px)';
+                    opacity = 0;
+                    scale = 0.9;
+                  }
+
+                  return (
+                    <div
+                      key={img}
+                      className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl transition-all duration-700 ease-in-out"
+                      style={{
+                        opacity,
+                        zIndex,
+                        transformStyle: 'preserve-3d',
+                        backfaceVisibility: 'hidden',
+                        transform: `${transform} scale(${scale})`,
+                        boxShadow: position === 0 
+                          ? '0 20px 40px rgba(0,0,0,0.3)' 
+                          : '0 10px 20px rgba(0,0,0,0.2)',
+                      }}
+                    >
+                      <img 
+                        src={img} 
+                        alt={`Hero ${index + 1}`}
+                        className="w-full h-full object-cover object-center"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.onerror = null;
+                          target.src = PlaceholderImage;
+                        }}
+                      />
+                      {/* Add a subtle gradient overlay */}
+                      <div className={`absolute inset-0 ${
+                        position === 0 
+                          ? 'bg-gradient-to-r from-black/10 to-transparent' 
+                          : 'bg-gradient-to-r from-black/30 to-transparent'
+                      }`}></div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Navigation dots */}
+              <div className="flex justify-center gap-2 mt-8">
+                {heroImages.map((_, index) => (
+                  <button
+                    key={index}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      index === currentHeroImage 
+                        ? 'bg-white scale-125' 
+                        : 'bg-white/50 hover:bg-white/75'
+                    }`}
+                    onClick={() => setCurrentHeroImage(index)}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>

@@ -275,11 +275,8 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
       {
         $group: {
           _id: null,
-          totalAmount: { $sum: '$totalAmount' },
-          count: { $sum: 1 },
-          avgAmount: { $avg: '$totalAmount' },
-          maxAmount: { $max: '$totalAmount' },
-          minAmount: { $min: '$totalAmount' }
+          total: { $sum: 1 },
+          revenue: { $sum: '$totalAmount' }
         }
       }
     ]);
@@ -291,6 +288,7 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
 
     // Get recent orders
     const recentOrders = await Order.find()
+      .populate('userId', 'name')
       .sort({ createdAt: -1 })
       .limit(5);
 
@@ -307,12 +305,12 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
       .sort({ createdAt: -1 })
       .limit(5);
 
-    // Get total charities count from Charity model instead of donations
+    // Get total charities count
     const totalCharities = await Charity.countDocuments();
 
     // Calculate total revenue (donations + orders)
     const totalDonationAmount = donationStats[0]?.totalAmount || 0;
-    const totalOrderAmount = orderStats[0]?.totalAmount || 0;
+    const totalOrderAmount = orderStats[0]?.revenue || 0;
     const totalRevenue = totalDonationAmount + totalOrderAmount;
 
     // Prepare response
@@ -336,14 +334,11 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
           minAmount: 0
         },
         orders: orderStats[0] || {
-          totalAmount: 0,
-          count: 0,
-          avgAmount: 0,
-          maxAmount: 0,
-          minAmount: 0
-        },
-        totalRevenue
+          total: 0,
+          revenue: 0
+        }
       },
+      revenue: totalRevenue,
       recent: {
         donations: recentDonations,
         orders: recentOrders,
@@ -362,34 +357,17 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
 // Get detailed statistics for charts
 router.get('/chart-stats', adminAuth, async (req: AuthRequest, res: Response) => {
   try {
-    // Get appointment distribution by status
-    const appointmentsByStatus = await Appointment.aggregate([
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    // Get donation distribution by charity
-    const donationsByCharity = await Donation.aggregate([
-      {
-        $group: {
-          _id: '$charityName',
-          totalAmount: { $sum: '$amount' },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { totalAmount: -1 }
-      }
-    ]);
+    // Calculate date for 6 months ago
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
     // Get user registration trends (by month)
     const userRegistrationTrends = await User.aggregate([
       {
-        $match: { role: 'user' }
+        $match: { 
+          role: 'user',
+          createdAt: { $gte: sixMonthsAgo }
+        }
       },
       {
         $group: {
@@ -405,49 +383,29 @@ router.get('/chart-stats', adminAuth, async (req: AuthRequest, res: Response) =>
       }
     ]);
 
-    // Get appointment distribution by doctor
-    const appointmentsByDoctor = await Appointment.aggregate([
+    // Get order trends (last 6 months)
+    const orderTrends = await Order.aggregate([
       {
-        $lookup: {
-          from: 'doctors',
-          localField: 'doctor',
-          foreignField: '_id',
-          as: 'doctorInfo'
+        $match: {
+          createdAt: { $gte: sixMonthsAgo }
         }
-      },
-      {
-        $unwind: '$doctorInfo'
       },
       {
         $group: {
           _id: {
-            doctorId: '$doctor',
-            firstName: '$doctorInfo.firstName',
-            lastName: '$doctorInfo.lastName'
+            year: { $year: '$createdAt' },
+            month: { $month: '$createdAt' }
           },
+          totalAmount: { $sum: '$totalAmount' },
           count: { $sum: 1 }
         }
       },
-      {
-        $project: {
-          _id: 0,
-          doctorId: '$_id.doctorId',
-          doctorName: {
-            $concat: ['Dr. ', '$_id.firstName', ' ', '$_id.lastName']
-          },
-          count: 1
-        }
-      },
-      {
-        $sort: { count: -1 }
-      }
+      { $sort: { '_id.year': 1, '_id.month': 1 } }
     ]);
 
     const statistics = {
-      appointmentsByStatus,
-      donationsByCharity,
       userRegistrationTrends,
-      appointmentsByDoctor
+      orderTrends
     };
 
     res.json(statistics);
