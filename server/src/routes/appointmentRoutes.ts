@@ -63,10 +63,17 @@ router.get('/my-appointments', verifyToken, (async (req: AuthRequest, res: Respo
 router.get('/doctor', doctorAuth, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/appointments/doctor - Fetching doctor appointments');
-    const appointments = await Appointment.find({ doctor: req.user?._id })
+    console.log('Doctor ID:', req.user?._id);
+    
+    if (!req.user?._id) {
+      return res.status(401).json({ message: 'Doctor ID not found in token' });
+    }
+
+    const appointments = await Appointment.find({ doctor: req.user._id })
       .populate('user', 'name email')
       .sort({ date: -1 });
     
+    console.log(`Found ${appointments.length} appointments for doctor ${req.user._id}`);
     res.json(appointments);
   } catch (error) {
     console.error('Error fetching doctor appointments:', error);
@@ -121,27 +128,61 @@ router.get('/:id', verifyToken, (async (req: AuthRequest, res: Response) => {
   }
 }) as RequestHandler);
 
-// @route   PUT /api/appointments/:id
+// @route   PUT /api/appointments/:id/status
 // @desc    Update appointment status
 // @access  Private (Doctor or Admin)
 router.put('/:id/status', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
+    console.log(`PUT /api/appointments/${req.params.id}/status - Updating appointment status`);
+    console.log('User:', JSON.stringify(req.user, null, 2));
+    console.log('Request body:', req.body);
+    
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
     const appointment = await Appointment.findById(req.params.id);
     if (!appointment) {
+      console.log(`Appointment with ID ${req.params.id} not found`);
       return res.status(404).json({ message: 'Appointment not found' });
     }
 
-    // Only allow doctors and admins to update status
-    if (!req.user.isAdmin && appointment.doctor.toString() !== req.user._id.toString()) {
+    // Check if the user is a doctor or admin
+    const isDoctor = req.user.role === 'doctor';
+    const isAdmin = req.user.isAdmin || req.user.role === 'admin';
+    
+    // For doctors, check if they're assigned to this appointment
+    const appointmentDoctorId = appointment.doctor.toString();
+    const userId = req.user._id.toString();
+    const isAssignedDoctor = isDoctor && appointmentDoctorId === userId;
+    
+    console.log({
+      appointmentDoctorId,
+      userId,
+      isDoctor,
+      isAdmin,
+      isAssignedDoctor,
+      userRole: req.user.role
+    });
+    
+    // Allow admin or the assigned doctor to update
+    if (!isAdmin && !isAssignedDoctor) {
+      console.log('User not authorized to update this appointment');
       return res.status(403).json({ message: 'Not authorized to update this appointment' });
     }
 
-    appointment.status = req.body.status;
+    // Update status if provided
+    if (req.body.status) {
+      appointment.status = req.body.status;
+    }
+    
+    // Update notes if provided
+    if (req.body.notes) {
+      appointment.notes = req.body.notes;
+    }
+    
     await appointment.save();
+    console.log(`Appointment ${req.params.id} updated successfully`);
 
     res.json(appointment);
   } catch (error) {

@@ -7,6 +7,7 @@ interface UserPayload {
   name: string;
   email: string;
   isAdmin: boolean;
+  role: 'user' | 'admin' | 'doctor';
 }
 
 export interface AuthRequest extends Request {
@@ -44,9 +45,9 @@ export const adminAuth = async (req: AuthRequest, res: Response, next: NextFunct
         return res.status(401).json({ message: 'Authorization denied' });
       }
       
-      console.log('AdminAuth middleware - User role:', req.user.isAdmin);
+      console.log('AdminAuth middleware - User:', { isAdmin: req.user.isAdmin, role: req.user.role });
       
-      if (!req.user.isAdmin) {
+      if (!req.user.isAdmin && req.user.role !== 'admin') {
         console.log('AdminAuth middleware - User is not an admin');
         return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
       }
@@ -75,9 +76,10 @@ export const doctorAuth = async (req: AuthRequest, res: Response, next: NextFunc
         return res.status(401).json({ message: 'Authorization denied' });
       }
       
-      console.log('DoctorAuth middleware - User role:', req.user.isAdmin);
+      console.log('DoctorAuth middleware - User role:', req.user.role);
       
-      if (req.user.isAdmin) {
+      // Check if user is a doctor
+      if (req.user.role !== 'doctor') {
         console.log('DoctorAuth middleware - User is not a doctor');
         return res.status(403).json({ message: 'Access denied. Doctor privileges required.' });
       }

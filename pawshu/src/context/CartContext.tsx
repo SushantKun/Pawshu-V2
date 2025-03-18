@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import { showSuccessNotification, NOTIFICATIONS } from '../utils/notification';
 
 interface CartItem {
   id: string;
@@ -83,6 +84,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
       return [...items, { ...item, quantity: 1 }];
     });
+    
+    // Show notification
+    showSuccessNotification(
+      NOTIFICATIONS.CART_ADD.title,
+      NOTIFICATIONS.CART_ADD.message
+    );
+    
     openCart();
   };
 
@@ -106,6 +114,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     setWishlist(current => {
       // Only add if not already in wishlist
       if (!current.includes(productId)) {
+        // Show notification
+        showSuccessNotification(
+          NOTIFICATIONS.WISHLIST_ADD.title,
+          NOTIFICATIONS.WISHLIST_ADD.message
+        );
         return [...current, productId];
       }
       return current;

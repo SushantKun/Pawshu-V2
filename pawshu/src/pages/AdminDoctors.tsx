@@ -358,7 +358,7 @@ const AdminDoctors = () => {
     <div className="container mx-auto px-4 py-8">
       <ToastContainer />
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Manage Doctors</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Manage Doctors</h1>
         <button
           onClick={() => {
             resetForm();
@@ -370,44 +370,44 @@ const AdminDoctors = () => {
         </button>
       </div>
 
-      {error && <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-6">{error}</div>}
+      {error && <div className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 p-4 rounded-lg mb-6">{error}</div>}
 
       {loading && !showAddModal && !showEditModal ? (
         <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 dark:border-blue-400"></div>
         </div>
       ) : (
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Doctor
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Specialization
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Experience
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Email
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {doctors.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                     No doctors found. Add a new doctor to get started.
                   </td>
                 </tr>
               ) : (
                 doctors.map((doctor) => (
-                  <tr key={doctor._id}>
+                  <tr key={doctor._id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
@@ -418,8 +418,8 @@ const AdminDoctors = () => {
                               alt={`${doctor.firstName} ${doctor.lastName}`}
                             />
                           ) : (
-                            <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                              <span className="text-gray-600">
+                            <div className="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
+                              <span className="text-gray-600 dark:text-gray-300">
                                 {doctor.firstName.charAt(0)}
                                 {doctor.lastName.charAt(0)}
                               </span>
@@ -427,31 +427,31 @@ const AdminDoctors = () => {
                           )}
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
                             {doctor.firstName} {doctor.lastName}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                       {doctor.specialization}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                       {doctor.experience} years
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                       {doctor.email}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
                         onClick={() => handleEditClick(doctor)}
-                        className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 mr-4"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDeleteDoctor(doctor._id)}
-                        className="text-red-600 hover:text-red-900"
+                        className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
                       >
                         Delete
                       </button>
@@ -467,61 +467,61 @@ const AdminDoctors = () => {
       {/* Add Doctor Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Add New Doctor</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Add New Doctor</h2>
             <form onSubmit={handleAddDoctor}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-gray-700 mb-2">First Name</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">First Name</label>
                   <input
                     type="text"
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Last Name</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Last Name</label>
                   <input
                     type="text"
                     name="lastName"
                     value={formData.lastName}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Email</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Email</label>
                   <input
                     type="email"
                     name="email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Password</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Password</label>
                   <input
                     type="password"
                     name="password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Specialization</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Specialization</label>
                   <select
                     name="specialization"
                     value={formData.specialization}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   >
                     <option value="">Select Specialization</option>
@@ -533,60 +533,67 @@ const AdminDoctors = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Experience (years)</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Experience (years)</label>
                   <input
                     type="number"
                     name="experience"
                     value={formData.experience}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     min="0"
-                    required
                   />
                 </div>
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Bio</label>
+                <label className="block text-gray-700 dark:text-gray-300 mb-2">Bio</label>
                 <textarea
                   name="bio"
                   value={formData.bio}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   rows={3}
                 ></textarea>
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Availability</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {daysOfWeek.map((day) =>
-                    periods.map((period) => (
-                      <div key={`${day}-${period}`} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`${day}-${period}`}
-                          value={`${day} ${period}`}
-                          checked={formData.availability.includes(`${day} ${period}`)}
-                          onChange={handleAvailabilityChange}
-                          className="mr-2"
-                        />
-                        <label htmlFor={`${day}-${period}`}>
-                          {day} {period}
-                        </label>
+                <label className="block text-gray-700 dark:text-gray-300 mb-2">Availability</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {daysOfWeek.map((day) => (
+                    <div key={day} className="flex flex-col">
+                      <span className="text-sm text-gray-700 dark:text-gray-300 mb-1">{day}</span>
+                      <div className="flex space-x-2">
+                        {periods.map((period) => {
+                          const value = `${day} ${period}`;
+                          const isSelected = formData.availability.includes(value);
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => handleAvailabilityChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>)}
+                              className={`px-2 py-1 text-xs rounded ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              {period}
+                            </button>
+                          );
+                        })}
                       </div>
-                    ))
-                  )}
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Profile Image</label>
+                <label className="block text-gray-700 dark:text-gray-300 mb-2">Profile Image</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
                 {imagePreview && (
                   <div className="mt-2">
@@ -603,7 +610,7 @@ const AdminDoctors = () => {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -623,60 +630,60 @@ const AdminDoctors = () => {
       {/* Edit Doctor Modal */}
       {showEditModal && selectedDoctor && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-4">Edit Doctor</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Edit Doctor</h2>
             <form onSubmit={handleUpdateDoctor}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-gray-700 mb-2">First Name</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">First Name</label>
                   <input
                     type="text"
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Last Name</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Last Name</label>
                   <input
                     type="text"
                     name="lastName"
                     value={formData.lastName}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Email</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Email</label>
                   <input
                     type="email"
                     name="email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Password (leave blank to keep current)</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Password (leave blank to keep current)</label>
                   <input
                     type="password"
                     name="password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Specialization</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Specialization</label>
                   <select
                     name="specialization"
                     value={formData.specialization}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   >
                     <option value="">Select Specialization</option>
@@ -688,60 +695,67 @@ const AdminDoctors = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-gray-700 mb-2">Experience (years)</label>
+                  <label className="block text-gray-700 dark:text-gray-300 mb-2">Experience (years)</label>
                   <input
                     type="number"
                     name="experience"
                     value={formData.experience}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     min="0"
-                    required
                   />
                 </div>
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Bio</label>
+                <label className="block text-gray-700 dark:text-gray-300 mb-2">Bio</label>
                 <textarea
                   name="bio"
                   value={formData.bio}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   rows={3}
                 ></textarea>
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Availability</label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {daysOfWeek.map((day) =>
-                    periods.map((period) => (
-                      <div key={`${day}-${period}`} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`edit-${day}-${period}`}
-                          value={`${day} ${period}`}
-                          checked={formData.availability.includes(`${day} ${period}`)}
-                          onChange={handleAvailabilityChange}
-                          className="mr-2"
-                        />
-                        <label htmlFor={`edit-${day}-${period}`}>
-                          {day} {period}
-                        </label>
+                <label className="block text-gray-700 dark:text-gray-300 mb-2">Availability</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {daysOfWeek.map((day) => (
+                    <div key={day} className="flex flex-col">
+                      <span className="text-sm text-gray-700 dark:text-gray-300 mb-1">{day}</span>
+                      <div className="flex space-x-2">
+                        {periods.map((period) => {
+                          const value = `${day} ${period}`;
+                          const isSelected = formData.availability.includes(value);
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => handleAvailabilityChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>)}
+                              className={`px-2 py-1 text-xs rounded ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                              }`}
+                            >
+                              {period}
+                            </button>
+                          );
+                        })}
                       </div>
-                    ))
-                  )}
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className="mb-4">
-                <label className="block text-gray-700 mb-2">Profile Image</label>
+                <label className="block text-gray-700 dark:text-gray-300 mb-2">Profile Image</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
                 {imagePreview && (
                   <div className="mt-2">
@@ -758,7 +772,7 @@ const AdminDoctors = () => {
                 <button
                   type="button"
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>

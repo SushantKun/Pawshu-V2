@@ -123,7 +123,7 @@ const Wishlist = () => {
               <img
                 src={getProductImage(product)}
                 alt={product.name}
-                className="w-full h-48 object-cover"
+                className="w-full h-[300px] object-cover"
                 onError={() => handleImageError(product._id)}
                 loading="lazy"
               />

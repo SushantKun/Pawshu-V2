@@ -11,7 +11,8 @@ const donationSchema = new mongoose.Schema({
     required: true
   },
   charityId: {
-    type: Number,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Charity',
     required: true
   },
   charityName: {

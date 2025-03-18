@@ -17,6 +17,18 @@ const getAllProducts = async (req: Request, res: Response) => {
   }
 };
 
+// Get featured products - Public route
+const getFeaturedProducts = async (req: Request, res: Response) => {
+  try {
+    console.log('GET /products/featured - Fetching featured products');
+    const featuredProducts = await Product.find({ featured: true }).limit(4);
+    res.status(200).json(featuredProducts);
+  } catch (error) {
+    console.error('Error fetching featured products:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Get single product - Public route
 const getProductById = async (req: Request, res: Response) => {
   try {
@@ -232,6 +244,7 @@ const deleteProduct = async (req: AuthRequest, res: Response) => {
 
 // Register routes
 router.get('/', getAllProducts as any);
+router.get('/featured', getFeaturedProducts as any);
 router.get('/:id', getProductById as any);
 router.post('/', verifyToken, adminAuth as any, createProduct as any);
 router.put('/:id', verifyToken, adminAuth as any, updateProduct as any);

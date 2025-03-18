@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-const API_URL = 'http://localhost:5000/api';
+import api from '../../api/axios';
+import { toast } from 'react-toastify';
 
 interface Appointment {
   _id: string;
@@ -59,13 +58,15 @@ const DoctorAppointments = () => {
   const fetchAppointments = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('doctorToken');
       
-      const response = await axios.get(`${API_URL}/doctors/appointments`, {
+      // Use the correct API endpoint
+      const response = await api.get('/appointments/doctor', {
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${localStorage.getItem('doctorToken')}`
         }
       });
+      
+      console.log('Doctor appointments fetched:', response.data.length);
       
       setAppointments(response.data);
       setError('');
@@ -74,6 +75,7 @@ const DoctorAppointments = () => {
       setError(err.response?.data?.message || 'Failed to fetch appointments');
       
       if (err.response?.status === 401) {
+        toast.error('Your session has expired. Please log in again.');
         // Unauthorized, redirect to login
         localStorage.removeItem('doctorToken');
         localStorage.removeItem('doctorInfo');
@@ -87,17 +89,19 @@ const DoctorAppointments = () => {
   const updateAppointmentStatus = async (appointmentId: string, status: string) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('doctorToken');
       
-      await axios.put(
-        `${API_URL}/appointments/${appointmentId}`,
+      await api.put(
+        `/appointments/${appointmentId}/status`,
         { status },
         {
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${localStorage.getItem('doctorToken')}`
           }
         }
       );
+      
+      // Show success message
+      toast.success(`Appointment status updated to ${status}`);
       
       // Update local state
       setAppointments(prevAppointments => 
@@ -111,6 +115,7 @@ const DoctorAppointments = () => {
       setError('');
     } catch (err: any) {
       console.error('Error updating appointment:', err);
+      toast.error(err.response?.data?.message || 'Failed to update appointment');
       setError(err.response?.data?.message || 'Failed to update appointment');
     } finally {
       setLoading(false);
@@ -123,17 +128,22 @@ const DoctorAppointments = () => {
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('doctorToken');
       
-      await axios.put(
-        `${API_URL}/appointments/${selectedAppointment._id}`,
-        { notes },
+      await api.put(
+        `/appointments/${selectedAppointment._id}/status`,
+        { 
+          status: selectedAppointment.status,
+          notes 
+        },
         {
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${localStorage.getItem('doctorToken')}`
           }
         }
       );
+      
+      // Show success message
+      toast.success('Notes added successfully');
       
       // Update local state
       setAppointments(prevAppointments => 
@@ -150,6 +160,7 @@ const DoctorAppointments = () => {
       setError('');
     } catch (err: any) {
       console.error('Error adding notes:', err);
+      toast.error(err.response?.data?.message || 'Failed to add notes');
       setError(err.response?.data?.message || 'Failed to add notes');
     } finally {
       setLoading(false);

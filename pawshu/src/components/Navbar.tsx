@@ -1,10 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { useTheme } from '../context/ThemeContext';
 import ProfileDropdown from './ProfileDropdown';
 import CartSlideOver from './CartSlideOver';
-import { useState } from 'react';
-import { ShoppingCartIcon as ShoppingCartIconOutline, HeartIcon as HeartIconOutline } from '@heroicons/react/24/outline';
+import { useState, useEffect } from 'react';
+import { 
+  ShoppingCartIcon as ShoppingCartIconOutline, 
+  HeartIcon as HeartIconOutline,
+  SunIcon as SunIconOutline,
+  MoonIcon as MoonIconOutline
+} from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import type { ComponentType, SVGProps } from 'react';
 
@@ -13,49 +19,87 @@ type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const ShoppingCartIcon = ShoppingCartIconOutline as IconComponent;
 const HeartIcon = HeartIconOutline as IconComponent;
 const HeartSolidIcon = HeartIconSolid as IconComponent;
+const SunIcon = SunIconOutline as IconComponent;
+const MoonIcon = MoonIconOutline as IconComponent;
 
 const Navbar = () => {
   const { user, loading } = useAuth();
   const { cartItems, isCartOpen, openCart, closeCart, updateQuantity, removeFromCart, wishlist } = useCart();
+  const { darkMode, toggleDarkMode } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const cartItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const wishlistCount = wishlist.length;
 
+  // Add scroll event listener
+  useEffect(() => {
+    const handleScroll = () => {
+      const offset = window.scrollY;
+      if (offset > 50) {
+        setScrolled(true);
+      } else {
+        setScrolled(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
   return (
-    <nav className="bg-white shadow-lg">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center">
-            <Link to="/" className="text-2xl font-bold text-blue-600">
-              Pawshu
+    <header className="fixed top-2 left-0 right-0 z-50">
+      <div className="container mx-auto px-4">
+        {/* Floating Navigation Bar */}
+        <nav className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl rounded-full px-6 py-3 shadow-lg border border-white/20 dark:border-gray-700/20 flex items-center justify-between w-[80%] mx-auto">
+          <Link to="/" className="flex-shrink-0 flex items-center">
+            <img
+              className="h-8 w-auto"
+              src={darkMode ? "/PawshuLogo.png" : "/PawshuLogo.png"}
+              alt="Pawshu Logo"
+            />
+          </Link>
+          
+          {/* Main Navigation Links */}
+          <div className="hidden md:flex items-center space-x-6">
+            <Link to="/products" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
+              Products
             </Link>
-            
-            {/* Main Navigation */}
-            <div className="hidden md:flex items-center ml-10 space-x-8">
-              <Link to="/products" className="text-gray-600 hover:text-blue-600">
-                Products
-              </Link>
-              <Link to="/booking" className="text-gray-600 hover:text-blue-600">
-                Book Services
-              </Link>
-              <Link to="/lost-found" className="text-gray-600 hover:text-blue-600">
-                Lost & Found
-              </Link>
-              <Link to="/donate" className="text-gray-600 hover:text-blue-600">
-                Donate
-              </Link>
-            </div>
+            <Link to="/booking" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
+              Book Services
+            </Link>
+            <Link to="/lost-found" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
+              Lost & Found
+            </Link>
+            <Link to="/donate" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
+              Donate
+            </Link>
           </div>
           
+          {/* User Actions */}
           <div className="hidden md:flex items-center space-x-4">
+            {/* Dark Mode Toggle */}
+            <button 
+              onClick={toggleDarkMode}
+              className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 p-2 rounded-full focus:outline-none transition-colors"
+              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {darkMode ? (
+                <SunIcon className="h-6 w-6" />
+              ) : (
+                <MoonIcon className="h-6 w-6" />
+              )}
+            </button>
+            
             {!loading && (
               <>
                 {user ? (
                   <div className="flex items-center space-x-4">
                     <Link
                       to="/wishlist"
-                      className="text-gray-600 hover:text-blue-600 relative"
+                      className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
                     >
                       {wishlistCount > 0 ? (
                         <HeartSolidIcon className="h-6 w-6 text-red-500" />
@@ -63,18 +107,19 @@ const Navbar = () => {
                         <HeartIcon className="h-6 w-6" />
                       )}
                       {wishlistCount > 0 && (
-                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-sm rounded-full h-5 w-5 flex items-center justify-center">
                           {wishlistCount}
                         </span>
                       )}
                     </Link>
                     <button
                       onClick={openCart}
-                      className="text-gray-600 hover:text-blue-600 relative"
+                      className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
+                      aria-label="Shopping cart"
                     >
                       <ShoppingCartIcon className="h-6 w-6" />
                       {cartItemsCount > 0 && (
-                        <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-sm rounded-full h-5 w-5 flex items-center justify-center">
                           {cartItemsCount}
                         </span>
                       )}
@@ -82,32 +127,96 @@ const Navbar = () => {
                     <ProfileDropdown />
                   </div>
                 ) : (
-                  <>
+                  <div className="flex items-center space-x-3">
                     <Link
                       to="/login"
-                      className="px-4 py-2 rounded-md text-white bg-blue-500 hover:bg-blue-600"
+                      className="px-4 py-2 rounded-full text-white bg-blue-500 hover:bg-blue-600 transition-colors text-base shadow-sm"
                     >
                       Login
                     </Link>
                     <Link
                       to="/register"
-                      className="px-4 py-2 rounded-md text-blue-500 border border-blue-500 hover:bg-blue-50"
+                      className="px-4 py-2 rounded-full text-blue-500 dark:text-blue-400 border border-blue-500 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-gray-800/50 transition-colors text-base shadow-sm"
                     >
                       Register
                     </Link>
-                  </>
+                  </div>
                 )}
               </>
             )}
           </div>
-
+          
           {/* Mobile menu button */}
-          <div className="md:hidden flex items-center space-x-4">
+          <div className="md:hidden flex items-center">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none transition-colors"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {isMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
+          </div>
+        </nav>
+      </div>
+
+      {/* Mobile menu */}
+      {isMenuOpen && (
+        <div className="md:hidden py-4 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl mt-2 mx-4 rounded-lg shadow-lg border border-white/20 dark:border-gray-700/20">
+          <div className="flex flex-col space-y-2">
+            <Link to="/products" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
+              Products
+            </Link>
+            <Link to="/booking" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
+              Book Services
+            </Link>
+            <Link to="/lost-found" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
+              Lost & Found
+            </Link>
+            <Link to="/donate" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
+              Donate
+            </Link>
+            <Link to="/contact" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
+              Contact
+            </Link>
+            
+            {/* Dark Mode Toggle in Mobile Menu */}
+            <button 
+              onClick={toggleDarkMode}
+              className="flex items-center text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors"
+            >
+              {darkMode ? (
+                <>
+                  <SunIcon className="h-5 w-5 mr-2" />
+                  <span>Light Mode</span>
+                </>
+              ) : (
+                <>
+                  <MoonIcon className="h-5 w-5 mr-2" />
+                  <span>Dark Mode</span>
+                </>
+              )}
+            </button>
+            
+            {!user && !loading && (
+              <div className="flex flex-col space-y-2 pt-2 border-t border-white/20 dark:border-gray-700/20">
+                <Link to="/login" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
+                  Login
+                </Link>
+                <Link to="/register" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
+                  Register
+                </Link>
+              </div>
+            )}
             {user && (
-              <>
+              <div className="flex justify-between items-center px-4 py-2 border-t border-white/20 dark:border-gray-700/20 mt-2">
                 <Link
                   to="/wishlist"
-                  className="text-gray-600 hover:text-blue-600 relative"
+                  className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
                 >
                   {wishlistCount > 0 ? (
                     <HeartSolidIcon className="h-6 w-6 text-red-500" />
@@ -122,7 +231,7 @@ const Navbar = () => {
                 </Link>
                 <button
                   onClick={openCart}
-                  className="text-gray-600 hover:text-blue-600 relative"
+                  className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
                 >
                   <ShoppingCartIcon className="h-6 w-6" />
                   {cartItemsCount > 0 && (
@@ -131,63 +240,21 @@ const Navbar = () => {
                     </span>
                   )}
                 </button>
-              </>
+              </div>
             )}
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="text-gray-600 hover:text-blue-600 focus:outline-none"
-            >
-              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                {isMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
-            </button>
           </div>
         </div>
-
-        {/* Mobile menu */}
-        {isMenuOpen && (
-          <div className="md:hidden py-4">
-            <div className="flex flex-col space-y-2">
-              <Link to="/products" className="text-gray-600 hover:text-blue-600 px-4 py-2">
-                Products
-              </Link>
-              <Link to="/booking" className="text-gray-600 hover:text-blue-600 px-4 py-2">
-                Book Services
-              </Link>
-              <Link to="/lost-found" className="text-gray-600 hover:text-blue-600 px-4 py-2">
-                Lost & Found
-              </Link>
-              <Link to="/donate" className="text-gray-600 hover:text-blue-600 px-4 py-2">
-                Donate
-              </Link>
-              {!user && !loading && (
-                <>
-                  <Link to="/login" className="text-gray-600 hover:text-blue-600 px-4 py-2">
-                    Login
-                  </Link>
-                  <Link to="/register" className="text-gray-600 hover:text-blue-600 px-4 py-2">
-                    Register
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Cart Slide Over */}
-      <CartSlideOver
-        isOpen={isCartOpen}
-        setIsOpen={closeCart}
+      <CartSlideOver 
+        isOpen={isCartOpen} 
+        setIsOpen={closeCart} 
         cartItems={cartItems}
         updateQuantity={updateQuantity}
         removeItem={removeFromCart}
       />
-    </nav>
+    </header>
   );
 };
 

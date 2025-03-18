@@ -34,18 +34,25 @@ router.post('/login', (async (req: Request, res: Response) => {
 
     // Create token
     const token = jwt.sign(
-      { id: doctor._id, role: 'doctor' },
+      { 
+        _id: doctor._id,
+        name: `${doctor.firstName} ${doctor.lastName}`,
+        email: doctor.email,
+        isAdmin: false,
+        role: 'doctor'
+      },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
     );
 
     // Return token and doctor info (excluding password)
     const doctorInfo = {
-      id: doctor._id,
+      _id: doctor._id,
       firstName: doctor.firstName,
       lastName: doctor.lastName,
       email: doctor.email,
-      specialization: doctor.specialization
+      specialization: doctor.specialization,
+      role: 'doctor'
     };
 
     res.json({ token, doctor: doctorInfo });
@@ -114,6 +121,27 @@ router.get('/', (async (req: Request, res: Response) => {
   }
 }) as RequestHandler);
 
+// Get doctor's appointments
+router.get('/appointments', verifyToken as RequestHandler, doctorAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    console.log('Fetching appointments for doctor:', req.user._id);
+
+    const appointments = await Appointment.find({ doctor: req.user._id })
+      .populate('user', 'name email')
+      .sort({ date: 1 });
+    
+    console.log('Found appointments:', appointments.length);
+    res.json(appointments);
+  } catch (error) {
+    console.error('Error fetching doctor appointments:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
+
 // Get doctor by ID
 router.get('/:id', (async (req: Request, res: Response) => {
   try {
@@ -124,24 +152,6 @@ router.get('/:id', (async (req: Request, res: Response) => {
     res.json(doctor);
   } catch (error) {
     console.error('Error fetching doctor:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
-
-// Get doctor's appointments
-router.get('/appointments', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
-    }
-
-    const appointments = await Appointment.find({ doctor: req.user._id })
-      .populate('user', 'name email')
-      .sort({ date: 1 });
-    
-    res.json(appointments);
-  } catch (error) {
-    console.error('Error fetching doctor appointments:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);

@@ -4,13 +4,18 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import fileUpload, { UploadedFile } from 'express-fileupload';
 import { verifyToken, adminAuth, AuthRequest } from './middleware/auth';
 import productRoutes from './routes/productRoutes';
 import doctorRoutes from './routes/doctorRoutes';
 import appointmentRoutes from './routes/appointmentRoutes';
 import adminRoutes from './routes/adminRoutes';
 import donationRoutes from './routes/donations';
+import orderRoutes from './routes/orderRoutes';
 import { v2 as cloudinary } from 'cloudinary';
+import User from './models/User';
+import charityRoutes from './routes/charityRoutes';
+import { Charity, initialCharities } from './models/Charity';
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +31,11 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50mb' })); // Increased limit for image uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(fileUpload({
+  useTempFiles: true,
+  tempFileDir: '/tmp/',
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+}));
 
 // Configure Cloudinary
 cloudinary.config({
@@ -34,27 +44,33 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+console.log('Cloudinary configured successfully with cloud name:', process.env.CLOUDINARY_CLOUD_NAME);
+
 // MongoDB connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/pawshu';
+
+// Initialize charities if none exist
+const initializeCharities = async () => {
+  try {
+    const charityCount = await Charity.countDocuments();
+    if (charityCount === 0) {
+      console.log('No charities found. Initializing with sample data...');
+      await Charity.insertMany(initialCharities);
+      console.log('Sample charities initialized successfully.');
+    }
+  } catch (error) {
+    console.error('Error initializing charities:', error);
+  }
+};
 
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('Connected to MongoDB');
+    initializeCharities();
   })
   .catch((error) => {
     console.error('MongoDB connection error:', error);
   });
-
-// User Schema
-const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  name: { type: String, required: true },
-  role: { type: String, enum: ['user', 'admin'], default: 'user' },
-  createdAt: { type: Date, default: Date.now }
-});
-
-const User = mongoose.model('User', userSchema);
 
 // Routes
 // Register
@@ -199,7 +215,8 @@ const adminLoginHandler = async (req: Request, res: Response) => {
         _id: user._id,
         name: user.name,
         email: user.email,
-        isAdmin: true
+        isAdmin: true,
+        role: 'admin'
       },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
@@ -212,7 +229,8 @@ const adminLoginHandler = async (req: Request, res: Response) => {
         _id: user._id,
         name: user.name,
         email: user.email,
-        isAdmin: true
+        isAdmin: true,
+        role: 'admin'
       }
     });
   } catch (error) {
@@ -241,6 +259,39 @@ const profileHandler = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Update Profile
+const updateProfileHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    console.log('PUT /api/auth/profile - Updating user profile');
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+    
+    const { name, email, phone, address, avatar } = req.body;
+    
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Update fields
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (phone) user.phone = phone;
+    if (address) user.address = address;
+    if (avatar) user.avatar = avatar;
+    
+    await user.save();
+    
+    // Return updated user without password
+    const updatedUser = await User.findById(req.user._id).select('-password');
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Get All Users
 const getAllUsersHandler = async (req: AuthRequest, res: Response) => {
   try {
@@ -252,7 +303,7 @@ const getAllUsersHandler = async (req: AuthRequest, res: Response) => {
     const users = await User.find().select('-password');
     res.json(users);
   } catch (error) {
-    console.error('Users fetch error:', error);
+    console.error('Error fetching users:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -276,27 +327,46 @@ app.get('/api/auth/debug-user/:email', (async (req: Request, res: Response) => {
   }
 }) as RequestHandler);
 
-// Register routes
+// Auth routes
 app.post('/api/auth/register', registerHandler as RequestHandler);
 app.post('/api/auth/login', loginHandler as RequestHandler);
 app.post('/api/auth/admin/login', adminLoginHandler as RequestHandler);
 app.get('/api/auth/profile', verifyToken as RequestHandler, profileHandler as RequestHandler);
-app.get('/api/auth/users', verifyToken as RequestHandler, getAllUsersHandler as RequestHandler);
+app.put('/api/auth/profile', verifyToken as RequestHandler, updateProfileHandler as RequestHandler);
+app.get('/api/auth/users', adminAuth as RequestHandler, getAllUsersHandler as RequestHandler);
 
-// Product routes
+// API routes
 app.use('/api/products', productRoutes);
-
-// Doctor routes
 app.use('/api/doctors', doctorRoutes);
-
-// Appointment routes
 app.use('/api/appointments', appointmentRoutes);
-
-// Admin routes
 app.use('/api/admin', adminRoutes);
-
-// Donation routes
+app.use('/api/charities', charityRoutes);
 app.use('/api/donations', donationRoutes);
+app.use('/api/orders', orderRoutes);
+
+// Upload endpoint
+app.post('/api/upload', async (req: Request, res: Response) => {
+  try {
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const file = req.files.file as UploadedFile;
+    const result = await cloudinary.uploader.upload(file.tempFilePath || '', {
+      folder: 'pawshu/users',
+      use_filename: true,
+      unique_filename: false,
+    });
+
+    res.json({
+      public_id: result.public_id,
+      url: result.secure_url
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ message: 'Error uploading file' });
+  }
+});
 
 // Start server
 const PORT = process.env.PORT || 5000;

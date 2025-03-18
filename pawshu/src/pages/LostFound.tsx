@@ -71,22 +71,22 @@ const LostFound = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Lost & Found Pets</h1>
-          <p className="mt-2 text-gray-600">Help reunite lost pets with their families</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Lost & Found Pets</h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-300">Help reunite lost pets with their families</p>
         </div>
 
         {/* Tabs */}
         <div className="flex justify-center mb-8">
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border dark:border-gray-700 rounded-lg overflow-hidden">
             <button
               onClick={() => setActiveTab('browse')}
               className={`px-6 py-2 ${
                 activeTab === 'browse'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
               Browse Reports
@@ -96,7 +96,7 @@ const LostFound = () => {
               className={`px-6 py-2 ${
                 activeTab === 'report'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-50'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
               }`}
             >
               Submit Report
@@ -113,7 +113,7 @@ const LostFound = () => {
                 className={`px-4 py-2 rounded-md ${
                   filter === 'all'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
                 All
@@ -123,7 +123,7 @@ const LostFound = () => {
                 className={`px-4 py-2 rounded-md ${
                   filter === 'lost'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
                 Lost Pets
@@ -133,7 +133,7 @@ const LostFound = () => {
                 className={`px-4 py-2 rounded-md ${
                   filter === 'found'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
                 Found Pets
@@ -143,25 +143,25 @@ const LostFound = () => {
             {/* Reports Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredReports.map(report => (
-                <div key={report.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
+                <div key={report.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
                   <img
                     src={report.image}
                     alt={`${report.type} ${report.petType}`}
-                    className="w-full h-48 object-cover"
+                    className="w-full h-[300px] object-cover"
                   />
                   <div className="p-4">
                     <div className={`inline-block px-2 py-1 rounded text-sm font-semibold ${
                       report.type === 'lost'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-green-100 text-green-800'
+                        ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
+                        : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300'
                     }`}>
                       {report.type.toUpperCase()}
                     </div>
-                    <h3 className="mt-2 text-lg font-semibold text-gray-900">
+                    <h3 className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">
                       {report.petType} - {report.breed}
                     </h3>
-                    <p className="mt-1 text-gray-500">{report.description}</p>
-                    <div className="mt-4 text-sm text-gray-500">
+                    <p className="mt-1 text-gray-500 dark:text-gray-400">{report.description}</p>
+                    <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
                       <p>Location: {report.location}</p>
                       <p>Date: {report.date}</p>
                       <p>Contact: {report.contact}</p>
@@ -174,17 +174,17 @@ const LostFound = () => {
         ) : (
           /* Report Form */
           <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Report Type
                   </label>
                   <select
                     name="type"
                     value={formData.type}
                     onChange={handleChange}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   >
                     <option value="lost">Lost Pet</option>
@@ -194,7 +194,7 @@ const LostFound = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Pet Type
                     </label>
                     <input
@@ -202,12 +202,12 @@ const LostFound = () => {
                       name="petType"
                       value={formData.petType}
                       onChange={handleChange}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Breed (optional)
                     </label>
                     <input
@@ -215,13 +215,13 @@ const LostFound = () => {
                       name="breed"
                       value={formData.breed}
                       onChange={handleChange}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Location
                   </label>
                   <input
@@ -229,13 +229,13 @@ const LostFound = () => {
                     name="location"
                     value={formData.location}
                     onChange={handleChange}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Date
                   </label>
                   <input
@@ -243,13 +243,13 @@ const LostFound = () => {
                     name="date"
                     value={formData.date}
                     onChange={handleChange}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Description
                   </label>
                   <textarea
@@ -257,13 +257,13 @@ const LostFound = () => {
                     value={formData.description}
                     onChange={handleChange}
                     rows={4}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Contact Information
                   </label>
                   <input
@@ -271,7 +271,7 @@ const LostFound = () => {
                     name="contact"
                     value={formData.contact}
                     onChange={handleChange}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     required
                   />
                 </div>

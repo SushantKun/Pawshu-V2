@@ -8,7 +8,7 @@ type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const XMarkIcon = XMarkIconOutline as IconComponent;
 
 interface CartItem {
-  id: number;
+  id: string;
   name: string;
   price: number;
   quantity: number;
@@ -19,8 +19,8 @@ interface CartSlideOverProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   cartItems: CartItem[];
-  updateQuantity: (id: number, newQuantity: number) => void;
-  removeItem: (id: number) => void;
+  updateQuantity: (id: string, newQuantity: number) => void;
+  removeItem: (id: string) => void;
 }
 
 const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeItem }: CartSlideOverProps) => {
@@ -62,14 +62,14 @@ const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeIte
                 leaveTo="translate-x-full"
               >
                 <Dialog.Panel className="pointer-events-auto w-screen max-w-md">
-                  <div className="flex h-full flex-col overflow-y-scroll bg-white shadow-xl">
+                  <div className="flex h-full flex-col overflow-y-scroll bg-white dark:bg-gray-800 shadow-xl">
                     <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
                       <div className="flex items-start justify-between">
-                        <Dialog.Title className="text-lg font-medium text-gray-900">Shopping cart</Dialog.Title>
+                        <Dialog.Title className="text-lg font-medium text-gray-900 dark:text-white">Shopping cart</Dialog.Title>
                         <div className="ml-3 flex h-7 items-center">
                           <button
                             type="button"
-                            className="relative -m-2 p-2 text-gray-400 hover:text-gray-500"
+                            className="relative -m-2 p-2 text-gray-400 hover:text-gray-500 dark:text-gray-300 dark:hover:text-gray-200"
                             onClick={() => setIsOpen(false)}
                           >
                             <span className="absolute -inset-0.5" />
@@ -83,20 +83,20 @@ const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeIte
                         <div className="flow-root">
                           {cartItems.length === 0 ? (
                             <div className="text-center py-12">
-                              <p className="text-gray-500 mb-4">Your cart is empty</p>
+                              <p className="text-gray-500 dark:text-gray-400 mb-4">Your cart is empty</p>
                               <Link
                                 to="/products"
-                                className="text-blue-600 hover:text-blue-500"
+                                className="text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
                                 onClick={() => setIsOpen(false)}
                               >
                                 Continue Shopping
                               </Link>
                             </div>
                           ) : (
-                            <ul role="list" className="-my-6 divide-y divide-gray-200">
+                            <ul role="list" className="-my-6 divide-y divide-gray-200 dark:divide-gray-700">
                               {cartItems.map((item) => (
                                 <li key={item.id} className="flex py-6">
-                                  <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-md border border-gray-200">
+                                  <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
                                     <img
                                       src={item.image}
                                       alt={item.name}
@@ -106,7 +106,7 @@ const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeIte
 
                                   <div className="ml-4 flex flex-1 flex-col">
                                     <div>
-                                      <div className="flex justify-between text-base font-medium text-gray-900">
+                                      <div className="flex justify-between text-base font-medium text-gray-900 dark:text-white">
                                         <h3>{item.name}</h3>
                                         <p className="ml-4">${(item.price * item.quantity).toFixed(2)}</p>
                                       </div>
@@ -115,14 +115,14 @@ const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeIte
                                       <div className="flex items-center space-x-2">
                                         <button
                                           onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                          className="px-2 py-1 border rounded hover:bg-gray-50"
+                                          className="px-2 py-1 border rounded hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-white"
                                         >
                                           -
                                         </button>
-                                        <span className="text-gray-500">{item.quantity}</span>
+                                        <span className="text-gray-500 dark:text-gray-400">{item.quantity}</span>
                                         <button
                                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                          className="px-2 py-1 border rounded hover:bg-gray-50"
+                                          className="px-2 py-1 border rounded hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 dark:text-white"
                                         >
                                           +
                                         </button>
@@ -145,16 +145,16 @@ const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeIte
                     </div>
 
                     {cartItems.length > 0 && (
-                      <div className="border-t border-gray-200 px-4 py-6 sm:px-6">
-                        <div className="flex justify-between text-base font-medium text-gray-900">
+                      <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-6 sm:px-6">
+                        <div className="flex justify-between text-base font-medium text-gray-900 dark:text-white">
                           <p>Subtotal</p>
                           <p>${subtotal.toFixed(2)}</p>
                         </div>
-                        <div className="flex justify-between text-base font-medium text-gray-900 mt-2">
+                        <div className="flex justify-between text-base font-medium text-gray-900 dark:text-white mt-2">
                           <p>Shipping</p>
                           <p>${shipping.toFixed(2)}</p>
                         </div>
-                        <div className="flex justify-between text-base font-medium text-gray-900 mt-4 pt-4 border-t">
+                        <div className="flex justify-between text-base font-medium text-gray-900 dark:text-white mt-4 pt-4 border-t dark:border-gray-700">
                           <p>Total</p>
                           <p>${total.toFixed(2)}</p>
                         </div>
@@ -166,12 +166,12 @@ const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeIte
                             Checkout
                           </button>
                         </div>
-                        <div className="mt-6 flex justify-center text-center text-sm text-gray-500">
+                        <div className="mt-6 flex justify-center text-center text-sm text-gray-500 dark:text-gray-400">
                           <p>
                             or{' '}
                             <button
                               type="button"
-                              className="font-medium text-blue-600 hover:text-blue-500"
+                              className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
                               onClick={() => setIsOpen(false)}
                             >
                               Continue Shopping

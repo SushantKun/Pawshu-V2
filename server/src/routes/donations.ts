@@ -1,31 +1,56 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { AuthRequest, verifyToken } from '../middleware/auth';
 import Donation from '../models/Donation';
+import { Charity } from '../models/Charity';
 
 const router = express.Router();
 
 // Create a new donation
 router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
+    console.log('Creating new donation:', req.body);
+
     if (!req.user) {
       res.status(401).json({ message: 'Please authenticate' });
+      return;
+    }
+
+    // Validate required fields
+    const { charityId, charityName, amount } = req.body;
+    if (!charityId || !charityName || !amount) {
+      res.status(400).json({ message: 'Please provide all required fields: charityId, charityName, amount' });
+      return;
+    }
+
+    // Verify charity exists
+    const charity = await Charity.findById(charityId);
+    if (!charity) {
+      res.status(404).json({ message: 'Charity not found' });
       return;
     }
 
     const donation = new Donation({
       userId: req.user._id,
       userName: req.user.name,
-      charityId: req.body.charityId,
-      charityName: req.body.charityName,
-      amount: req.body.amount,
+      charityId,
+      charityName,
+      amount,
       status: req.body.status || 'completed',
       date: req.body.date || new Date()
     });
 
+    console.log('Saving donation:', donation);
     await donation.save();
+    console.log('Donation saved successfully:', donation._id);
+
     res.status(201).json(donation);
   } catch (error) {
-    next(error);
+    console.error('Error creating donation:', error);
+    if (error instanceof Error) {
+      res.status(500).json({ message: 'Failed to create donation', error: error.message });
+    } else {
+      res.status(500).json({ message: 'Failed to create donation', error: 'Unknown error' });
+    }
   }
 });
 

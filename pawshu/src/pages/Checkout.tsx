@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { toast } from 'react-toastify';
+import api from '../api/axios';
+import { showSuccessNotification, NOTIFICATIONS } from '../utils/notification';
 
 interface ShippingDetails {
   firstName: string;
@@ -25,10 +29,12 @@ const initialShippingDetails: ShippingDetails = {
 };
 
 const Checkout = () => {
-  const { cartItems } = useCart();
+  const { cartItems, clearCart } = useCart();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [shippingDetails, setShippingDetails] = useState<ShippingDetails>(initialShippingDetails);
   const [step, setStep] = useState<'shipping' | 'payment'>('shipping');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shipping = cartItems.length > 0 ? 5.99 : 0;
@@ -50,16 +56,48 @@ const Checkout = () => {
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would typically:
-    // 1. Validate payment details
-    // 2. Send to payment processor
-    // 3. Create order in database
-    // 4. Clear cart
-    // 5. Redirect to success page
     
-    // For now, we'll just show an alert and redirect
-    alert('Order placed successfully!');
-    navigate('/');
+    if (!user) {
+      toast.error('Please log in to complete your purchase');
+      navigate('/login');
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      // Prepare order items
+      const items = cartItems.map(item => ({
+        productId: item.id,
+        productName: item.name,
+        price: item.price,
+        quantity: item.quantity
+      }));
+      
+      // Create order
+      const response = await api.post('/orders', {
+        items,
+        totalAmount: total,
+        shippingAddress: shippingDetails
+      });
+      
+      // Clear cart
+      clearCart();
+      
+      // Show success notification
+      showSuccessNotification(
+        NOTIFICATIONS.PURCHASE.title,
+        NOTIFICATIONS.PURCHASE.message
+      );
+      
+      // Redirect to success page
+      navigate('/');
+    } catch (error) {
+      console.error('Error placing order:', error);
+      toast.error('Failed to place order. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (cartItems.length === 0) {
@@ -78,11 +116,11 @@ const Checkout = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 bg-gray-50 dark:bg-gray-900">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Main Content */}
         <div className="flex-1">
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             {/* Progress Steps */}
             <div className="flex mb-8">
               <div className={`flex-1 text-center ${step === 'shipping' ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>
@@ -97,7 +135,7 @@ const Checkout = () => {
               <form onSubmit={handleShippingSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">First Name</label>
+                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
                     <input
                       type="text"
                       id="firstName"
@@ -105,11 +143,13 @@ const Checkout = () => {
                       required
                       value={shippingDetails.firstName}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className={`mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        shippingDetails.firstName ? 'border-gray-300' : 'border-red-500 dark:border-red-500'
+                      }`}
                     />
                   </div>
                   <div>
-                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">Last Name</label>
+                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
                     <input
                       type="text"
                       id="lastName"
@@ -117,11 +157,13 @@ const Checkout = () => {
                       required
                       value={shippingDetails.lastName}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className={`mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        shippingDetails.lastName ? 'border-gray-300' : 'border-red-500 dark:border-red-500'
+                      }`}
                     />
                   </div>
                   <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
                     <input
                       type="email"
                       id="email"
@@ -129,11 +171,13 @@ const Checkout = () => {
                       required
                       value={shippingDetails.email}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className={`mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        shippingDetails.email ? 'border-gray-300' : 'border-red-500 dark:border-red-500'
+                      }`}
                     />
                   </div>
                   <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Phone</label>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label>
                     <input
                       type="tel"
                       id="phone"
@@ -141,11 +185,13 @@ const Checkout = () => {
                       required
                       value={shippingDetails.phone}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className={`mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        shippingDetails.phone ? 'border-gray-300' : 'border-red-500 dark:border-red-500'
+                      }`}
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label htmlFor="address" className="block text-sm font-medium text-gray-700">Address</label>
+                    <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
                     <input
                       type="text"
                       id="address"
@@ -153,11 +199,13 @@ const Checkout = () => {
                       required
                       value={shippingDetails.address}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className={`mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        shippingDetails.address ? 'border-gray-300' : 'border-red-500 dark:border-red-500'
+                      }`}
                     />
                   </div>
                   <div>
-                    <label htmlFor="city" className="block text-sm font-medium text-gray-700">City</label>
+                    <label htmlFor="city" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">City</label>
                     <input
                       type="text"
                       id="city"
@@ -165,11 +213,13 @@ const Checkout = () => {
                       required
                       value={shippingDetails.city}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className={`mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        shippingDetails.city ? 'border-gray-300' : 'border-red-500 dark:border-red-500'
+                      }`}
                     />
                   </div>
                   <div>
-                    <label htmlFor="state" className="block text-sm font-medium text-gray-700">State</label>
+                    <label htmlFor="state" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">State</label>
                     <input
                       type="text"
                       id="state"
@@ -177,11 +227,13 @@ const Checkout = () => {
                       required
                       value={shippingDetails.state}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className={`mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        shippingDetails.state ? 'border-gray-300' : 'border-red-500 dark:border-red-500'
+                      }`}
                     />
                   </div>
                   <div>
-                    <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700">Postal Code</label>
+                    <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Postal Code</label>
                     <input
                       type="text"
                       id="postalCode"
@@ -189,7 +241,9 @@ const Checkout = () => {
                       required
                       value={shippingDetails.postalCode}
                       onChange={handleInputChange}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className={`mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white ${
+                        shippingDetails.postalCode ? 'border-gray-300' : 'border-red-500 dark:border-red-500'
+                      }`}
                     />
                   </div>
                 </div>
@@ -206,34 +260,34 @@ const Checkout = () => {
               <form onSubmit={handlePaymentSubmit} className="space-y-6">
                 <div className="space-y-6">
                   <div>
-                    <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700">Card Number</label>
+                    <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Card Number</label>
                     <input
                       type="text"
                       id="cardNumber"
                       required
                       placeholder="1234 5678 9012 3456"
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <label htmlFor="expiry" className="block text-sm font-medium text-gray-700">Expiry Date</label>
+                      <label htmlFor="expiry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expiry Date</label>
                       <input
                         type="text"
                         id="expiry"
                         required
                         placeholder="MM/YY"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
                     </div>
                     <div>
-                      <label htmlFor="cvc" className="block text-sm font-medium text-gray-700">CVC</label>
+                      <label htmlFor="cvc" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CVC</label>
                       <input
                         type="text"
                         id="cvc"
                         required
                         placeholder="123"
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       />
                     </div>
                   </div>
@@ -242,7 +296,7 @@ const Checkout = () => {
                   <button
                     type="button"
                     onClick={() => setStep('shipping')}
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-800"
                   >
                     Back to Shipping
                   </button>
@@ -260,34 +314,34 @@ const Checkout = () => {
 
         {/* Order Summary */}
         <div className="lg:w-1/3">
-          <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
-            <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 sticky top-4">
+            <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Order Summary</h2>
             <div className="space-y-4">
               {cartItems.map(item => (
                 <div key={item.id} className="flex justify-between">
                   <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                    <p className="font-medium text-gray-800 dark:text-gray-300">{item.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Quantity: {item.quantity}</p>
                   </div>
-                  <p className="font-medium">${(item.price * item.quantity).toFixed(2)}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-300">NPR {(item.price * item.quantity).toFixed(2)}</p>
                 </div>
               ))}
               <div className="border-t pt-4">
                 <div className="flex justify-between mb-2">
-                  <p className="text-gray-600">Subtotal</p>
-                  <p className="font-medium">${subtotal.toFixed(2)}</p>
+                  <p className="text-gray-600 dark:text-gray-400">Subtotal</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-300">NPR {subtotal.toFixed(2)}</p>
                 </div>
                 <div className="flex justify-between mb-2">
-                  <p className="text-gray-600">Shipping</p>
-                  <p className="font-medium">${shipping.toFixed(2)}</p>
+                  <p className="text-gray-600 dark:text-gray-400">Shipping</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-300">NPR {shipping.toFixed(2)}</p>
                 </div>
                 <div className="flex justify-between mb-2">
-                  <p className="text-gray-600">Tax</p>
-                  <p className="font-medium">${tax.toFixed(2)}</p>
+                  <p className="text-gray-600 dark:text-gray-400">Tax</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-300">NPR {tax.toFixed(2)}</p>
                 </div>
                 <div className="flex justify-between border-t pt-2">
-                  <p className="font-semibold">Total</p>
-                  <p className="font-semibold">${total.toFixed(2)}</p>
+                  <p className="font-semibold text-gray-900 dark:text-white">Total</p>
+                  <p className="font-semibold text-gray-900 dark:text-white">NPR {total.toFixed(2)}</p>
                 </div>
               </div>
             </div>
