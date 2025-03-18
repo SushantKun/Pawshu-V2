@@ -242,187 +242,191 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="space-y-6 bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <div className="flex space-x-2">
-          <button
-            onClick={fetchDashboardStats}
-            className="px-4 py-2 bg-blue-600 dark:bg-blue-500 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors duration-200"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="container mx-auto px-4">
+        <div className="space-y-6">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+            <div className="flex space-x-2">
+              <button
+                onClick={fetchDashboardStats}
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-500 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors duration-200"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          title="Total Users"
-          value={stats?.counts?.users?.toString() || '0'}
-          icon={<UserGroupIconComponent className="h-6 w-6 text-blue-600 dark:text-blue-400" />}
-          color="text-blue-600 dark:text-blue-400"
-        />
-        <StatCard
-          title="Total Orders"
-          value={stats?.counts?.orders?.total?.toString() || '0'}
-          icon={<ShoppingBagIconComponent className="h-6 w-6 text-green-600 dark:text-green-400" />}
-          color="text-green-600 dark:text-green-400"
-        />
-        <StatCard
-          title="Total Revenue"
-          value={`Rs. ${(stats?.revenue || 0).toLocaleString()}`}
-          icon={<CurrencyDollarIconComponent className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />}
-          color="text-yellow-600 dark:text-yellow-400"
-        />
-        <StatCard
-          title="Total Donations"
-          value={`Rs. ${(stats?.counts?.donations?.totalAmount || 0).toLocaleString()}`}
-          icon={<HeartIconComponent className="h-6 w-6 text-red-600 dark:text-red-400" />}
-          color="text-red-600 dark:text-red-400"
-        />
-      </div>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StatCard
+              title="Total Users"
+              value={stats?.counts?.users?.toString() || '0'}
+              icon={<UserGroupIconComponent className="h-6 w-6 text-blue-600 dark:text-blue-400" />}
+              color="text-blue-600 dark:text-blue-400"
+            />
+            <StatCard
+              title="Total Orders"
+              value={stats?.counts?.orders?.total?.toString() || '0'}
+              icon={<ShoppingBagIconComponent className="h-6 w-6 text-green-600 dark:text-green-400" />}
+              color="text-green-600 dark:text-green-400"
+            />
+            <StatCard
+              title="Total Revenue"
+              value={`Rs. ${(stats?.revenue || 0).toLocaleString()}`}
+              icon={<CurrencyDollarIconComponent className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />}
+              color="text-yellow-600 dark:text-yellow-400"
+            />
+            <StatCard
+              title="Total Donations"
+              value={`Rs. ${(stats?.counts?.donations?.totalAmount || 0).toLocaleString()}`}
+              icon={<HeartIconComponent className="h-6 w-6 text-red-600 dark:text-red-400" />}
+              color="text-red-600 dark:text-red-400"
+            />
+          </div>
 
-      {/* Quick Stats */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Quick Stats</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Pending Appointments</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.appointments?.pending || 0}</p>
-          </div>
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Completed Appointments</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.appointments?.completed || 0}</p>
-          </div>
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Total Doctors</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.doctors || 0}</p>
-          </div>
-          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Total Charities</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.charities || 0}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Revenue Overview</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData.revenueData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
-                <XAxis 
-                  dataKey="date" 
-                  className="text-gray-500 dark:text-gray-400"
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <YAxis 
-                  className="text-gray-500 dark:text-gray-400"
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1F2937',
-                    border: 'none',
-                    borderRadius: '0.5rem',
-                    color: '#F9FAFB'
-                  }}
-                  labelStyle={{ color: '#F9FAFB' }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="amount" 
-                  stroke="#3B82F6" 
-                  strokeWidth={2}
-                  dot={{ fill: '#3B82F6', strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* User Growth Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">User Growth</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData.userGrowthData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
-                <XAxis 
-                  dataKey="date" 
-                  className="text-gray-500 dark:text-gray-400"
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <YAxis 
-                  className="text-gray-500 dark:text-gray-400"
-                  tick={{ fill: '#9CA3AF' }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1F2937',
-                    border: 'none',
-                    borderRadius: '0.5rem',
-                    color: '#F9FAFB'
-                  }}
-                  labelStyle={{ color: '#F9FAFB' }}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="users" 
-                  stroke="#10B981" 
-                  fill="#059669" 
-                  fillOpacity={0.2}
-                  dot={{ fill: '#10B981', strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Orders */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recent Orders</h2>
-          <div className="space-y-4">
-            {stats?.recent?.orders?.map((order: any) => (
-              <div key={order._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900 dark:text-white">{order.userId?.name || 'Unknown User'}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Order #{order._id.slice(-6)}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-medium text-gray-900 dark:text-white">Rs. {order.totalAmount.toLocaleString()}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
-                </div>
+          {/* Quick Stats */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Quick Stats</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Pending Appointments</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.appointments?.pending || 0}</p>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Appointments */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recent Appointments</h2>
-          <div className="space-y-4">
-            {stats?.recent?.appointments?.map((appointment: any) => (
-              <div key={appointment._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-900 dark:text-white">{appointment.user?.name}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Dr. {appointment.doctor?.firstName} {appointment.doctor?.lastName}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="font-medium text-gray-900 dark:text-white">{appointment.status}</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(appointment.date).toLocaleDateString()}</p>
-                </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Completed Appointments</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.appointments?.completed || 0}</p>
               </div>
-            ))}
+              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Doctors</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.doctors || 0}</p>
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Total Charities</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats?.counts?.charities || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Revenue Chart */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Revenue Overview</h2>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData.revenueData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
+                    <XAxis 
+                      dataKey="date" 
+                      className="text-gray-500 dark:text-gray-400"
+                      tick={{ fill: '#9CA3AF' }}
+                    />
+                    <YAxis 
+                      className="text-gray-500 dark:text-gray-400"
+                      tick={{ fill: '#9CA3AF' }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1F2937',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        color: '#F9FAFB'
+                      }}
+                      labelStyle={{ color: '#F9FAFB' }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="amount" 
+                      stroke="#3B82F6" 
+                      strokeWidth={2}
+                      dot={{ fill: '#3B82F6', strokeWidth: 2 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* User Growth Chart */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">User Growth</h2>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData.userGrowthData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
+                    <XAxis 
+                      dataKey="date" 
+                      className="text-gray-500 dark:text-gray-400"
+                      tick={{ fill: '#9CA3AF' }}
+                    />
+                    <YAxis 
+                      className="text-gray-500 dark:text-gray-400"
+                      tick={{ fill: '#9CA3AF' }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#1F2937',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        color: '#F9FAFB'
+                      }}
+                      labelStyle={{ color: '#F9FAFB' }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="users" 
+                      stroke="#10B981" 
+                      fill="#059669" 
+                      fillOpacity={0.2}
+                      dot={{ fill: '#10B981', strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Activity Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Recent Orders */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recent Orders</h2>
+              <div className="space-y-4">
+                {stats?.recent?.orders?.map((order: any) => (
+                  <div key={order._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">{order.userId?.name || 'Unknown User'}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Order #{order._id.slice(-6)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gray-900 dark:text-white">Rs. {order.totalAmount.toLocaleString()}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Appointments */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Recent Appointments</h2>
+              <div className="space-y-4">
+                {stats?.recent?.appointments?.map((appointment: any) => (
+                  <div key={appointment._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">{appointment.user?.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Dr. {appointment.doctor?.firstName} {appointment.doctor?.lastName}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-medium text-gray-900 dark:text-white">{appointment.status}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(appointment.date).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

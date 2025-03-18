@@ -61,7 +61,7 @@ const Doctors = () => {
   }
   
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 py-16">
+    <div className="min-h-screen bg-white dark:bg-gray-900 pt-24">
       <div className="container mx-auto px-4">
         <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-8 text-center">
           Our Veterinarians

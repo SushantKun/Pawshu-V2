@@ -118,7 +118,7 @@ const Products = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 bg-gray-50 dark:bg-gray-900">
+    <div className="container mx-auto px-4 py-8 bg-gray-50 dark:bg-gray-900 pt-24">
       {/* Category Filter */}
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Categories</h2>

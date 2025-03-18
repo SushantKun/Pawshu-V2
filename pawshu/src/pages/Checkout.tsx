@@ -116,7 +116,7 @@ const Checkout = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 bg-gray-50 dark:bg-gray-900">
+    <div className="container mx-auto px-4 py-8 bg-gray-50 dark:bg-gray-900 pt-24">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Main Content */}
         <div className="flex-1">
