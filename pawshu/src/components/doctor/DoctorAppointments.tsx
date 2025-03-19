@@ -170,9 +170,15 @@ const DoctorAppointments = () => {
   // Filter appointments based on status and search term
   const filteredAppointments = appointments.filter(appointment => {
     const matchesStatus = filterStatus === 'all' || appointment.status === filterStatus;
+    
+    // Create a safe user name for searching
+    const userName = appointment.user 
+      ? `${appointment.user?.firstName || ''} ${appointment.user?.lastName || ''}`.toLowerCase()
+      : '';
+    
     const matchesSearch = 
       appointment.petName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (appointment.user.firstName + ' ' + appointment.user.lastName).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      userName.includes(searchTerm.toLowerCase()) ||
       appointment.reason.toLowerCase().includes(searchTerm.toLowerCase());
     
     return matchesStatus && matchesSearch;
@@ -303,7 +309,7 @@ const DoctorAppointments = () => {
                           {appointment.petName} ({appointment.petType})
                         </h3>
                         <p className="text-gray-600 dark:text-gray-300 mb-1">
-                          Owner: {appointment.user.firstName} {appointment.user.lastName}
+                          Owner: {appointment.user?.firstName || 'Unknown'} {appointment.user?.lastName || ''}
                         </p>
                         <p className="text-gray-600 dark:text-gray-300 mb-1">
                           Time: {appointment.timeSlot}

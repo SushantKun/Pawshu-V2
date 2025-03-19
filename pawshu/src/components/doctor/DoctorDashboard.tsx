@@ -165,7 +165,7 @@ const DoctorDashboard = () => {
                         <div>
                           <h4 className="font-medium text-gray-900 dark:text-white">{appointment.petName}</h4>
                           <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Owner: {appointment.user.name} • {new Date(appointment.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            Owner: {appointment.user?.name || 'Unknown'} • {new Date(appointment.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </p>
                           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                             Reason: {appointment.reason}

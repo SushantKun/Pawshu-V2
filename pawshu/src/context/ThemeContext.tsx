@@ -11,24 +11,31 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const userId = user?._id || 'guest';
+  const userRole = user?.role || 'guest';
   
-  // Initialize dark mode from localStorage if available, using user-specific key
+  // Generate a unique theme key based on user ID and role
+  const themeKey = `theme_${userRole}_${userId}`;
+  
+  // Initialize dark mode from localStorage if available, using user and role specific key
   const [darkMode, setDarkMode] = useState<boolean>(() => {
-    const savedTheme = localStorage.getItem(`theme_${userId}`);
+    const savedTheme = localStorage.getItem(themeKey);
     return savedTheme ? JSON.parse(savedTheme) : false;
   });
 
   // Update theme when user changes
   useEffect(() => {
-    const savedTheme = localStorage.getItem(`theme_${userId}`);
+    const savedTheme = localStorage.getItem(themeKey);
     if (savedTheme) {
       setDarkMode(JSON.parse(savedTheme));
+    } else {
+      // Reset to default when changing users
+      setDarkMode(false);
     }
-  }, [userId]);
+  }, [userId, userRole, themeKey]);
 
   // Persist theme to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem(`theme_${userId}`, JSON.stringify(darkMode));
+    localStorage.setItem(themeKey, JSON.stringify(darkMode));
     
     // Apply dark mode to the document
     if (darkMode) {
@@ -36,7 +43,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [darkMode, userId]);
+  }, [darkMode, themeKey]);
 
   const toggleDarkMode = () => {
     setDarkMode(prevMode => !prevMode);

@@ -138,7 +138,7 @@ const Wishlist = () => {
               <h3 className="text-lg font-semibold mb-2">{product.name}</h3>
               <p className="text-gray-600 mb-4 line-clamp-2">{product.description}</p>
               <div className="flex justify-between items-center">
-                <span className="text-xl font-bold">${product.price.toFixed(2)}</span>
+                <span className="text-xl font-bold">NPR {product.price.toFixed(2)}</span>
                 <button
                   onClick={() => handleAddToCart(product)}
                   className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"

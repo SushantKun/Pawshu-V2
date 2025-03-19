@@ -108,7 +108,7 @@ const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeIte
                                     <div>
                                       <div className="flex justify-between text-base font-medium text-gray-900 dark:text-white">
                                         <h3>{item.name}</h3>
-                                        <p className="ml-4">${(item.price * item.quantity).toFixed(2)}</p>
+                                        <p className="ml-4">NPR {(item.price * item.quantity).toFixed(2)}</p>
                                       </div>
                                     </div>
                                     <div className="flex flex-1 items-end justify-between text-sm">
@@ -148,15 +148,15 @@ const CartSlideOver = ({ isOpen, setIsOpen, cartItems, updateQuantity, removeIte
                       <div className="border-t border-gray-200 dark:border-gray-700 px-4 py-6 sm:px-6">
                         <div className="flex justify-between text-base font-medium text-gray-900 dark:text-white">
                           <p>Subtotal</p>
-                          <p>${subtotal.toFixed(2)}</p>
+                          <p>NPR {subtotal.toFixed(2)}</p>
                         </div>
                         <div className="flex justify-between text-base font-medium text-gray-900 dark:text-white mt-2">
                           <p>Shipping</p>
-                          <p>${shipping.toFixed(2)}</p>
+                          <p>NPR {shipping.toFixed(2)}</p>
                         </div>
                         <div className="flex justify-between text-base font-medium text-gray-900 dark:text-white mt-4 pt-4 border-t dark:border-gray-700">
                           <p>Total</p>
-                          <p>${total.toFixed(2)}</p>
+                          <p>NPR {total.toFixed(2)}</p>
                         </div>
                         <div className="mt-6">
                           <button

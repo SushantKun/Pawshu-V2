@@ -9,7 +9,7 @@ export interface IProduct extends Document {
   name: string;
   description: string;
   price: number;
-  category: 'Food' | 'Toys' | 'Accessories' | 'Health' | 'Travel';
+  category: 'Food' | 'Toys' | 'Accessories' | 'Health' | 'Grooming';
   stock: number;
   images: ProductImage[];
   featured: boolean;
@@ -37,7 +37,7 @@ const productSchema = new Schema<IProduct>({
     type: String,
     required: [true, 'Please select product category'],
     enum: {
-      values: ['Food', 'Toys', 'Accessories', 'Health', 'Travel'],
+      values: ['Food', 'Toys', 'Accessories', 'Health', 'Grooming'],
       message: 'Please select correct category'
     }
   },

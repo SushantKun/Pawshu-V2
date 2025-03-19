@@ -671,9 +671,9 @@ const Profile = () => {
                             <h3 className="text-sm font-medium text-gray-900 dark:text-white">
                               {donation.charityName}
                             </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              ${donation.amount.toFixed(2)}
-                            </p>
+                            <div className="text-gray-600 dark:text-gray-400">
+                              NPR {donation.amount.toFixed(2)}
+                            </div>
                           </div>
                           <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                             donation.status === 'completed'

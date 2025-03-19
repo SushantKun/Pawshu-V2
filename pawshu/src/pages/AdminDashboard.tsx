@@ -273,13 +273,13 @@ const AdminDashboard = () => {
             />
             <StatCard
               title="Total Revenue"
-              value={`Rs. ${(stats?.revenue || 0).toLocaleString()}`}
+              value={`NPR ${(stats?.revenue || 0).toLocaleString()}`}
               icon={<CurrencyDollarIconComponent className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />}
               color="text-yellow-600 dark:text-yellow-400"
             />
             <StatCard
               title="Total Donations"
-              value={`Rs. ${(stats?.counts?.donations?.totalAmount || 0).toLocaleString()}`}
+              value={`NPR ${(stats?.counts?.donations?.totalAmount || 0).toLocaleString()}`}
               icon={<HeartIconComponent className="h-6 w-6 text-red-600 dark:text-red-400" />}
               color="text-red-600 dark:text-red-400"
             />
@@ -399,7 +399,7 @@ const AdminDashboard = () => {
                       <p className="text-sm text-gray-500 dark:text-gray-400">Order #{order._id.slice(-6)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-gray-900 dark:text-white">Rs. {order.totalAmount.toLocaleString()}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">NPR {order.totalAmount.toLocaleString()}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
                     </div>
                   </div>

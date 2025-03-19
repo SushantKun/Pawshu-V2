@@ -176,7 +176,7 @@ const Donate = () => {
 
       showSuccessNotification(
         NOTIFICATIONS.DONATION.title,
-        `Your support of Rs. ${amount} helps make a difference for animals in need.`
+        `Your support of NPR ${amount.toLocaleString()} helps make a difference for animals in need.`
       );
       setDonationComplete(true);
       fetchCharities(); // Refresh charities to update progress
@@ -251,7 +251,7 @@ const Donate = () => {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Thank You for Your Donation!</h2>
             <p className="text-gray-600 dark:text-gray-300 mb-6">
-              Your generous contribution of Rs. {selectedAmount ? selectedAmount.toLocaleString() : customAmount} to {selectedCharity?.name} will make a difference.
+              Your generous contribution of NPR {selectedAmount ? selectedAmount.toLocaleString() : customAmount} to {selectedCharity?.name} will make a difference.
             </p>
             <button
               onClick={() => setSelectedCharity(null)}
@@ -292,10 +292,10 @@ const Donate = () => {
               </div>
               <div className="flex justify-between mt-2">
                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                  Rs. {selectedCharity.raised.toLocaleString()}
+                  NPR {selectedCharity.raised.toLocaleString()}
                 </span>
                 <span className="text-sm text-gray-600 dark:text-gray-300">
-                  Rs. {selectedCharity.goal.toLocaleString()}
+                  NPR {selectedCharity.goal.toLocaleString()}
                 </span>
               </div>
             </div>
@@ -313,7 +313,7 @@ const Donate = () => {
                         : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
                     }`}
                   >
-                    Rs. {amount}
+                    NPR {amount}
                   </button>
                 ))}
               </div>
@@ -325,7 +325,7 @@ const Donate = () => {
               </label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 dark:text-gray-400">
-                  Rs.
+                  NPR
                 </span>
                 <input
                   type="number"

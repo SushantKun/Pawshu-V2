@@ -78,7 +78,7 @@ const Cart = () => {
                     />
                     <div className="ml-6 flex-1">
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{item.name}</h3>
-                      <p className="text-gray-500 dark:text-gray-400">${item.price.toFixed(2)}</p>
+                      <p className="text-gray-500 dark:text-gray-400">NPR {item.price.toFixed(2)}</p>
                       <div className="mt-2 flex items-center space-x-4">
                         <div className="flex items-center border dark:border-gray-600 rounded">
                           <button
@@ -105,7 +105,7 @@ const Cart = () => {
                     </div>
                     <div className="ml-6">
                       <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                        ${(item.price * item.quantity).toFixed(2)}
+                        NPR {(item.price * item.quantity).toFixed(2)}
                       </p>
                     </div>
                   </div>
@@ -120,16 +120,16 @@ const Cart = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-500 dark:text-gray-400">Subtotal</span>
-                    <span className="text-gray-900 dark:text-white">${subtotal.toFixed(2)}</span>
+                    <span className="text-gray-900 dark:text-white">NPR {subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500 dark:text-gray-400">Shipping</span>
-                    <span className="text-gray-900 dark:text-white">${shipping.toFixed(2)}</span>
+                    <span className="text-gray-900 dark:text-white">NPR {shipping.toFixed(2)}</span>
                   </div>
                   <div className="border-t dark:border-gray-700 pt-2 mt-2">
                     <div className="flex justify-between font-semibold">
                       <span className="text-gray-900 dark:text-white">Total</span>
-                      <span className="text-gray-900 dark:text-white">${total.toFixed(2)}</span>
+                      <span className="text-gray-900 dark:text-white">NPR {total.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
