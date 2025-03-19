@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -159,15 +159,37 @@ const ChatDetail = () => {
     }
   };
 
-  // Format timestamp to readable time
+  // Format timestamp to relative time
   const formatTimestamp = (timestamp: string) => {
-    return format(new Date(timestamp), 'h:mm a');
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.round(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    
+    const diffHours = Math.round(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    
+    const diffDays = Math.round(diffHours / 24);
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return format(date, 'MMM d, yyyy');
   };
 
   // Get the other participant in the chat
-  const getOtherParticipant = () => {
-    if (!chat || !user) return { name: 'Unknown' };
+  const getOtherParticipant = (chat: Chat) => {
+    if (!user || !chat) return { name: 'Unknown' };
     return chat.participants.find(p => p._id !== user._id) || { name: 'Unknown' };
+  };
+
+  const getContextLabel = () => {
+    if (!chat) return '';
+    return chat.context.type === 'lost-found' 
+      ? `Regarding ${chat.context.type.replace('-', ' ')} pet` 
+      : 'Appointment';
   };
 
   if (loading) return (
@@ -215,74 +237,105 @@ const ChatDetail = () => {
     </div>
   );
 
-  const otherParticipant = getOtherParticipant();
+  const otherParticipant = getOtherParticipant(chat);
+  const contextLabel = getContextLabel();
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-gray-800">
-      {/* Chat header */}
-      <div className="flex items-center p-4 border-b border-gray-200 dark:border-gray-700">
-        <button 
-          onClick={() => navigate('/chat')}
-          className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 mr-2"
-        >
-          <span className="text-gray-500">←</span>
-        </button>
-        <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
-          {otherParticipant.name?.charAt(0) || '?'}
-        </div>
-        <div className="ml-3">
-          <h2 className="font-semibold text-gray-900 dark:text-white">
-            {otherParticipant.name}
-          </h2>
-        </div>
-      </div>
-
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900">
-        {chat.messages.map((msg) => {
-          const isCurrentUser = msg.sender._id === user?._id;
-          return (
-            <div 
-              key={msg._id} 
-              className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
-            >
-              <div 
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  isCurrentUser 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
-                }`}
-              >
-                <div className="text-sm">{msg.content}</div>
-                <div className={`text-xs mt-1 ${isCurrentUser ? 'text-blue-100' : 'text-gray-500'}`}>
-                  {formatTimestamp(msg.timestamp)}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Message input */}
-      <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-full flex flex-col">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 border border-gray-300 dark:border-gray-600 rounded-l-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-          />
-          <button
-            type="submit"
-            disabled={!message.trim()}
-            className="bg-blue-500 hover:bg-blue-600 text-white rounded-r-lg px-4 py-2 disabled:opacity-50"
-          >
-            <span>→</span>
-          </button>
+          <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
+            {otherParticipant.name?.charAt(0)}
+          </div>
+          <div className="ml-3">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              {otherParticipant.name}
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {contextLabel}
+            </p>
+          </div>
         </div>
-      </form>
+        <Link to="/chat" className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M7.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+          </svg>
+        </Link>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4" ref={messagesEndRef}>
+        {loading ? (
+          <div className="flex justify-center items-center h-full">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+          </div>
+        ) : chat ? (
+          <div className="space-y-4">
+            {chat.messages.length === 0 ? (
+              <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+                No messages yet. Start the conversation!
+              </div>
+            ) : (
+              <>
+                {chat.messages.map((message, index) => {
+                  const isSentByMe = message.sender._id === user?._id;
+                  return (
+                    <div 
+                      key={index} 
+                      className={`flex ${isSentByMe ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div 
+                        className={`max-w-[75%] px-4 py-2 rounded-lg ${
+                          isSentByMe 
+                            ? 'bg-blue-500 text-white rounded-br-none' 
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-none'
+                        }`}
+                      >
+                        <p>{message.content}</p>
+                        <div 
+                          className={`text-xs mt-1 ${
+                            isSentByMe ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'
+                          }`}
+                        >
+                          {formatTimestamp(message.timestamp)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full">
+            <p className="text-gray-500 dark:text-gray-400 text-center">
+              Conversation not found. <Link to="/chat" className="text-blue-500 hover:underline">Go back to chat list</Link>
+            </p>
+          </div>
+        )}
+      </div>
+
+      {chat && (
+        <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              className="flex-1 border border-gray-300 dark:border-gray-600 rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              placeholder="Type a message..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
+            <button
+              type="submit"
+              className="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={!message.trim()}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 };

@@ -68,12 +68,20 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
       setLoading(true);
       toast.loading('Initiating chat...');
       
+      // Create a more meaningful initial message based on report type
+      let initialMessage = '';
+      if (report.type === 'lost') {
+        initialMessage = `Hello, I'm reaching out about your lost ${report.petType}${report.breed ? ` (${report.breed})` : ''}. I believe I may have some information that could help you.`;
+      } else {
+        initialMessage = `Hello, I'm contacting you about the ${report.petType}${report.breed ? ` (${report.breed})` : ''} you found. I may be able to help identify the owner.`;
+      }
+      
       // Create or get existing chat
       const response = await axios.post('http://localhost:5000/api/chats/initiate', {
         recipientId: report.userId._id,
         contextType: 'lost-found',
         referenceId: report._id,
-        initialMessage: `Hi, I'm interested in your ${report.type === 'lost' ? 'lost' : 'found'} ${report.petType}.`
+        initialMessage
       }, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
