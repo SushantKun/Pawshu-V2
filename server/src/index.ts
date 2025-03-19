@@ -295,6 +295,45 @@ const updateProfileHandler = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Update User Password
+const updatePasswordHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    console.log('PUT /api/auth/profile/password - Updating user password');
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Please provide current and new password' });
+    }
+
+    // Find user with password field
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Current password is incorrect' });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Error updating user password:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Get All Users
 const getAllUsersHandler = async (req: AuthRequest, res: Response) => {
   try {
@@ -307,6 +346,29 @@ const getAllUsersHandler = async (req: AuthRequest, res: Response) => {
     res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Delete User
+const deleteUserHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    console.log(`DELETE /api/auth/users/${req.params.id} - Deleting user`);
+    if (!req.user || !req.user.isAdmin) {
+      return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await User.deleteOne({ _id: req.params.id });
+    console.log('User deleted successfully:', req.params.id);
+    
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
@@ -330,13 +392,53 @@ app.get('/api/auth/debug-user/:email', (async (req: Request, res: Response) => {
   }
 }) as RequestHandler);
 
+// Update User
+const updateUserHandler = async (req: AuthRequest, res: Response) => {
+  try {
+    console.log(`PUT /api/auth/users/${req.params.id} - Updating user`);
+    if (!req.user || !req.user.isAdmin) {
+      return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
+    }
+
+    const { firstName, lastName, email, role, status } = req.body;
+    
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Update fields
+    if (firstName && lastName) user.name = `${firstName} ${lastName}`;
+    if (email) user.email = email;
+    if (role) {
+      if (!['user', 'admin'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role. Must be either "user" or "admin"' });
+      }
+      user.role = role;
+    }
+    if (status) user.status = status;
+    
+    await user.save();
+    
+    // Return updated user without password
+    const updatedUser = await User.findById(req.params.id).select('-password');
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 // Auth routes
 app.post('/api/auth/register', registerHandler as RequestHandler);
 app.post('/api/auth/login', loginHandler as RequestHandler);
 app.post('/api/auth/admin/login', adminLoginHandler as RequestHandler);
 app.get('/api/auth/profile', verifyToken as RequestHandler, profileHandler as RequestHandler);
 app.put('/api/auth/profile', verifyToken as RequestHandler, updateProfileHandler as RequestHandler);
+app.put('/api/auth/profile/password', verifyToken as RequestHandler, updatePasswordHandler as RequestHandler);
 app.get('/api/auth/users', adminAuth as RequestHandler, getAllUsersHandler as RequestHandler);
+app.put('/api/auth/users/:id', adminAuth as RequestHandler, updateUserHandler as RequestHandler);
+app.delete('/api/auth/users/:id', adminAuth as RequestHandler, deleteUserHandler as RequestHandler);
 
 // API routes
 app.use('/api/products', productRoutes);

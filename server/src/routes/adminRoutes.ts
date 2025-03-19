@@ -7,6 +7,7 @@ import Appointment from '../models/Appointment';
 import Donation from '../models/Donation';
 import { Charity } from '../models/Charity';
 import Order from '../models/Order';
+import bcrypt from 'bcrypt';
 
 const router = express.Router();
 
@@ -788,6 +789,55 @@ router.delete('/charities/:id', adminAuth as RequestHandler, (async (req: AuthRe
   } catch (error) {
     console.error('Error deleting charity:', error);
     res.status(500).json({ message: 'Failed to delete charity' });
+  }
+}) as RequestHandler);
+
+// Create new user (Admin only)
+router.post('/users', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+  try {
+    console.log('POST /api/admin/users - Creating new user');
+    const { firstName, lastName, email, password, role, status } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !password) {
+      return res.status(400).json({ message: 'Please provide all required fields' });
+    }
+
+    // Validate role
+    if (!role || !['user', 'admin'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role. Must be either "user" or "admin"' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new user
+    const user = new User({
+      name: `${firstName} ${lastName}`,
+      email,
+      password: hashedPassword,
+      role: role,
+      status: status || 'active'
+    });
+
+    await user.save();
+    console.log('User created successfully:', user._id);
+
+    // Remove password from response
+    const userResponse = user.toObject();
+    const { password: _, ...userWithoutPassword } = userResponse;
+
+    res.status(201).json(userWithoutPassword);
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
 

@@ -22,7 +22,7 @@ import ProductManagement from './pages/ProductManagement';
 import AdminLogin from './pages/AdminLogin';
 import AdminStats from './pages/AdminStats';
 import AdminUsers from './pages/AdminUsers';
-import AdminSettings from './pages/AdminSettings';
+import AdminSettings from './pages/admin/AdminSettings';
 import AdminDoctors from './pages/AdminDoctors';
 import CharityManagement from './components/admin/CharityManagement';
 // Import doctor components
@@ -115,7 +115,7 @@ const DoctorLayout = ({ children }: { children: JSX.Element }) => {
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <DoctorSidebar />
-      <div className="flex-1">
+      <div className="flex-1 ml-64">
         <main className="p-6">{children}</main>
       </div>
     </div>

@@ -49,7 +49,7 @@ const DoctorSidebar = () => {
   };
 
   return (
-    <div className="w-64 bg-blue-800 dark:bg-gray-800 text-white flex flex-col h-screen">
+    <div className="fixed top-0 left-0 w-64 bg-blue-800 dark:bg-gray-800 text-white flex flex-col h-screen">
       <div className="p-4 border-b border-blue-700 dark:border-gray-700 flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <div className="flex-shrink-0">
@@ -88,7 +88,7 @@ const DoctorSidebar = () => {
         </button>
       </div>
       
-      <nav className="flex-1 overflow-y-auto py-4">
+      <nav className="flex-1 overflow-y-auto py-4 scrollbar-thin scrollbar-thumb-blue-700 dark:scrollbar-thumb-gray-700 scrollbar-track-transparent">
         <ul className="space-y-2 px-2">
           <li>
             <Link 

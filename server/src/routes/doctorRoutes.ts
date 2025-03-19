@@ -110,6 +110,43 @@ router.put('/profile', verifyToken, doctorAuth, (async (req: AuthRequest, res: R
   }
 }) as RequestHandler);
 
+// Update doctor password
+router.put('/profile/password', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Please provide current and new password' });
+    }
+
+    // Find doctor with password field
+    const doctor = await Doctor.findById(req.user._id).select('+password');
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    // Verify current password
+    const isMatch = await doctor.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Current password is incorrect' });
+    }
+
+    // Update password
+    doctor.password = newPassword;
+    await doctor.save();
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Error updating doctor password:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
+
 // Get all doctors
 router.get('/', (async (req: Request, res: Response) => {
   try {
@@ -138,20 +175,6 @@ router.get('/appointments', verifyToken as RequestHandler, doctorAuth as Request
     res.json(appointments);
   } catch (error) {
     console.error('Error fetching doctor appointments:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
-
-// Get doctor by ID
-router.get('/:id', (async (req: Request, res: Response) => {
-  try {
-    const doctor = await Doctor.findById(req.params.id).select('-password');
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-    res.json(doctor);
-  } catch (error) {
-    console.error('Error fetching doctor:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
@@ -208,6 +231,20 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
     res.json({ availableSlots: finalAvailableSlots });
   } catch (error) {
     console.error('Get available slots error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
+
+// Get doctor by ID
+router.get('/:id', (async (req: Request, res: Response) => {
+  try {
+    const doctor = await Doctor.findById(req.params.id).select('-password');
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+    res.json(doctor);
+  } catch (error) {
+    console.error('Error fetching doctor:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);

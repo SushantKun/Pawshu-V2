@@ -271,61 +271,61 @@ const CharityManagement = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Charity Management</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Charity Management</h1>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
         >
           {showForm ? 'Close Form' : 'Add New Charity'}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm mb-6">
+        <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm mb-6">
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
               <input
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
               <textarea
                 name="description"
                 value={formData.description}
                 onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 rows={3}
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Goal Amount (NPR)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Goal Amount (NPR)</label>
               <input
                 type="number"
                 name="goal"
                 value={formData.goal}
                 onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 min="0"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Charity Image
               </label>
               
               <div className="mt-1 flex items-center">
                 <label
                   htmlFor="image-upload"
-                  className="cursor-pointer px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 flex items-center"
+                  className="cursor-pointer px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 flex items-center"
                 >
                   <PhotoIconComponent className="h-5 w-5 mr-2" />
                   {isEditing ? 'Change Image' : 'Add Image'}
@@ -355,7 +355,7 @@ const CharityManagement = () => {
                         setSelectedImage(null);
                         setPreviewImage(null);
                       }}
-                      className="mt-2 text-sm text-red-600 hover:text-red-800"
+                      className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                     >
                       Remove image
                     </button>
@@ -364,7 +364,7 @@ const CharityManagement = () => {
               )}
               
               {isEditing && !selectedImage && (
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {previewImage ? 'Using existing image. Upload a new one to replace it.' : 'No image currently. Please upload one.'}
                 </p>
               )}
@@ -373,13 +373,13 @@ const CharityManagement = () => {
               <button
                 type="button"
                 onClick={resetForm}
-                className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200"
+                className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
                 disabled={loading}
               >
                 {loading ? (
@@ -401,12 +401,12 @@ const CharityManagement = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {charities.length === 0 ? (
-          <div className="col-span-3 text-center py-10 bg-white rounded-lg shadow-sm">
-            <p className="text-gray-500">No charities found. Add your first charity!</p>
+          <div className="col-span-3 text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+            <p className="text-gray-500 dark:text-gray-400">No charities found. Add your first charity!</p>
           </div>
         ) : (
           charities.map((charity) => (
-            <div key={charity._id} className="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div key={charity._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
               <img
                 src={getCharityImage(charity)}
                 alt={charity.name}
@@ -414,20 +414,20 @@ const CharityManagement = () => {
                 onError={() => handleImageError(charity._id)}
               />
               <div className="p-4">
-                <h3 className="text-lg font-semibold mb-2">{charity.name}</h3>
-                <p className="text-gray-600 mb-4">{charity.description}</p>
+                <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">{charity.name}</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">{charity.description}</p>
                 <div className="mb-4">
-                  <div className="flex justify-between text-sm text-gray-500 mb-1">
+                  <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-1">
                     <span>Progress</span>
                     <span>{Math.round((charity.raised / charity.goal) * 100)}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
-                      className="bg-blue-600 h-2 rounded-full"
+                      className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full"
                       style={{ width: `${Math.min(100, (charity.raised / charity.goal) * 100)}%` }}
                     />
                   </div>
-                  <div className="flex justify-between text-sm mt-1">
+                  <div className="flex justify-between text-sm mt-1 text-gray-900 dark:text-white">
                     <span>NPR {charity.raised.toLocaleString()}</span>
                     <span>NPR {charity.goal.toLocaleString()}</span>
                   </div>
@@ -435,13 +435,13 @@ const CharityManagement = () => {
                 <div className="flex justify-end space-x-2">
                   <button
                     onClick={() => handleEdit(charity)}
-                    className="bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200"
+                    className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(charity._id)}
-                    className="bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200"
+                    className="bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 px-3 py-1 rounded hover:bg-red-200 dark:hover:bg-red-800"
                   >
                     Delete
                   </button>

@@ -54,6 +54,7 @@ const Profile = () => {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [donationsLoading, setDonationsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -61,6 +62,14 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationType, setNotificationType] = useState<'success' | 'error' | ''>('');
+  const [showNotification, setShowNotification] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -133,16 +142,15 @@ const Profile = () => {
     }) : null);
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+  const showCustomNotification = (message: string, type: 'success' | 'error') => {
+    setNotificationMessage(message);
+    setNotificationType(type);
+    setShowNotification(true);
+    
+    // Auto hide after 5 seconds
+    setTimeout(() => {
+      setShowNotification(false);
+    }, 5000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -177,10 +185,58 @@ const Profile = () => {
       
       setProfile(response.data);
       setIsEditing(false);
-      toast.success('Profile updated successfully');
+      showCustomNotification('Profile information updated successfully!', 'success');
     } catch (err: any) {
       console.error('Error updating profile:', err);
-      toast.error(err.response?.data?.message || 'Failed to update profile');
+      showCustomNotification(err.response?.data?.message || 'Failed to update profile', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setPasswordData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate passwords
+    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+      showCustomNotification('Please fill in all password fields', 'error');
+      return;
+    }
+    
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      showCustomNotification('New passwords do not match', 'error');
+      return;
+    }
+    
+    if (passwordData.newPassword.length < 6) {
+      showCustomNotification('New password must be at least 6 characters long', 'error');
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      await api.put('/auth/profile/password', {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
+      });
+      
+      showCustomNotification('Password updated successfully!', 'success');
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+    } catch (err: any) {
+      console.error('Error updating password:', err);
+      showCustomNotification(err.response?.data?.message || 'Failed to update password', 'error');
     } finally {
       setSaving(false);
     }
@@ -207,7 +263,50 @@ const Profile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 pt-20">
+      {/* Custom Notification */}
+      {showNotification && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded-md shadow-lg max-w-md transform transition-all duration-300 ease-in-out ${
+          notificationType === 'success' 
+            ? 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200 border-l-4 border-green-500' 
+            : 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200 border-l-4 border-red-500'
+        }`}>
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              {notificationType === 'success' ? (
+                <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium">{notificationMessage}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <div className="-mx-1.5 -my-1.5">
+                <button
+                  onClick={() => setShowNotification(false)}
+                  className={`inline-flex rounded-md p-1.5 ${
+                    notificationType === 'success' 
+                      ? 'text-green-600 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-700'
+                      : 'text-red-600 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-700'
+                  } focus:outline-none`}
+                >
+                  <span className="sr-only">Dismiss</span>
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm mb-8">
           <div className="p-6 sm:p-8">
@@ -218,129 +317,86 @@ const Profile = () => {
                   alt={profile?.name}
                   className="w-32 h-32 rounded-full object-cover border-4 border-white dark:border-gray-700 shadow-sm"
                 />
-                {!isEditing && (
-                  <button 
-                    onClick={() => setIsEditing(true)}
-                    className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-500 transition-colors"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                    </svg>
-                  </button>
-                )}
+                <button 
+                  onClick={() => {
+                    document.getElementById('avatar-upload')?.click();
+                  }}
+                  className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-500 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                  </svg>
+                </button>
+                <input
+                  type="file"
+                  id="avatar-upload"
+                  name="avatar"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setImageFile(file);
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setImagePreview(reader.result as string);
+                      };
+                      reader.readAsDataURL(file);
+                      
+                      // Upload immediately
+                      try {
+                        setSaving(true);
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        
+                        // Upload image through server
+                        const uploadResponse = await api.post('/upload', formData, {
+                          headers: {
+                            'Content-Type': 'multipart/form-data'
+                          }
+                        });
+                        
+                        const avatarData = {
+                          public_id: uploadResponse.data.public_id,
+                          url: uploadResponse.data.url
+                        };
+                        
+                        // Update just the avatar
+                        const response = await api.put('/auth/profile', {
+                          ...profile,
+                          avatar: avatarData
+                        });
+                        
+                        setProfile(response.data);
+                        showCustomNotification('Profile picture updated successfully!', 'success');
+                      } catch (err: any) {
+                        console.error('Error updating profile picture:', err);
+                        showCustomNotification(err.response?.data?.message || 'Failed to update profile picture', 'error');
+                        // Revert preview if upload fails
+                        setImagePreview(profile?.avatar?.url || null);
+                        setImageFile(null);
+                      } finally {
+                        setSaving(false);
+                      }
+                    }
+                  }}
+                  className="hidden"
+                />
               </div>
 
               <div className="flex-1">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{profile?.name}</h1>
                 <p className="text-gray-500 dark:text-gray-400 mb-4">{profile?.email}</p>
 
-                {!isEditing ? (
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Phone</h3>
-                      <p className="mt-1 text-gray-900 dark:text-white">{profile?.phone || 'Not provided'}</p>
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Address</h3>
-                      <p className="mt-1 text-gray-900 dark:text-white">{profile?.address || 'Not provided'}</p>
-                    </div>
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Phone</h3>
+                    <p className="mt-1 text-gray-900 dark:text-white">{profile?.phone || 'Not provided'}</p>
                   </div>
-                ) : (
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                      <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Name
-                      </label>
-                      <input
-                        type="text"
-                        name="name"
-                        id="name"
-                        value={editedProfile?.name || ''}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        name="email"
-                        id="email"
-                        value={editedProfile?.email || ''}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Phone
-                      </label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        id="phone"
-                        value={editedProfile?.phone || ''}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Address
-                      </label>
-                      <input
-                        type="text"
-                        name="address"
-                        id="address"
-                        value={editedProfile?.address || ''}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="avatar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Profile Picture
-                      </label>
-                      <input
-                        type="file"
-                        name="avatar"
-                        id="avatar"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        className="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400
-                          file:mr-4 file:py-2 file:px-4
-                          file:rounded-md file:border-0
-                          file:text-sm file:font-semibold
-                          file:bg-blue-50 file:text-blue-700
-                          hover:file:bg-blue-100
-                          dark:file:bg-blue-900 dark:file:text-blue-300"
-                      />
-                    </div>
-                    <div className="flex justify-end space-x-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsEditing(false);
-                          setEditedProfile(profile);
-                          setImageFile(null);
-                          setImagePreview(profile?.avatar?.url || null);
-                        }}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={saving}
-                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                      >
-                        {saving ? 'Saving...' : 'Save Changes'}
-                      </button>
-                    </div>
-                  </form>
-                )}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Address</h3>
+                    <p className="mt-1 text-gray-900 dark:text-white">{profile?.address || 'Not provided'}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -383,6 +439,175 @@ const Profile = () => {
           </div>
 
           <div className="p-6">
+            {activeTab === 'profile' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-medium text-gray-900 dark:text-white">Personal Information</h2>
+                  <button
+                    onClick={() => setIsEditing(!isEditing)}
+                    className="flex items-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500"
+                  >
+                    {isEditing ? 'Cancel' : 'Edit Profile'}
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="mb-4 p-2 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300 rounded">
+                    {error}
+                  </div>
+                )}
+                
+                {success && (
+                  <div className="mb-4 p-2 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300 rounded">
+                    {success}
+                  </div>
+                )}
+
+                {isEditing ? (
+                  <div className="space-y-6">
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div>
+                        <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Name
+                        </label>
+                        <input
+                          type="text"
+                          name="name"
+                          id="name"
+                          value={editedProfile?.name || ''}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Email
+                        </label>
+                        <input
+                          type="email"
+                          name="email"
+                          id="email"
+                          value={editedProfile?.email || ''}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Phone
+                        </label>
+                        <input
+                          type="tel"
+                          name="phone"
+                          id="phone"
+                          value={editedProfile?.phone || ''}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Address
+                        </label>
+                        <input
+                          type="text"
+                          name="address"
+                          id="address"
+                          value={editedProfile?.address || ''}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={saving}
+                          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                        >
+                          {saving ? 'Saving...' : 'Save Changes'}
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                      <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Change Password</h2>
+                      <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                        <div>
+                          <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Current Password
+                          </label>
+                          <input
+                            type="password"
+                            name="currentPassword"
+                            id="currentPassword"
+                            value={passwordData.currentPassword}
+                            onChange={handlePasswordChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            New Password
+                          </label>
+                          <input
+                            type="password"
+                            name="newPassword"
+                            id="newPassword"
+                            value={passwordData.newPassword}
+                            onChange={handlePasswordChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Confirm New Password
+                          </label>
+                          <input
+                            type="password"
+                            name="confirmPassword"
+                            id="confirmPassword"
+                            value={passwordData.confirmPassword}
+                            onChange={handlePasswordChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            type="submit"
+                            disabled={saving}
+                            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                          >
+                            {saving ? 'Updating...' : 'Update Password'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Name</h3>
+                        <p className="mt-1 text-gray-900 dark:text-white">{profile?.name}</p>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</h3>
+                        <p className="mt-1 text-gray-900 dark:text-white">{profile?.email}</p>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Phone</h3>
+                        <p className="mt-1 text-gray-900 dark:text-white">{profile?.phone || 'Not provided'}</p>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Address</h3>
+                        <p className="mt-1 text-gray-900 dark:text-white">{profile?.address || 'Not provided'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'appointments' && (
               <div>
                 <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Appointment History</h2>

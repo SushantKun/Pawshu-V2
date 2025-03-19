@@ -238,86 +238,86 @@ const Statistics = () => {
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-semibold mb-4">Admin Dashboard</h1>
+      <h1 className="text-2xl font-semibold mb-4 text-gray-900 dark:text-white">Admin Dashboard</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         {/* User Activity Card */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">User Activity</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">User Activity</h2>
           <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-2 bg-blue-50 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">
+            <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {stats.userActivityMetrics.totalActiveUsers}
               </p>
-              <p className="text-xs text-gray-600">Active Users</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Active Users</p>
             </div>
-            <div className="text-center p-2 bg-green-50 rounded-lg">
-              <p className="text-2xl font-bold text-green-600">
+            <div className="text-center p-2 bg-green-50 dark:bg-green-900/30 rounded-lg">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {stats.userActivityMetrics.usersWithAppointments}
               </p>
-              <p className="text-xs text-gray-600">With Appointments</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">With Appointments</p>
             </div>
-            <div className="text-center p-2 bg-purple-50 rounded-lg">
-              <p className="text-2xl font-bold text-purple-600">
+            <div className="text-center p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {stats.userActivityMetrics.usersWithDonations}
               </p>
-              <p className="text-xs text-gray-600">With Donations</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">With Donations</p>
             </div>
-            <div className="text-center p-2 bg-pink-50 rounded-lg">
-              <p className="text-2xl font-bold text-pink-600">
+            <div className="text-center p-2 bg-pink-50 dark:bg-pink-900/30 rounded-lg">
+              <p className="text-2xl font-bold text-pink-600 dark:text-pink-400">
                 {stats.userActivityMetrics.usersWithOrders || 0}
               </p>
-              <p className="text-xs text-gray-600">With Orders</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">With Orders</p>
             </div>
           </div>
         </div>
 
         {/* Donations Card */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">Charity Donations</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Charity Donations</h2>
           <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-2 bg-purple-50 rounded-lg">
-              <p className="text-2xl font-bold text-purple-600">
+            <div className="text-center p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {formatNPR(stats.donationStats.totalAmount)}
               </p>
-              <p className="text-xs text-gray-600">Total Donations</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Total Donations</p>
             </div>
-            <div className="text-center p-2 bg-purple-50 rounded-lg">
-              <p className="text-2xl font-bold text-purple-600">
+            <div className="text-center p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {stats.donationStats.count}
               </p>
-              <p className="text-xs text-gray-600">Donation Count</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Donation Count</p>
             </div>
-            <div className="text-center p-2 bg-purple-50 rounded-lg col-span-2">
-              <p className="text-2xl font-bold text-purple-600">
+            <div className="text-center p-2 bg-purple-50 dark:bg-purple-900/30 rounded-lg col-span-2">
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                 {formatNPR(stats.donationStats.avgAmount)}
               </p>
-              <p className="text-xs text-gray-600">Average Donation</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Average Donation</p>
             </div>
           </div>
         </div>
 
         {/* Revenue Card */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">Business Revenue</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Business Revenue</h2>
           <div className="grid grid-cols-2 gap-3">
-            <div className="text-center p-2 bg-blue-50 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">
+            <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {formatNPR(stats.orderStats?.totalAmount || 0)}
               </p>
-              <p className="text-xs text-gray-600">Product Sales</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Product Sales</p>
             </div>
-            <div className="text-center p-2 bg-blue-50 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">
+            <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {stats.orderStats?.count || 0}
               </p>
-              <p className="text-xs text-gray-600">Order Count</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Order Count</p>
             </div>
-            <div className="text-center p-2 bg-blue-50 rounded-lg col-span-2">
-              <p className="text-2xl font-bold text-blue-600">
+            <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg col-span-2">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {formatNPR(stats.orderStats?.avgAmount || 0)}
               </p>
-              <p className="text-xs text-gray-600">Average Order</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Average Order</p>
             </div>
           </div>
         </div>
@@ -325,8 +325,8 @@ const Statistics = () => {
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">User Registration Trends</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">User Registration Trends</h2>
           <div style={{ height: '250px' }}>
             <Bar 
               data={userRegistrationData}
@@ -348,7 +348,15 @@ const Statistics = () => {
                 scales: {
                   y: {
                     beginAtZero: true,
-                    ticks: { stepSize: 1 }
+                    ticks: { stepSize: 1 },
+                    grid: {
+                      color: 'rgba(156, 163, 175, 0.2)'
+                    }
+                  },
+                  x: {
+                    grid: {
+                      color: 'rgba(156, 163, 175, 0.2)'
+                    }
                   }
                 }
               }}
@@ -356,8 +364,8 @@ const Statistics = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">Appointments by Status</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Appointments by Status</h2>
           <div style={{ height: '250px' }}>
             <Doughnut 
               data={appointmentStatusData}
@@ -365,15 +373,22 @@ const Statistics = () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                  legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }
+                  legend: { 
+                    position: 'right', 
+                    labels: { 
+                      boxWidth: 12, 
+                      font: { size: 11 },
+                      color: 'rgb(156, 163, 175)'
+                    } 
+                  }
                 }
               }}
             />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">Donation Trends</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Donation Trends</h2>
           <div style={{ height: '250px' }}>
             <Bar 
               data={donationTrendsData}
@@ -389,7 +404,22 @@ const Statistics = () => {
                     title: {
                       display: true,
                       text: 'NPR',
-                      font: { size: 10 }
+                      font: { size: 10 },
+                      color: 'rgb(156, 163, 175)'
+                    },
+                    grid: {
+                      color: 'rgba(156, 163, 175, 0.2)'
+                    },
+                    ticks: {
+                      color: 'rgb(156, 163, 175)'
+                    }
+                  },
+                  x: {
+                    grid: {
+                      color: 'rgba(156, 163, 175, 0.2)'
+                    },
+                    ticks: {
+                      color: 'rgb(156, 163, 175)'
                     }
                   }
                 }
@@ -398,8 +428,8 @@ const Statistics = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">Donations by Charity</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Donations by Charity</h2>
           <div style={{ height: '250px' }}>
             <Pie 
               data={donationsByCharityData}
@@ -407,15 +437,22 @@ const Statistics = () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                  legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }
+                  legend: { 
+                    position: 'right', 
+                    labels: { 
+                      boxWidth: 12, 
+                      font: { size: 11 },
+                      color: 'rgb(156, 163, 175)'
+                    } 
+                  }
                 }
               }}
             />
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">Product Sales Trends</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Product Sales Trends</h2>
           <div style={{ height: '250px' }}>
             <Bar 
               data={orderTrendsData}
@@ -431,7 +468,22 @@ const Statistics = () => {
                     title: {
                       display: true,
                       text: 'NPR',
-                      font: { size: 10 }
+                      font: { size: 10 },
+                      color: 'rgb(156, 163, 175)'
+                    },
+                    grid: {
+                      color: 'rgba(156, 163, 175, 0.2)'
+                    },
+                    ticks: {
+                      color: 'rgb(156, 163, 175)'
+                    }
+                  },
+                  x: {
+                    grid: {
+                      color: 'rgba(156, 163, 175, 0.2)'
+                    },
+                    ticks: {
+                      color: 'rgb(156, 163, 175)'
                     }
                   }
                 }
@@ -440,8 +492,8 @@ const Statistics = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">Doctor Performance</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+          <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Doctor Performance</h2>
           <div style={{ height: '250px' }}>
             <Bar 
               data={doctorPerformanceData}
@@ -449,11 +501,32 @@ const Statistics = () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                  legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } }
+                  legend: { 
+                    position: 'top', 
+                    labels: { 
+                      boxWidth: 12, 
+                      font: { size: 11 },
+                      color: 'rgb(156, 163, 175)'
+                    } 
+                  }
                 },
                 scales: {
                   y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    grid: {
+                      color: 'rgba(156, 163, 175, 0.2)'
+                    },
+                    ticks: {
+                      color: 'rgb(156, 163, 175)'
+                    }
+                  },
+                  x: {
+                    grid: {
+                      color: 'rgba(156, 163, 175, 0.2)'
+                    },
+                    ticks: {
+                      color: 'rgb(156, 163, 175)'
+                    }
                   }
                 }
               }}
@@ -463,53 +536,53 @@ const Statistics = () => {
       </div>
 
       {/* Statistics Summary */}
-      <div className="bg-white rounded-lg shadow-sm p-4">
-        <h2 className="text-base font-semibold mb-3 text-gray-700 border-b pb-2">Statistics Summary</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4">
+        <h2 className="text-base font-semibold mb-3 text-gray-700 dark:text-gray-300 border-b dark:border-gray-700 pb-2">Statistics Summary</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-lg shadow-sm">
-            <h3 className="font-medium text-blue-700 mb-2 text-sm border-b border-blue-200 pb-1">Appointments</h3>
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 p-3 rounded-lg shadow-sm">
+            <h3 className="font-medium text-blue-700 dark:text-blue-400 mb-2 text-sm border-b border-blue-200 dark:border-blue-700 pb-1">Appointments</h3>
             <ul className="space-y-1 text-sm">
               {stats.appointmentsByStatus.map(status => (
                 <li key={status._id} className="flex justify-between items-center">
-                  <span className="text-gray-700">{status._id.charAt(0).toUpperCase() + status._id.slice(1)}:</span>
-                  <span className="font-semibold text-blue-600">{status.count}</span>
+                  <span className="text-gray-700 dark:text-gray-300">{status._id.charAt(0).toUpperCase() + status._id.slice(1)}:</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">{status.count}</span>
                 </li>
               ))}
             </ul>
           </div>
           
-          <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-3 rounded-lg shadow-sm">
-            <h3 className="font-medium text-purple-700 mb-2 text-sm border-b border-purple-200 pb-1">Donations</h3>
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 p-3 rounded-lg shadow-sm">
+            <h3 className="font-medium text-purple-700 dark:text-purple-400 mb-2 text-sm border-b border-purple-200 dark:border-purple-700 pb-1">Donations</h3>
             <ul className="space-y-1 text-sm">
               <li className="flex justify-between items-center">
-                <span className="text-gray-700">Total Count:</span>
-                <span className="font-semibold text-purple-600">{stats.donationStats.count}</span>
+                <span className="text-gray-700 dark:text-gray-300">Total Count:</span>
+                <span className="font-semibold text-purple-600 dark:text-purple-400">{stats.donationStats.count}</span>
               </li>
               <li className="flex justify-between items-center">
-                <span className="text-gray-700">Total Amount:</span>
-                <span className="font-semibold text-purple-600">{formatNPR(stats.donationStats.totalAmount)}</span>
+                <span className="text-gray-700 dark:text-gray-300">Total Amount:</span>
+                <span className="font-semibold text-purple-600 dark:text-purple-400">{formatNPR(stats.donationStats.totalAmount)}</span>
               </li>
               <li className="flex justify-between items-center">
-                <span className="text-gray-700">Average Donation:</span>
-                <span className="font-semibold text-purple-600">{formatNPR(stats.donationStats.avgAmount)}</span>
+                <span className="text-gray-700 dark:text-gray-300">Average Donation:</span>
+                <span className="font-semibold text-purple-600 dark:text-purple-400">{formatNPR(stats.donationStats.avgAmount)}</span>
               </li>
             </ul>
           </div>
           
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-lg shadow-sm">
-            <h3 className="font-medium text-blue-700 mb-2 text-sm border-b border-blue-200 pb-1">Product Sales</h3>
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 p-3 rounded-lg shadow-sm">
+            <h3 className="font-medium text-blue-700 dark:text-blue-400 mb-2 text-sm border-b border-blue-200 dark:border-blue-700 pb-1">Orders</h3>
             <ul className="space-y-1 text-sm">
               <li className="flex justify-between items-center">
-                <span className="text-gray-700">Total Orders:</span>
-                <span className="font-semibold text-blue-600">{stats.orderStats?.count || 0}</span>
+                <span className="text-gray-700 dark:text-gray-300">Total Count:</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">{stats.orderStats?.count || 0}</span>
               </li>
               <li className="flex justify-between items-center">
-                <span className="text-gray-700">Total Sales:</span>
-                <span className="font-semibold text-blue-600">{formatNPR(stats.orderStats?.totalAmount || 0)}</span>
+                <span className="text-gray-700 dark:text-gray-300">Total Amount:</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">{formatNPR(stats.orderStats?.totalAmount || 0)}</span>
               </li>
               <li className="flex justify-between items-center">
-                <span className="text-gray-700">Average Order:</span>
-                <span className="font-semibold text-blue-600">{formatNPR(stats.orderStats?.avgAmount || 0)}</span>
+                <span className="text-gray-700 dark:text-gray-300">Average Order:</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">{formatNPR(stats.orderStats?.avgAmount || 0)}</span>
               </li>
             </ul>
           </div>

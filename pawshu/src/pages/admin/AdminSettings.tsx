@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../../context/ThemeContext';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
@@ -22,8 +21,7 @@ interface AdminSettings {
 
 const API_URL = 'http://localhost:5000/api';
 
-const Settings = () => {
-  const { darkMode, toggleDarkMode } = useTheme();
+const AdminSettings = () => {
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState<AdminSettings>({
     name: '',
@@ -313,22 +311,6 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Theme Settings */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Theme Settings</h2>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              checked={darkMode}
-              onChange={toggleDarkMode}
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600"
-            />
-            <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-              Dark Mode
-            </label>
-          </div>
-        </div>
-
         {/* Submit Button */}
         <div className="flex justify-end">
           <button
@@ -344,4 +326,4 @@ const Settings = () => {
   );
 };
 
-export default Settings; 
+export default AdminSettings; 

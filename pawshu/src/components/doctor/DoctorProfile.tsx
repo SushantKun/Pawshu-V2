@@ -179,29 +179,11 @@ const DoctorProfile = () => {
       return;
     }
     
-    // Validate password if changing
-    if (formData.newPassword) {
-      if (!formData.currentPassword) {
-        setError('Current password is required to set a new password');
-        return;
-      }
-      
-      if (formData.newPassword !== formData.confirmPassword) {
-        setError('New password and confirmation do not match');
-        return;
-      }
-      
-      if (formData.newPassword.length < 6) {
-        setError('New password must be at least 6 characters long');
-        return;
-      }
-    }
-    
     try {
       setSaving(true);
       const token = localStorage.getItem('doctorToken');
       
-      // Prepare data for update
+      // Prepare data for profile update
       const updateData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -216,20 +198,47 @@ const DoctorProfile = () => {
         Object.assign(updateData, { profileImage: formData.profileImage });
       }
       
-      // Add password fields if changing password
-      if (formData.newPassword && formData.currentPassword) {
-        Object.assign(updateData, {
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword
-        });
-      }
-      
+      // Update profile
       await axios.put(`${API_URL}/doctors/profile`, updateData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
+      
+      // Handle password update if requested
+      if (formData.newPassword) {
+        // Validate password fields
+        if (!formData.currentPassword) {
+          setError('Current password is required to set a new password');
+          return;
+        }
+        
+        if (formData.newPassword !== formData.confirmPassword) {
+          setError('New password and confirmation do not match');
+          return;
+        }
+        
+        if (formData.newPassword.length < 6) {
+          setError('New password must be at least 6 characters long');
+          return;
+        }
+        
+        // Update password
+        await axios.put(`${API_URL}/doctors/profile/password`, {
+          currentPassword: formData.currentPassword,
+          newPassword: formData.newPassword
+        }, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        setSuccess('Profile and password updated successfully');
+      } else {
+        setSuccess('Profile updated successfully');
+      }
       
       // Reset password fields
       setFormData({
@@ -238,8 +247,6 @@ const DoctorProfile = () => {
         newPassword: '',
         confirmPassword: ''
       });
-      
-      setSuccess('Profile updated successfully');
       
       // Refresh profile data
       fetchDoctorProfile();
@@ -260,232 +267,221 @@ const DoctorProfile = () => {
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="p-6">
-        <h1 className="text-2xl font-semibold mb-6">My Profile</h1>
-        
-        {error && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
-            <p>{error}</p>
-          </div>
-        )}
-        
-        {success && (
-          <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6">
-            <p>{success}</p>
-          </div>
-        )}
-        
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-6">
-            <form onSubmit={handleProfileUpdate}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
-                    First Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="firstName"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="lastName"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="specialization" className="block text-sm font-medium text-gray-700 mb-1">
-                    Specialization *
-                  </label>
-                  <select
-                    id="specialization"
-                    name="specialization"
-                    value={formData.specialization}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  >
-                    <option value="">Select Specialization</option>
-                    {specializationOptions.map(option => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label htmlFor="experience" className="block text-sm font-medium text-gray-700 mb-1">
-                    Experience (years)
-                  </label>
-                  <input
-                    type="number"
-                    id="experience"
-                    name="experience"
-                    value={formData.experience}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    min="0"
-                  />
-                </div>
-              </div>
-              
-              <div className="mb-6">
-                <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-1">
-                  Bio
+    <div className="p-6">
+      <h1 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">Doctor Profile</h1>
+      
+      {error && (
+        <div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-4 mb-4">
+          <p>{error}</p>
+        </div>
+      )}
+      
+      {success && (
+        <div className="bg-green-100 dark:bg-green-900/30 border-l-4 border-green-500 text-green-700 dark:text-green-300 p-4 mb-4">
+          <p>{success}</p>
+        </div>
+      )}
+      
+      {loading ? (
+        <div className="flex justify-center items-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      ) : (
+        <form onSubmit={handleProfileUpdate} className="space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Basic Information</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  First Name
                 </label>
-                <textarea
-                  id="bio"
-                  name="bio"
-                  value={formData.bio}
+                <input
+                  type="text"
+                  name="firstName"
+                  value={formData.firstName}
                   onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  rows={4}
-                ></textarea>
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  required
+                />
               </div>
               
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Availability
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Last Name
                 </label>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {daysOfWeek.map(day => 
-                    periods.map(period => (
-                      <div key={`${day}-${period}`} className="flex items-center">
+                <input
+                  type="text"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Specialization
+                </label>
+                <select
+                  name="specialization"
+                  value={formData.specialization}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  required
+                >
+                  <option value="">Select Specialization</option>
+                  {specializationOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Years of Experience
+                </label>
+                <input
+                  type="number"
+                  name="experience"
+                  value={formData.experience}
+                  onChange={handleInputChange}
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+            
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Bio
+              </label>
+              <textarea
+                name="bio"
+                value={formData.bio}
+                onChange={handleInputChange}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="Tell us about yourself..."
+              />
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Profile Image</h2>
+            
+            <div className="flex items-center space-x-6">
+              <div className="flex-shrink-0">
+                <img
+                  src={imagePreview || doctor?.profileImage?.url || PLACEHOLDER_IMAGE}
+                  alt="Profile"
+                  className="h-32 w-32 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Change Profile Image
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="block w-full text-sm text-gray-500 dark:text-gray-400
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-medium
+                    file:bg-blue-50 file:text-blue-700
+                    dark:file:bg-blue-900/50 dark:file:text-blue-300
+                    hover:file:bg-blue-100 dark:hover:file:bg-blue-900/70"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Availability</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {daysOfWeek.map(day => (
+                <div key={day}>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{day}</h3>
+                  <div className="space-y-2">
+                    {periods.map(period => (
+                      <label key={`${day}-${period}`} className="flex items-center">
                         <input
                           type="checkbox"
-                          id={`${day}-${period}`}
-                          value={`${day} ${period}`}
-                          checked={formData.availability.includes(`${day} ${period}`)}
+                          value={`${day}-${period}`}
+                          checked={formData.availability.includes(`${day}-${period}`)}
                           onChange={handleAvailabilityChange}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
                         />
-                        <label htmlFor={`${day}-${period}`} className="ml-2 text-sm text-gray-700">
-                          {day} {period}
-                        </label>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-              
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Profile Image
-                </label>
-                <div className="flex items-center space-x-6">
-                  <div className="flex-shrink-0">
-                    {imagePreview ? (
-                      <img
-                        src={imagePreview}
-                        alt="Profile"
-                        className="h-24 w-24 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-gray-500 text-xl">
-                          {formData.firstName && formData.lastName
-                            ? `${formData.firstName.charAt(0)}${formData.lastName.charAt(0)}`
-                            : 'DR'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      type="file"
-                      id="profileImage"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      JPG, PNG or GIF. Max size 2MB.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="border-t border-gray-200 pt-6 mt-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                      Current Password
-                    </label>
-                    <input
-                      type="password"
-                      id="currentPassword"
-                      name="currentPassword"
-                      value={formData.currentPassword}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                        New Password
+                        <span className="ml-2 text-gray-700 dark:text-gray-300">{period}</span>
                       </label>
-                      <input
-                        type="password"
-                        id="newPassword"
-                        name="newPassword"
-                        value={formData.newPassword}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                        Confirm New Password
-                      </label>
-                      <input
-                        type="password"
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        value={formData.confirmPassword}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
+                    ))}
                   </div>
                 </div>
-              </div>
-              
-              <div className="flex justify-end mt-6">
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  disabled={saving}
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </form>
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Change Password</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  name="currentPassword"
+                  value={formData.currentPassword}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={formData.newPassword}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 };

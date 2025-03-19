@@ -227,25 +227,25 @@ const DoctorAppointments = () => {
   return (
     <div className="flex flex-col">
       <div className="p-6">
-        <h1 className="text-2xl font-semibold mb-6">Appointments</h1>
+        <h1 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">Appointments</h1>
         
         {error && (
-          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
+          <div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-4 mb-4">
             <p>{error}</p>
           </div>
         )}
         
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
             <div className="mb-4 md:mb-0">
-              <label htmlFor="filterStatus" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="filterStatus" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Filter by Status
               </label>
               <select
                 id="filterStatus"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full md:w-auto px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full md:w-auto px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
                 <option value="all">All Appointments</option>
                 <option value="pending">Pending</option>
@@ -254,18 +254,17 @@ const DoctorAppointments = () => {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-            
-            <div className="w-full md:w-1/3">
-              <label htmlFor="searchTerm" className="block text-sm font-medium text-gray-700 mb-1">
-                Search
+            <div>
+              <label htmlFor="searchTerm" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Search Appointments
               </label>
               <input
                 type="text"
                 id="searchTerm"
-                placeholder="Search by pet name, owner, or reason..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Search by pet name, owner, or reason..."
+                className="w-full md:w-80 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
               />
             </div>
           </div>
@@ -282,189 +281,128 @@ const DoctorAppointments = () => {
         </div>
         
         {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <div className="flex justify-center items-center h-32">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
           </div>
         ) : filteredAppointments.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-8 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <h2 className="text-xl font-semibold text-gray-700 mb-2">No appointments found</h2>
-            <p className="text-gray-500">
-              {filterStatus !== 'all' || searchTerm 
-                ? 'Try changing your filters or search term'
-                : 'You have no appointments scheduled at this time'}
-            </p>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 text-center">
+            <p className="text-gray-500 dark:text-gray-400">No appointments found</p>
           </div>
         ) : (
-          <div>
-            {sortedDates.map(date => (
-              <div key={date} className="mb-8">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">
-                  {formatDate(date)}
-                </h2>
-                
-                <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Time
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Pet
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Owner
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Reason
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {groupedAppointments[date]
-                          .sort((a, b) => a.timeSlot.localeCompare(b.timeSlot))
-                          .map(appointment => (
-                            <tr key={appointment._id}>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {appointment.timeSlot}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {appointment.petName}
-                                </div>
-                                <div className="text-sm text-gray-500">
-                                  {appointment.petType}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {appointment.user.firstName} {appointment.user.lastName}
-                                </div>
-                                <div className="text-sm text-gray-500">
-                                  {appointment.user.email}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                                {appointment.reason}
-                                {appointment.notes && (
-                                  <div className="mt-1 italic text-xs">
-                                    Notes: {appointment.notes}
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeColor(appointment.status)}`}>
-                                  {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                {appointment.status === 'pending' && (
-                                  <button
-                                    onClick={() => updateAppointmentStatus(appointment._id, 'confirmed')}
-                                    className="text-blue-600 hover:text-blue-900 mr-3"
-                                  >
-                                    Confirm
-                                  </button>
-                                )}
-                                
-                                {appointment.status === 'confirmed' && (
-                                  <button
-                                    onClick={() => updateAppointmentStatus(appointment._id, 'completed')}
-                                    className="text-green-600 hover:text-green-900 mr-3"
-                                  >
-                                    Complete
-                                  </button>
-                                )}
-                                
-                                {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
-                                  <button
-                                    onClick={() => updateAppointmentStatus(appointment._id, 'cancelled')}
-                                    className="text-red-600 hover:text-red-900 mr-3"
-                                  >
-                                    Cancel
-                                  </button>
-                                )}
-                                
-                                <button
-                                  onClick={() => {
-                                    setSelectedAppointment(appointment);
-                                    setNotes(appointment.notes || '');
-                                    setShowNotesModal(true);
-                                  }}
-                                  className="text-gray-600 hover:text-gray-900"
-                                >
-                                  Add Notes
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
+          sortedDates.map(date => (
+            <div key={date} className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+                {formatDate(date)}
+              </h2>
+              <div className="space-y-4">
+                {groupedAppointments[date].map(appointment => (
+                  <div key={appointment._id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                          {appointment.petName} ({appointment.petType})
+                        </h3>
+                        <p className="text-gray-600 dark:text-gray-300 mb-1">
+                          Owner: {appointment.user.firstName} {appointment.user.lastName}
+                        </p>
+                        <p className="text-gray-600 dark:text-gray-300 mb-1">
+                          Time: {appointment.timeSlot}
+                        </p>
+                        <p className="text-gray-600 dark:text-gray-300">
+                          Reason: {appointment.reason}
+                        </p>
+                        {appointment.notes && (
+                          <p className="text-gray-600 dark:text-gray-300 mt-2">
+                            Notes: {appointment.notes}
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-4 md:mt-0 flex flex-col space-y-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold inline-block ${getStatusBadgeColor(appointment.status)}`}>
+                          {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                        </span>
+                        <div className="flex flex-col space-y-2">
+                          {appointment.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => updateAppointmentStatus(appointment._id, 'confirmed')}
+                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:hover:bg-blue-600"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => updateAppointmentStatus(appointment._id, 'cancelled')}
+                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:hover:bg-red-600"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          {appointment.status === 'confirmed' && (
+                            <button
+                              onClick={() => updateAppointmentStatus(appointment._id, 'completed')}
+                              className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 dark:hover:bg-green-600"
+                            >
+                              Mark as Completed
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setSelectedAppointment(appointment);
+                              setNotes(appointment.notes || '');
+                              setShowNotesModal(true);
+                            }}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                          >
+                            {appointment.notes ? 'Edit Notes' : 'Add Notes'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-        
-        {/* Notes Modal */}
-        {showNotesModal && selectedAppointment && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h3 className="text-lg font-semibold mb-4">
-                Add Notes for {selectedAppointment.petName}
-              </h3>
-              
-              <form onSubmit={handleAddNotes}>
-                <div className="mb-4">
-                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    id="notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    rows={4}
-                    placeholder="Enter appointment notes here..."
-                  ></textarea>
-                </div>
-                
-                <div className="flex justify-end space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowNotesModal(false);
-                      setSelectedAppointment(null);
-                      setNotes('');
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-                    disabled={loading}
-                  >
-                    {loading ? 'Saving...' : 'Save Notes'}
-                  </button>
-                </div>
-              </form>
             </div>
-          </div>
+          ))
         )}
       </div>
+
+      {showNotesModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+              {selectedAppointment?.notes ? 'Edit Notes' : 'Add Notes'}
+            </h2>
+            <form onSubmit={handleAddNotes}>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white h-32 resize-none"
+                placeholder="Enter appointment notes..."
+              />
+              <div className="flex justify-end space-x-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNotesModal(false);
+                    setSelectedAppointment(null);
+                    setNotes('');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:hover:bg-blue-600"
+                >
+                  Save Notes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

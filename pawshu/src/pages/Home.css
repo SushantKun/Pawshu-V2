@@ -3,7 +3,7 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Reset margin and padding for home page */
+
 .home-page {
   margin-top: -5rem;
   padding: 0;
@@ -11,7 +11,7 @@ html {
 
 .home-page .hero-section {
   position: relative;
-  height: calc(100vh + 5rem); /* Make it taller to account for navbar offset */
+  height: calc(100vh + 5rem);
   background: linear-gradient(135deg, 
     #0d9488, /* Teal 600 */
     #0f766e, /* Teal 700 */

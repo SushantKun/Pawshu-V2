@@ -116,7 +116,7 @@ const Home = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentHeroImage((prev) => (prev + 1) % heroImages.length);
-    }, 5000); // Change image every 5 seconds
+    }, 3000); // Change image every 3 seconds
     
     return () => clearInterval(interval);
   }, []);
@@ -214,7 +214,7 @@ const Home = () => {
                   return (
                     <div
                       key={img}
-                      className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl transition-all duration-700 ease-in-out"
+                      className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl transition-all duration-1000 ease-in-out"
                       style={{
                         opacity,
                         zIndex,
