@@ -147,18 +147,18 @@ const Home = () => {
 
   return (
     <div className="home-page bg-white dark:bg-gray-900">
-      {/* Hero Section - Full viewport height */}
-      <section className="hero-section">
-        <div className="hero-content container mx-auto px-4 h-full flex items-center">
+      {/* Hero Section 1 */}
+      <section className="hero-section" style={{ background: 'linear-gradient(to bottom, #19E622, rgba(25, 230, 34, 0.7))' }}>
+        <div className="hero-content container mx-auto px-4 h-full flex items-center justify-center">
           {/* Left side content */}
-          <div className="w-full lg:w-1/2 z-10">
+          <div className="w-full lg:w-1/2 z-10 lg:pr-12 text-center lg:text-left">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
               Everything Your Pet Needs in One Place
             </h1>
             <p className="text-xl text-white/90 mb-8">
               Discover premium products, quality healthcare, and essential services for your furry friends.
             </p>
-            <div className="flex flex-wrap gap-4">
+            <div className="flex justify-center lg:justify-start">
               <Link 
                 to="/products" 
                 className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200 inline-flex items-center"
@@ -166,17 +166,11 @@ const Home = () => {
                 Shop Now
                 <ShoppingBagIconComponent className="w-5 h-5 ml-2" />
               </Link>
-              <Link 
-                to="/booking" 
-                className="px-6 py-3 bg-transparent border-2 border-white text-white rounded-md font-medium hover:bg-white/10 transition-colors duration-200"
-              >
-                Book Services
-              </Link>
             </div>
           </div>
 
           {/* Right side image slideshow */}
-          <div className="hidden lg:block w-1/2 h-full relative">
+          <div className="hidden lg:block w-1/2 h-full relative lg:pl-12">
             <div className="absolute right-12 top-1/2 -translate-y-1/3">
               <div className="relative w-[500px] h-[400px] perspective-[2000px]">
                 {heroImages.map((img, index) => {
@@ -268,6 +262,236 @@ const Home = () => {
         {/* Add scroll indicator with click handler */}
         <div className="scroll-indicator" onClick={scrollToProducts}>
           <ChevronDownIconComponent className="w-8 h-8 text-white animate-bounce" />
+        </div>
+      </section>
+
+      {/* Hero Section 2 */}
+      <section className="hero-section" style={{ background: 'linear-gradient(to bottom, rgba(34, 25, 230, 0.7), #2219E6)' }}>
+        <div className="hero-content container mx-auto px-4 h-full flex items-center justify-center">
+          {/* Left side image slideshow */}
+          <div className="hidden lg:block w-1/2 h-full relative order-1 lg:pr-24">
+            <div className="absolute left-12 top-1/2 -translate-y-1/3">
+              <div className="relative w-[500px] h-[400px] perspective-[2000px]">
+                {heroImages.map((img, index) => {
+                  // Calculate the position slightly differently to create variety
+                  const position = (index - ((currentHeroImage + 3) % heroImages.length) + heroImages.length) % heroImages.length;
+                  // Calculate the z-index to ensure proper stacking
+                  const zIndex = position === 0 ? heroImages.length : heroImages.length - position;
+                  
+                  // Define transformations based on position
+                  let transform = '';
+                  let opacity = 1;
+                  let scale = 1;
+                  
+                  if (position === 0) {
+                    // Current image - lifted up and forward
+                    transform = 'translateX(0) translateZ(100px) translateY(-20px) rotateX(5deg)';
+                    scale = 1;
+                  } else if (position === heroImages.length - 1) {
+                    // Next image - subtle peek from behind on the left (reversed)
+                    transform = 'translateX(-15%) translateZ(-50px) translateY(0) rotateY(5deg)';
+                    opacity = 0.15;
+                    scale = 0.95;
+                  } else if (position === 1) {
+                    // Previous image - subtle peek from behind on the right (reversed)
+                    transform = 'translateX(15%) translateZ(-50px) translateY(0) rotateY(-5deg)';
+                    opacity = 0.15;
+                    scale = 0.95;
+                  } else {
+                    // Other images - hidden behind
+                    transform = 'translateZ(-200px)';
+                    opacity = 0;
+                    scale = 0.9;
+                  }
+
+                  return (
+                    <div
+                      key={`second-${img}`}
+                      className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl transition-all duration-1000 ease-in-out"
+                      style={{
+                        opacity,
+                        zIndex,
+                        transformStyle: 'preserve-3d',
+                        backfaceVisibility: 'hidden',
+                        transform: `${transform} scale(${scale})`,
+                        boxShadow: position === 0 
+                          ? '0 20px 40px rgba(0,0,0,0.3)' 
+                          : '0 10px 20px rgba(0,0,0,0.2)',
+                      }}
+                    >
+                      <img 
+                        src={img} 
+                        alt={`Second Hero ${index + 1}`}
+                        className="w-full h-full object-cover object-center"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.onerror = null;
+                          target.src = PlaceholderImage;
+                        }}
+                      />
+                      {/* Add a subtle gradient overlay */}
+                      <div className={`absolute inset-0 ${
+                        position === 0 
+                          ? 'bg-gradient-to-l from-black/10 to-transparent' // Flip gradient direction 
+                          : 'bg-gradient-to-l from-black/30 to-transparent'
+                      }`}></div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Navigation dots */}
+              <div className="flex justify-center gap-2 mt-8">
+                {heroImages.map((_, index) => (
+                  <button
+                    key={index}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      (index + 3) % heroImages.length === currentHeroImage
+                        ? 'bg-white scale-125' 
+                        : 'bg-white/50 hover:bg-white/75'
+                    }`}
+                    onClick={() => setCurrentHeroImage((index + 3) % heroImages.length)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right side content */}
+          <div className="w-full lg:w-1/2 z-10 order-2 lg:pl-24 text-center lg:text-left">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
+              More Than Just a Pet Store
+            </h1>
+            <p className="text-xl text-white/90 mb-8">
+              Book veterinary services, help find lost pets, and support animal welfare through donations.
+            </p>
+            <div className="flex justify-center lg:justify-start">
+              <Link 
+                to="/booking" 
+                className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200 inline-flex items-center"
+              >
+                Book Appointment
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Hero Section 3 */}
+      <section className="hero-section" style={{ background: 'linear-gradient(to bottom, rgba(230, 34, 25, 0.7), #E62219)' }}>
+        <div className="hero-content container mx-auto px-4 h-full flex items-center justify-center">
+          {/* Left side content */}
+          <div className="w-full lg:w-1/2 z-10 lg:pr-24 text-center lg:text-left">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
+              Lost & Found and Donations
+            </h1>
+            <p className="text-xl text-white/90 mb-8">
+              Help reunite lost pets with their owners and support animal welfare organizations.
+            </p>
+            <div className="flex flex-wrap justify-center lg:justify-start gap-4">
+              <Link 
+                to="/lost-found" 
+                className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200"
+              >
+                Lost & Found
+              </Link>
+              <Link 
+                to="/donate" 
+                className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200"
+              >
+                Donate
+              </Link>
+            </div>
+          </div>
+
+          {/* Right side image slideshow */}
+          <div className="hidden lg:block w-1/2 h-full relative lg:pl-24">
+            <div className="absolute right-12 top-1/2 -translate-y-1/3">
+              <div className="relative w-[500px] h-[400px] perspective-[2000px]">
+                {heroImages.map((img, index) => {
+                  // Calculate the position of each image relative to the current image
+                  const position = (index - ((currentHeroImage + 6) % heroImages.length) + heroImages.length) % heroImages.length;
+                  // Calculate the z-index to ensure proper stacking
+                  const zIndex = position === 0 ? heroImages.length : heroImages.length - position;
+                  
+                  // Define transformations based on position
+                  let transform = '';
+                  let opacity = 1;
+                  let scale = 1;
+                  
+                  if (position === 0) {
+                    // Current image - lifted up and forward
+                    transform = 'translateX(0) translateZ(100px) translateY(-20px) rotateX(5deg)';
+                    scale = 1;
+                  } else if (position === heroImages.length - 1) {
+                    // Next image - subtle peek from behind on the right
+                    transform = 'translateX(15%) translateZ(-50px) translateY(0) rotateY(-5deg)';
+                    opacity = 0.15;
+                    scale = 0.95;
+                  } else if (position === 1) {
+                    // Previous image - subtle peek from behind on the left
+                    transform = 'translateX(-15%) translateZ(-50px) translateY(0) rotateY(5deg)';
+                    opacity = 0.15;
+                    scale = 0.95;
+                  } else {
+                    // Other images - hidden behind
+                    transform = 'translateZ(-200px)';
+                    opacity = 0;
+                    scale = 0.9;
+                  }
+
+                  return (
+                    <div
+                      key={`third-${img}`}
+                      className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl transition-all duration-1000 ease-in-out"
+                      style={{
+                        opacity,
+                        zIndex,
+                        transformStyle: 'preserve-3d',
+                        backfaceVisibility: 'hidden',
+                        transform: `${transform} scale(${scale})`,
+                        boxShadow: position === 0 
+                          ? '0 20px 40px rgba(0,0,0,0.3)' 
+                          : '0 10px 20px rgba(0,0,0,0.2)',
+                      }}
+                    >
+                      <img 
+                        src={img} 
+                        alt={`Third Hero ${index + 1}`}
+                        className="w-full h-full object-cover object-center"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.onerror = null;
+                          target.src = PlaceholderImage;
+                        }}
+                      />
+                      {/* Add a subtle gradient overlay */}
+                      <div className={`absolute inset-0 ${
+                        position === 0 
+                          ? 'bg-gradient-to-r from-black/10 to-transparent' 
+                          : 'bg-gradient-to-r from-black/30 to-transparent'
+                      }`}></div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Navigation dots */}
+              <div className="flex justify-center gap-2 mt-8">
+                {heroImages.map((_, index) => (
+                  <button
+                    key={index}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      (index + 6) % heroImages.length === currentHeroImage
+                        ? 'bg-white scale-125' 
+                        : 'bg-white/50 hover:bg-white/75'
+                    }`}
+                    onClick={() => setCurrentHeroImage((index + 6) % heroImages.length)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
