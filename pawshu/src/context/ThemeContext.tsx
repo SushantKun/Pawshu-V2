@@ -9,7 +9,8 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuth();
+  const auth = useAuth();
+  const user = auth?.user;
   const userId = user?._id || 'guest';
   const userRole = user?.role || 'guest';
   

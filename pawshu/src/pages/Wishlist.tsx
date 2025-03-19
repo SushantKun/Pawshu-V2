@@ -86,7 +86,7 @@ const Wishlist = () => {
       <div className="container mx-auto px-4 py-8 flex justify-center items-center min-h-[60vh]">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          <p className="mt-4 text-gray-600">Loading wishlist...</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-300">Loading wishlist...</p>
         </div>
       </div>
     );
@@ -95,7 +95,7 @@ const Wishlist = () => {
   if (error) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-4">
           {error}
         </div>
       </div>
@@ -105,20 +105,20 @@ const Wishlist = () => {
   if (wishlistItems.length === 0) {
     return (
       <div className="container mx-auto px-4 py-16 text-center">
-        <HeartIconComponent className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Your wishlist is empty</h2>
-        <p className="text-gray-600 mb-8">Save items you love to your wishlist and they'll show up here</p>
+        <HeartIconComponent className="h-16 w-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Your wishlist is empty</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-8">Save items you love to your wishlist and they'll show up here</p>
       </div>
     );
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-8">My Wishlist ({wishlistItems.length} items)</h1>
+      <h1 className="text-2xl font-bold mb-8 dark:text-white">My Wishlist ({wishlistItems.length} items)</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {wishlistItems.map(product => (
-          <div key={product._id} className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div key={product._id} className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
             <div className="relative">
               <img
                 src={getProductImage(product)}
@@ -129,16 +129,16 @@ const Wishlist = () => {
               />
               <button
                 onClick={() => removeFromWishlist(product._id)}
-                className="absolute top-2 right-2 p-2 rounded-full bg-white shadow-md hover:bg-gray-100"
+                className="absolute top-2 right-2 p-2 rounded-full bg-white dark:bg-gray-700 shadow-md hover:bg-gray-100 dark:hover:bg-gray-600"
               >
                 <HeartIconComponent className="h-6 w-6 text-red-500" />
               </button>
             </div>
             <div className="p-4">
-              <h3 className="text-lg font-semibold mb-2">{product.name}</h3>
-              <p className="text-gray-600 mb-4 line-clamp-2">{product.description}</p>
+              <h3 className="text-lg font-semibold mb-2 dark:text-white">{product.name}</h3>
+              <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">{product.description}</p>
               <div className="flex justify-between items-center">
-                <span className="text-xl font-bold">NPR {product.price.toFixed(2)}</span>
+                <span className="text-xl font-bold dark:text-white">NPR {product.price.toFixed(2)}</span>
                 <button
                   onClick={() => handleAddToCart(product)}
                   className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
@@ -148,7 +148,7 @@ const Wishlist = () => {
                 </button>
               </div>
               {product.stock <= 5 && product.stock > 0 && (
-                <p className="text-sm text-orange-500 mt-2">Only {product.stock} left in stock!</p>
+                <p className="text-sm text-orange-500 dark:text-orange-400 mt-2">Only {product.stock} left in stock!</p>
               )}
             </div>
           </div>

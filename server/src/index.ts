@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fileUpload, { UploadedFile } from 'express-fileupload';
 import { verifyToken, adminAuth, AuthRequest } from './middleware/auth';
+import http from 'http';
 import productRoutes from './routes/productRoutes';
 import doctorRoutes from './routes/doctorRoutes';
 import appointmentRoutes from './routes/appointmentRoutes';
@@ -19,11 +20,25 @@ import { v2 as cloudinary } from 'cloudinary';
 import User from './models/User';
 import charityRoutes from './routes/charityRoutes';
 import { Charity, initialCharities } from './models/Charity';
+import lostFoundRoutes from './routes/lostFoundRoutes';
+import chatRoutes from './routes/chatRoutes';
+import { setupSocketIO } from './services/chatService';
 
 // Load environment variables
 dotenv.config();
 
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
 const app = express();
+const server = http.createServer(app);
+
+// Set up Socket.io
+const io = setupSocketIO(server);
 
 // Middleware
 app.use(cors({
@@ -41,12 +56,6 @@ app.use(fileUpload({
 }));
 
 // Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
 console.log('Cloudinary configured successfully with cloud name:', process.env.CLOUDINARY_CLOUD_NAME);
 
 // MongoDB connection
@@ -448,6 +457,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/charities', charityRoutes);
 app.use('/api/donations', donationRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/lost-found', lostFoundRoutes);
+app.use('/api/chats', chatRoutes);
 
 // Upload endpoint
 app.post('/api/upload', async (req: Request, res: Response) => {
@@ -473,8 +484,17 @@ app.post('/api/upload', async (req: Request, res: Response) => {
   }
 });
 
+// Error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({
+    message: err.message || 'Something went wrong!',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 }); 

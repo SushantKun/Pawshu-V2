@@ -63,12 +63,11 @@ router.post('/doctors', adminAuth as RequestHandler, (async (req: AuthRequest, r
       if (profileImage && typeof profileImage === 'string') {
         try {
           const uploadResult = await uploadImage(profileImage);
-          if (uploadResult) {
-            doctor.profileImage = {
-              public_id: uploadResult.public_id,
-              url: uploadResult.url
-            };
-          }
+          const processedImageData = {
+            public_id: uploadResult.public_id,
+            url: uploadResult.secure_url
+          };
+          doctor.profileImage = processedImageData;
         } catch (imageError) {
           console.error('Error uploading profile image:', imageError);
           // Continue with doctor creation even if image upload fails
@@ -174,10 +173,11 @@ router.put('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest
     if (profileImage && typeof profileImage === 'string' && profileImage.startsWith('data:image/')) {
       try {
         const uploadResult = await uploadImage(profileImage);
-        doctor.profileImage = {
+        const processedImageData = {
           public_id: uploadResult.public_id,
-          url: uploadResult.url
+          url: uploadResult.secure_url
         };
+        doctor.profileImage = processedImageData;
       } catch (imageError) {
         console.error('Error uploading profile image:', imageError);
         // Continue with update even if image upload fails
@@ -708,7 +708,7 @@ router.post('/charities', adminAuth as RequestHandler, (async (req: AuthRequest,
         const uploadResult = await uploadImage(image);
         imageData = {
           public_id: uploadResult.public_id,
-          url: uploadResult.url
+          url: uploadResult.secure_url
         };
       } catch (imageError) {
         console.error('Error uploading charity image:', imageError);
@@ -753,10 +753,11 @@ router.put('/charities/:id', adminAuth as RequestHandler, (async (req: AuthReque
     if (image && typeof image === 'string' && image.startsWith('data:image/')) {
       try {
         const uploadResult = await uploadImage(image);
-        charity.image = {
+        const processedImageData = {
           public_id: uploadResult.public_id,
-          url: uploadResult.url
+          url: uploadResult.secure_url
         };
+        charity.image = processedImageData;
       } catch (imageError) {
         console.error('Error uploading charity image:', imageError);
         res.status(500).json({ message: 'Failed to upload image' });

@@ -31,7 +31,7 @@ const AdminLogin = () => {
       localStorage.setItem('adminToken', response.data.token);
       
       // Redirect to admin dashboard
-      navigate('/admin/dashboard');
+      navigate('/admin');
     } catch (err: any) {
       console.error('Login error details:', {
         message: err.message,

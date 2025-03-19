@@ -76,6 +76,9 @@ const Navbar = () => {
             <Link to="/donate" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
               Donate
             </Link>
+            <Link to="/chat" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
+              Chat
+            </Link>
           </div>
           
           {/* User Actions */}
@@ -179,6 +182,9 @@ const Navbar = () => {
             </Link>
             <Link to="/donate" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
               Donate
+            </Link>
+            <Link to="/chat" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
+              Chat
             </Link>
             <Link to="/contact" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
               Contact

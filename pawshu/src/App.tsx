@@ -16,15 +16,14 @@ import LostFound from './pages/LostFound';
 import Donate from './pages/Donate';
 import Wishlist from './pages/Wishlist';
 import Checkout from './pages/Checkout';
-import AdminLayout from './components/AdminLayout';
-import AdminDashboard from './pages/AdminDashboard';
-import ProductManagement from './pages/ProductManagement';
-import AdminLogin from './pages/AdminLogin';
-import AdminStats from './pages/AdminStats';
-import AdminUsers from './pages/AdminUsers';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import ProductManagement from './pages/admin/ProductManagement';
+import AdminLogin from './pages/admin/AdminLogin';
+import AdminStats from './pages/admin/AdminStats';
+import AdminUsers from './pages/admin/AdminUsers';
 import AdminSettings from './pages/admin/AdminSettings';
-import AdminDoctors from './pages/AdminDoctors';
-import CharityManagement from './components/admin/CharityManagement';
+import AdminDoctors from './pages/admin/AdminDoctors';
+import CharityManagement from './pages/admin/CharityManagement';
 // Import doctor components
 import DoctorLogin from './components/doctor/DoctorLogin';
 import DoctorDashboard from './components/doctor/DoctorDashboard';
@@ -32,6 +31,8 @@ import DoctorProfile from './components/doctor/DoctorProfile';
 import DoctorAppointments from './components/doctor/DoctorAppointments';
 import DoctorSidebar from './components/doctor/DoctorSidebar';
 import Doctors from './pages/Doctors';
+import Chat from './pages/Chat';
+import AdminSidebar from './components/admin/AdminSidebar';
 
 // Protected route component for admin routes
 const ProtectedAdminRoute = ({ children }: { children: JSX.Element }) => {
@@ -46,7 +47,11 @@ const ProtectedAdminRoute = ({ children }: { children: JSX.Element }) => {
   }, []);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
 
   if (!isAdmin) {
@@ -69,7 +74,11 @@ const ProtectedDoctorRoute = ({ children }: { children: JSX.Element }) => {
   }, []);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
   }
 
   if (!isDoctor) {
@@ -114,9 +123,33 @@ const DoctorLayout = ({ children }: { children: JSX.Element }) => {
   
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-      <DoctorSidebar />
-      <div className="flex-1 ml-64">
+      <div className="w-64 flex-shrink-0">
+        <DoctorSidebar />
+      </div>
+      <div className="flex-1 overflow-x-hidden">
         <main className="p-6">{children}</main>
+      </div>
+    </div>
+  );
+};
+
+// Layout component for admin routes
+const AdminLayout = ({ children }: { children: JSX.Element }) => {
+  const { darkMode } = useTheme();
+  
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+  
+  return (
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+      <AdminSidebar />
+      <div className="ml-64 p-6 overflow-x-hidden min-h-screen">
+        {children}
       </div>
     </div>
   );
@@ -125,74 +158,109 @@ const DoctorLayout = ({ children }: { children: JSX.Element }) => {
 function App() {
   return (
     <AuthProvider>
-      <CartProvider>
-        <ThemeProvider>
+      <ThemeProvider>
+        <CartProvider>
           <Router>
             <Routes>
-              {/* Admin Login */}
-              <Route path="/admin/login" element={<AdminLogin />} />
+              {/* Admin Routes */}
+              <Route path="/admin/login" element={
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                  <AdminLogin />
+                </div>
+              } />
               
               {/* Protected Admin Routes */}
-              <Route 
-                path="/admin" 
-                element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout />
-                  </ProtectedAdminRoute>
-                }
-              >
-                <Route index element={<AdminDashboard />} />
-                <Route path="dashboard" element={<AdminDashboard />} />
-                <Route path="products" element={<ProductManagement />} />
-                <Route path="doctors" element={<AdminDoctors />} />
-                <Route path="charities" element={<CharityManagement />} />
-                <Route path="stats" element={<AdminStats />} />
-                <Route path="users" element={<AdminUsers />} />
-                <Route path="settings" element={<AdminSettings />} />
-              </Route>
-              
+              <Route path="/admin" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminDashboard />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/dashboard" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminDashboard />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/products" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <ProductManagement />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/statistics" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminStats />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/users" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminUsers />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/doctors" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminDoctors />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/settings" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminSettings />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/charities" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <CharityManagement />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+
               {/* Doctor Routes */}
-              <Route path="/doctor/login" element={<DoctorLogin />} />
-              <Route 
-                path="/doctor" 
-                element={
-                  <ProtectedDoctorRoute>
-                    <DoctorLayout>
-                      <DoctorDashboard />
-                    </DoctorLayout>
-                  </ProtectedDoctorRoute>
-                } 
-              />
-              <Route 
-                path="/doctor/dashboard" 
-                element={
-                  <ProtectedDoctorRoute>
-                    <DoctorLayout>
-                      <DoctorDashboard />
-                    </DoctorLayout>
-                  </ProtectedDoctorRoute>
-                } 
-              />
-              <Route 
-                path="/doctor/profile" 
-                element={
-                  <ProtectedDoctorRoute>
-                    <DoctorLayout>
-                      <DoctorProfile />
-                    </DoctorLayout>
-                  </ProtectedDoctorRoute>
-                } 
-              />
-              <Route 
-                path="/doctor/appointments" 
-                element={
-                  <ProtectedDoctorRoute>
-                    <DoctorLayout>
-                      <DoctorAppointments />
-                    </DoctorLayout>
-                  </ProtectedDoctorRoute>
-                } 
-              />
+              <Route path="/doctor/login" element={
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                  <DoctorLogin />
+                </div>
+              } />
+              <Route path="/doctor" element={
+                <ProtectedDoctorRoute>
+                  <DoctorLayout>
+                    <DoctorDashboard />
+                  </DoctorLayout>
+                </ProtectedDoctorRoute>
+              } />
+              <Route path="/doctor/dashboard" element={
+                <ProtectedDoctorRoute>
+                  <DoctorLayout>
+                    <DoctorDashboard />
+                  </DoctorLayout>
+                </ProtectedDoctorRoute>
+              } />
+              <Route path="/doctor/appointments" element={
+                <ProtectedDoctorRoute>
+                  <DoctorLayout>
+                    <DoctorAppointments />
+                  </DoctorLayout>
+                </ProtectedDoctorRoute>
+              } />
+              <Route path="/doctor/profile" element={
+                <ProtectedDoctorRoute>
+                  <DoctorLayout>
+                    <DoctorProfile />
+                  </DoctorLayout>
+                </ProtectedDoctorRoute>
+              } />
               
               {/* User Routes */}
               <Route path="/" element={<UserLayout><Home /></UserLayout>} />
@@ -207,10 +275,11 @@ function App() {
               <Route path="/doctors" element={<UserLayout><Doctors /></UserLayout>} />
               <Route path="/wishlist" element={<UserLayout><Wishlist /></UserLayout>} />
               <Route path="/checkout" element={<UserLayout><Checkout /></UserLayout>} />
+              <Route path="/chat/*" element={<UserLayout><Chat /></UserLayout>} />
             </Routes>
           </Router>
-        </ThemeProvider>
-      </CartProvider>
+        </CartProvider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

@@ -81,8 +81,11 @@ const createProduct = async (req: AuthRequest, res: Response) => {
           
           console.log('Uploading image to Cloudinary...');
           const uploadResult = await uploadImage(image);
-          console.log('Image uploaded successfully, URL:', uploadResult.url);
-          uploadedImages.push(uploadResult);
+          console.log('Image uploaded successfully, URL:', uploadResult.secure_url);
+          uploadedImages.push({
+            public_id: uploadResult.public_id,
+            url: uploadResult.secure_url
+          });
         }
         console.log(`Successfully uploaded ${uploadedImages.length} images`);
       } catch (imageError) {
@@ -178,8 +181,11 @@ const updateProduct = async (req: AuthRequest, res: Response) => {
           
           console.log('Uploading image to Cloudinary...');
           const uploadResult = await uploadImage(image);
-          console.log('Image uploaded successfully, URL:', uploadResult.url);
-          updatedImages.push(uploadResult);
+          console.log('Image uploaded successfully, URL:', uploadResult.secure_url);
+          updatedImages.push({
+            public_id: uploadResult.public_id,
+            url: uploadResult.secure_url
+          });
         }
         console.log(`After additions: ${updatedImages.length} total images`);
       } catch (uploadError) {
