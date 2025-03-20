@@ -22,7 +22,7 @@ import charityRoutes from './routes/charityRoutes';
 import { Charity, initialCharities } from './models/Charity';
 import lostFoundRoutes from './routes/lostFoundRoutes';
 import chatRoutes from './routes/chatRoutes';
-import { setupSocketIO } from './services/chatService';
+import setupSocketIO from './services/ChatService';
 
 // Load environment variables
 dotenv.config();

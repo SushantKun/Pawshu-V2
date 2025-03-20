@@ -1,263 +1,391 @@
-import { Server as SocketServer } from 'socket.io';
+import { Server as SocketServer, Socket as SocketIOSocket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
-import Chat, { IMessage } from '../models/Chat';
-import mongoose from 'mongoose';
+import User from '../models/User';
+import mongoose, { Document } from 'mongoose';
+import rateLimit from 'express-rate-limit';
+import { Request } from 'express';
+import Chat, { IChat as IChatDocument, IMessage } from '../models/Chat';
+import crypto from 'crypto';
 
-// Socket.io connection management
-interface SocketUser {
-  userId: string;
-  socketId: string;
+// Extend Socket interface to include custom properties
+declare module 'socket.io' {
+  interface Socket {
+    userId?: string;
+  }
 }
 
-// Map to keep track of online users
-const connectedUsers = new Map<string, string[]>(); // userId -> [socketIds]
+// Map to track connected users and their socket IDs
+const connectedUsers = new Map<string, string[]>();
 
-export const setupSocketIO = (httpServer: HttpServer) => {
-  const io = new SocketServer(httpServer, {
+class ChatService {
+  static async getUserChats(userId: string): Promise<IChatDocument[]> {
+    try {
+      const chats = await Chat.find({
+        participants: new mongoose.Types.ObjectId(userId)
+      })
+      .populate({
+        path: 'participants',
+        select: '_id name email'
+      })
+      .populate({
+        path: 'messages.sender',
+        select: '_id name email'
+      })
+      .sort({ 'messages.timestamp': -1 })
+      .exec();
+
+      return chats;
+    } catch (error) {
+      console.error('Error fetching user chats:', error);
+      return [];
+    }
+  }
+
+  static async getChatById(chatId: string, userId: string): Promise<IChatDocument | null> {
+    try {
+      const chat = await Chat.findOne({
+        _id: new mongoose.Types.ObjectId(chatId),
+        participants: new mongoose.Types.ObjectId(userId)
+      })
+      .populate({
+        path: 'participants',
+        select: '_id name email'
+      })
+      .populate({
+        path: 'messages.sender',
+        select: '_id name email'
+      })
+      .sort({ 'messages.timestamp': 1 })
+      .exec();
+
+      return chat;
+    } catch (error) {
+      console.error('Error fetching chat:', error);
+      return null;
+    }
+  }
+
+  static async addMessageToChat(
+    chatId: string, 
+    senderId: string, 
+    content: string
+  ): Promise<{ success: boolean; data?: IMessage & { _id: mongoose.Types.ObjectId }; error?: string }> {
+    try {
+      const chat = await Chat.findById(chatId);
+
+      if (!chat) {
+        return { 
+          success: false, 
+          error: 'Chat not found' 
+        };
+      }
+
+      // Verify sender is a participant
+      const isSenderParticipant = chat.participants.some(
+        (p: mongoose.Types.ObjectId) => p.toString() === senderId
+      );
+
+      if (!isSenderParticipant) {
+        return { 
+          success: false, 
+          error: 'Sender is not a participant of this chat' 
+        };
+      }
+
+      const newMessageId = new mongoose.Types.ObjectId();
+      const newMessage: IMessage = {
+        _id: newMessageId,
+        sender: new mongoose.Types.ObjectId(senderId),
+        content: content.trim(),
+        timestamp: new Date(),
+        read: false
+      };
+
+      chat.messages.push(newMessage);
+      await chat.save();
+
+      // Populate sender details
+      const populatedMessage = await Chat.populate(newMessage, {
+        path: 'sender',
+        select: '_id name email'
+      });
+
+      // Create a plain object with only the required IMessage properties
+      const messageData: IMessage & { _id: mongoose.Types.ObjectId } = {
+        _id: newMessageId,
+        sender: newMessage.sender,
+        content: newMessage.content,
+        timestamp: newMessage.timestamp,
+        read: newMessage.read
+      };
+
+      return { 
+        success: true, 
+        data: messageData
+      };
+    } catch (error) {
+      console.error('Error adding message to chat:', error);
+      return { 
+        success: false, 
+        error: 'Failed to add message' 
+      };
+    }
+  }
+
+  static async markMessagesAsRead(
+    chatId: string, 
+    userId: string
+  ): Promise<boolean> {
+    try {
+      const chat = await Chat.findById(chatId);
+
+      if (!chat) {
+        return false;
+      }
+
+      // Mark messages from other participants as read
+      const updatedChat = await Chat.updateOne(
+        { 
+          _id: chatId, 
+          'messages.sender': { $ne: new mongoose.Types.ObjectId(userId) },
+          'messages.read': false 
+        },
+        { 
+          $set: { 'messages.$[].read': true } 
+        }
+      );
+
+      return updatedChat.modifiedCount > 0;
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+      return false;
+    }
+  }
+}
+
+const setupSocketIO = (server: HttpServer): SocketServer => {
+  const io = new SocketServer(server, {
     cors: {
-      origin: 'http://localhost:5173', // Frontend URL
+      origin: 'http://localhost:5173',
       methods: ['GET', 'POST'],
       credentials: true
     }
   });
 
-  // Middleware to authenticate socket connections
-  io.use((socket, next) => {
+  // Authentication middleware
+  io.use(async (socket: SocketIOSocket, next) => {
     const token = socket.handshake.auth.token;
     
-    if (!token) {
-      return next(new Error('Authentication error: Token missing'));
-    }
-
     try {
+      if (!token) {
+        return next(new Error('Authentication error: No token provided'));
+      }
+
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret') as { _id: string };
-      socket.data.userId = decoded._id;
+      
+      const user = await User.findById(decoded._id);
+      if (!user) {
+        return next(new Error('Authentication error: User not found'));
+      }
+
+      // Attach user ID to socket for later use
+      socket.userId = user._id.toString();
       next();
     } catch (error) {
-      next(new Error('Authentication error: Invalid token'));
+      return next(new Error('Authentication error'));
     }
   });
 
-  io.on('connection', (socket) => {
-    const userId = socket.data.userId;
-    
-    console.log(`User connected: ${userId} (Socket ID: ${socket.id})`);
-    
-    // Add user to connected users map
-    if (connectedUsers.has(userId)) {
-      connectedUsers.get(userId)?.push(socket.id);
-    } else {
-      connectedUsers.set(userId, [socket.id]);
-    }
+  io.on('connection', (socket: SocketIOSocket) => {
+    const userId = socket.userId as string;
 
-    // Send online status to all connected clients
-    io.emit('userStatus', {
-      userId,
-      status: 'online'
-    });
+    // Track connected users
+    if (!connectedUsers.has(userId)) {
+      connectedUsers.set(userId, []);
+    }
+    connectedUsers.get(userId)?.push(socket.id);
+
+    console.log(`User connected: ${userId} (Socket ID: ${socket.id})`);
 
     // Join user to their chat rooms
-    Chat.find({ participants: userId })
-      .then(chats => {
-        chats.forEach(chat => {
+    ChatService.getUserChats(userId)
+      .then((chats: IChatDocument[]) => {
+        chats.forEach((chat: IChatDocument) => {
           socket.join(chat._id.toString());
         });
       })
-      .catch(err => console.error('Error joining chat rooms:', err));
+      .catch((err: Error) => {
+        console.error('Error joining chat rooms:', err);
+      });
 
-    // Handle sending messages
-    socket.on('sendMessage', async (data) => {
+    // Send message
+    socket.on('sendMessage', async (
+      { chatId, content }: { chatId: string; content: string }, 
+      callback?: (response: { success: boolean; messageId?: string; uniqueMessageKey?: string; error?: string }) => void
+    ) => {
+      // Validate inputs
+      if (!chatId || !content || content.trim() === '') {
+        if (callback) {
+          return callback({ 
+            success: false, 
+            error: 'Invalid message or chat ID' 
+          });
+        }
+        return;
+      }
+
       try {
-        const { chatId, content } = data;
+        const result = await ChatService.addMessageToChat(chatId, userId, content);
         
-        if (!chatId || !content) {
-          socket.emit('error', { message: 'Chat ID and content are required' });
-          return;
-        }
-
-        const chat = await Chat.findById(chatId);
-        
-        if (!chat) {
-          socket.emit('error', { message: 'Chat not found' });
-          return;
-        }
-
-        // Check if user is a participant
-        if (!chat.participants.includes(new mongoose.Types.ObjectId(userId))) {
-          socket.emit('error', { message: 'Not authorized to send messages in this chat' });
-          return;
-        }
-
-        // Add message to chat
-        const message = {
-          sender: new mongoose.Types.ObjectId(userId),
-          content,
-          timestamp: new Date(),
-          read: false
-        };
-
-        chat.messages.push(message);
-        chat.lastMessage = {
-          content,
-          timestamp: new Date(),
-          sender: new mongoose.Types.ObjectId(userId)
-        };
-
-        await chat.save();
-
-        // Broadcast message to all users in the chat
-        io.to(chatId).emit('newMessage', {
-          chatId,
-          message: {
-            ...message,
-            _id: chat.messages[chat.messages.length - 1]._id
-          }
-        });
-
-        // Update conversation list for participants
-        chat.participants.forEach(participantId => {
-          const participantSocketIds = connectedUsers.get(participantId.toString());
-          if (participantSocketIds && participantSocketIds.length > 0) {
-            participantSocketIds.forEach(socketId => {
-              io.to(socketId).emit('updateConversation', {
-                chatId,
-                lastMessage: {
-                  content,
-                  timestamp: new Date(),
-                  sender: userId
-                }
-              });
+        if (!result.success) {
+          if (callback) {
+            return callback({ 
+              success: false, 
+              error: result.error || 'Failed to add message to chat' 
             });
           }
-        });
-      } catch (error) {
-        console.error('Error sending message:', error);
-        socket.emit('error', { message: 'Error sending message' });
-      }
-    });
-
-    // Handle read receipts
-    socket.on('markAsRead', async (data) => {
-      try {
-        const { chatId } = data;
-        
-        if (!chatId) {
-          socket.emit('error', { message: 'Chat ID is required' });
           return;
         }
 
-        const chat = await Chat.findById(chatId);
-        
-        if (!chat) {
-          socket.emit('error', { message: 'Chat not found' });
-          return;
-        }
+        // Ensure data is not undefined
+        const messageData = result.data!;
 
-        // Check if user is a participant
-        if (!chat.participants.includes(new mongoose.Types.ObjectId(userId))) {
-          socket.emit('error', { message: 'Not authorized to access this chat' });
-          return;
-        }
+        // Ensure unique message identification
+        const messageId = messageData._id.toString();
+        const uniqueMessageKey = crypto.createHash('md5')
+          .update(`${messageId}-${content}-${userId}-${Date.now()}`)
+          .digest('hex');
 
-        // Mark unread messages as read
-        await Chat.updateOne(
-          { _id: chatId },
-          { $set: { 'messages.$[elem].read': true } },
-          { arrayFilters: [{ 'elem.read': false, 'elem.sender': { $ne: new mongoose.Types.ObjectId(userId) } }] }
-        );
-
-        // Notify other participants
-        chat.participants.forEach(participantId => {
-          if (participantId.toString() !== userId) {
-            const participantSocketIds = connectedUsers.get(participantId.toString());
-            if (participantSocketIds && participantSocketIds.length > 0) {
-              participantSocketIds.forEach(socketId => {
-                io.to(socketId).emit('messagesRead', {
-                  chatId,
-                  userId
-                });
-              });
-            }
+        // Emit to room EXCEPT the sender
+        socket.to(chatId).emit('newMessage', { 
+          chatId, 
+          message: {
+            ...messageData,
+            uniqueMessageKey,
+            isSenderMessage: false,
+            originalSenderId: userId
           }
         });
-      } catch (error) {
-        console.error('Error marking messages as read:', error);
-        socket.emit('error', { message: 'Error marking messages as read' });
-      }
-    });
 
-    // Handle typing indicator
-    socket.on('typing', (data) => {
-      const { chatId } = data;
-      
-      if (!chatId) {
-        return;
-      }
+        // Send acknowledgment to the sender
+        socket.emit('messageSent', {
+          chatId,
+          message: {
+            ...messageData,
+            uniqueMessageKey,
+            isSenderMessage: true,
+            originalSenderId: userId
+          }
+        });
 
-      // Broadcast to all users in the chat except the sender
-      socket.to(chatId).emit('userTyping', {
-        chatId,
-        userId
-      });
-    });
-
-    // Handle stop typing indicator
-    socket.on('stopTyping', (data) => {
-      const { chatId } = data;
-      
-      if (!chatId) {
-        return;
-      }
-
-      // Broadcast to all users in the chat except the sender
-      socket.to(chatId).emit('userStoppedTyping', {
-        chatId,
-        userId
-      });
-    });
-
-    // Handle disconnect
-    socket.on('disconnect', () => {
-      console.log(`User disconnected: ${userId}`);
-      
-      // Remove socket from connected users map
-      const userSockets = connectedUsers.get(userId);
-      if (userSockets) {
-        const index = userSockets.indexOf(socket.id);
-        if (index !== -1) {
-          userSockets.splice(index, 1);
+        // Send acknowledgment with message details
+        if (callback) {
+          callback({ 
+            success: true,
+            messageId: messageId,
+            uniqueMessageKey
+          });
         }
+      } catch (error) {
+        console.error('Error sending message:', error);
         
-        if (userSockets.length === 0) {
-          connectedUsers.delete(userId);
-          
-          // Send offline status to all connected clients
-          io.emit('userStatus', {
-            userId,
-            status: 'offline'
+        if (callback) {
+          callback({ 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Failed to send message' 
           });
         }
       }
+    });
+
+    // Handle reading messages
+    socket.on('readMessages', async ({ chatId }) => {
+      try {
+        const success = await ChatService.markMessagesAsRead(chatId, userId);
+        if (!success) {
+          return socket.emit('error', { message: 'Failed to mark messages as read' });
+        }
+
+        // Find the other participant to notify them
+        const chat = await ChatService.getChatById(chatId, userId);
+        if (!chat) {
+          return socket.emit('error', { message: 'Chat not found' });
+        }
+
+        const otherParticipantId = chat.participants.find(
+          (p: mongoose.Types.ObjectId) => p.toString() !== userId
+        );
+        
+        if (otherParticipantId) {
+          // Emit a 'messagesRead' event to the other user
+          const connectedSocketIds = connectedUsers.get(otherParticipantId.toString()) || [];
+          
+          for (const socketId of connectedSocketIds) {
+            io.to(socketId).emit('messagesRead', {
+              chatId,
+              readBy: userId,
+              timestamp: new Date()
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error marking messages as read:', error);
+        socket.emit('error', { message: 'Internal server error' });
+      }
+    });
+
+    // Typing indicators
+    socket.on('typing', ({ chatId }) => {
+      if (!chatId) return;
+
+      try {
+        const chat = ChatService.getChatById(chatId, userId);
+        if (!chat) {
+          return socket.emit('error', { message: 'Chat not found' });
+        }
+
+        // Get the typing user's information for identification
+        socket.to(chatId).emit('userTyping', { 
+          chatId, 
+          userId, 
+          userName: 'User' // You might want to fetch actual name 
+        });
+      } catch (error) {
+        console.error('Error handling typing event:', error);
+      }
+    });
+
+    socket.on('stopTyping', ({ chatId }) => {
+      if (!chatId) return;
+
+      socket.to(chatId).emit('userStoppedTyping', { 
+        chatId, 
+        userId 
+      });
+    });
+
+    // Disconnect handling
+    socket.on('disconnect', () => {
+      // Remove this specific socket ID from connected users
+      const userSockets = connectedUsers.get(userId);
+      if (userSockets) {
+        const index = userSockets.indexOf(socket.id);
+        if (index > -1) {
+          userSockets.splice(index, 1);
+        }
+
+        // If no more sockets for this user, remove the entry
+        if (userSockets.length === 0) {
+          connectedUsers.delete(userId);
+        }
+      }
+
+      console.log(`User disconnected: ${userId}`);
     });
   });
 
   return io;
 };
 
-// Function to get a user's online status
-export const getUserStatus = (userId: string) => {
-  return connectedUsers.has(userId) ? 'online' : 'offline';
-};
-
-// Function to emit an event to a specific user
-export const emitToUser = (userId: string, event: string, data: any, io: SocketServer) => {
-  const userSockets = connectedUsers.get(userId);
-  if (userSockets && userSockets.length > 0) {
-    userSockets.forEach(socketId => {
-      io.to(socketId).emit(event, data);
-    });
-    return true;
-  }
-  return false;
-}; 
+export default setupSocketIO;

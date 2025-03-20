@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
+import { io, Socket } from 'socket.io-client';
 
 interface Message {
   _id: string;
   sender: {
     _id: string;
     name: string;
-    email: string;
   };
   content: string;
   timestamp: string;
@@ -23,193 +23,300 @@ interface Chat {
     name: string;
     email: string;
   }>;
-  lastMessage: {
+  messages: Message[];
+  lastMessage?: {
     content: string;
+    sender: string;
     timestamp: string;
-    sender: {
-      _id: string;
-      name: string;
-      email: string;
-    };
   };
-  context: {
-    type: 'lost-found' | 'appointment';
-    referenceId: string;
-  };
-  messages?: Message[];
 }
 
-const ChatList = () => {
-  const [chats, setChats] = useState<Chat[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
-
-  useEffect(() => {
-    const fetchChats = async () => {
-      if (!user) return;
-
-      try {
-        const response = await axios.get('http://localhost:5000/api/chats', {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        setChats(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching chats:', error);
-        setError('Failed to load your conversations');
-        setLoading(false);
-      }
-    };
-
-    fetchChats();
-  }, [user]);
-
-  // Get the other participant in the chat (not the current user)
-  const getOtherParticipant = (chat: Chat) => {
-    if (!user) return { name: 'Unknown' };
-    return chat.participants.find(p => p._id !== user._id) || { name: 'Unknown' };
-  };
-
-  // Check if there are unread messages in the chat
-  const hasUnreadMessages = (chat: Chat) => {
-    if (!user) return false;
-    return chat.messages?.some(msg => 
-      !msg.read && msg.sender._id !== user._id
-    ) || false;
-  };
-
-  // Format timestamp to relative time (e.g., "2 hours ago")
-  const formatTimestamp = (timestamp: string) => {
-    if (!timestamp) return '';
-    
-    try {
-      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
-    } catch (error) {
-      console.error('Error formatting timestamp:', error);
-      return '';
-    }
-  };
-
-  if (loading) return (
-    <div className="p-8 text-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
-      <p className="text-gray-600 dark:text-gray-400">Loading conversations...</p>
-    </div>
-  );
-  
-  if (error) return (
-    <div className="p-8 text-center">
-      <div className="bg-red-100 dark:bg-red-900/20 p-4 rounded-lg inline-block mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-red-500 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      </div>
-      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Error</h3>
-      <p className="text-gray-600 dark:text-gray-400">{error}</p>
-    </div>
-  );
-  
-  if (chats.length === 0) return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-      <h2 className="text-xl font-semibold p-4 border-b border-gray-200 dark:border-gray-700">
-        Conversations
-      </h2>
-      <div className="p-8 text-center">
-        <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/20 p-5 rounded-full inline-flex items-center justify-center mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
-        </div>
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No conversations yet</h3>
-        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto mb-6">
-          Your message conversations will appear here. Start by contacting a pet owner from the Lost & Found page.
-        </p>
-        <button 
-          onClick={() => window.location.href = '/lost-found'}
-          className="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Go to Lost & Found
-        </button>
-      </div>
-    </div>
-  );
+const MessagePreview: React.FC<{ 
+  message: Message, 
+  currentUserId: string 
+}> = ({ message, currentUserId }) => {
+  // Handle potential null sender
+  const senderId = message.sender?._id || 'unknown';
+  const senderName = message.sender?.name || 'Unknown Sender';
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden h-full flex flex-col">
-      <h2 className="text-xl font-semibold p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center flex-shrink-0">
-        <span>Conversations</span>
-        <span className="text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 py-1 px-2 rounded-full">
-          {chats.length} {chats.length === 1 ? 'chat' : 'chats'}
-        </span>
-      </h2>
-      <ul className="divide-y divide-gray-200 dark:divide-gray-700 overflow-y-auto flex-1">
-        {chats.map(chat => {
-          const otherParticipant = getOtherParticipant(chat);
-          const contextLabel = chat.context.type === 'lost-found' 
-            ? 'Lost & Found' 
-            : chat.context.type === 'appointment'
-              ? 'Appointment'
-              : '';
-              
-          return (
-            <li key={chat._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              <Link 
-                to={`/chat/${chat._id}`} 
-                className="flex items-center p-3"
-              >
-                <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                  {otherParticipant.name?.charAt(0) || '?'}
-                </div>
-                
-                <div className="ml-3 flex-1 min-w-0">
-                  <div className="flex items-baseline justify-between">
-                    <span className={`font-medium truncate ${hasUnreadMessages(chat) ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
-                      {otherParticipant.name}
-                      {hasUnreadMessages(chat) && (
-                        <span className="ml-2 inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
-                      )}
-                    </span>
-                    <span className="ml-2 text-xs text-gray-500 flex-shrink-0">
-                      {chat.lastMessage && formatTimestamp(chat.lastMessage.timestamp)}
-                    </span>
-                  </div>
-                  
-                  <div className={`text-sm truncate ${
-                    hasUnreadMessages(chat) 
-                      ? 'text-gray-900 dark:text-gray-200 font-medium' 
-                      : 'text-gray-500 dark:text-gray-400'
-                  }`}>
-                    {chat.lastMessage ? (
-                      <>
-                        {chat.lastMessage.sender._id === user?._id ? 'You: ' : ''}
-                        {chat.lastMessage.content}
-                      </>
-                    ) : (
-                      'No messages yet'
-                    )}
-                  </div>
-                  
-                  {contextLabel && (
-                    <div className="mt-1">
-                      <span className="text-xs py-0.5 px-1.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-500 dark:text-gray-400">
-                        {contextLabel}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+    <div 
+      className={`flex ${senderId === currentUserId ? 'justify-end' : 'justify-start'}`}
+    >
+      <div 
+        className={`max-w-[70%] p-2 rounded-lg ${
+          senderId === currentUserId 
+            ? 'bg-blue-500 text-white' 
+            : 'bg-gray-200 dark:bg-gray-700'
+        }`}
+      >
+        <div className="flex items-center space-x-2">
+          {message.sender && (
+            <span className="text-xs opacity-70">{senderName}</span>
+          )}
+          <p>{message.content || 'No message'}</p>
+        </div>
+        <small className="text-xs opacity-70 block mt-1">
+          {message.timestamp 
+            ? formatDistanceToNow(new Date(message.timestamp), { addSuffix: true }) 
+            : 'Unknown time'}
+        </small>
+      </div>
     </div>
   );
 };
 
-export default ChatList; 
+const ChatList: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const isMountedRef = useRef(true);
+  const lastFetchTimeRef = useRef(0);
+
+  const connectSocket = useCallback(() => {
+    if (!user) return null;
+
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+
+    const newSocket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000', {
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      withCredentials: true
+    });
+
+    newSocket.on('connect', () => {
+      console.log('Socket connected in ChatList');
+    });
+
+    newSocket.on('connect_error', (err) => {
+      console.error('Socket connection error:', err.message);
+      setError('Connection error. Please try again.');
+    });
+
+    return newSocket;
+  }, [user]);
+
+  const fetchChats = useCallback(async () => {
+    // Prevent multiple simultaneous fetches or too frequent fetches
+    const now = Date.now();
+    if (!user || loading || (now - lastFetchTimeRef.current < 5000)) return;
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/chats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (isMountedRef.current) {
+        setChats(response.data);
+        
+        // Update unread counts
+        const counts: Record<string, number> = {};
+        response.data.forEach((chat: Chat) => {
+          counts[chat._id] = chat.messages.filter(msg => 
+            msg.sender._id !== user._id && !msg.read
+          ).length;
+        });
+        
+        setUnreadCounts(counts);
+        setError(null);
+        lastFetchTimeRef.current = now;
+      }
+    } catch (error) {
+      console.error('Error fetching chats:', error);
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        navigate('/login');
+      } else {
+        setError('Failed to load conversations');
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [user, navigate]);
+
+  // Connect socket
+  useEffect(() => {
+    if (authLoading) return;
+
+    const newSocket = connectSocket();
+    if (newSocket) {
+      setSocket(newSocket);
+      return () => {
+        newSocket.disconnect();
+      };
+    }
+  }, [authLoading, connectSocket]);
+
+  // Listen for new messages
+  useEffect(() => {
+    if (!socket || !user) return;
+
+    const handleNewMessage = ({ chatId, message }: { 
+      chatId: string, 
+      message: Message 
+    }) => {
+      // Validate incoming message data
+      if (!chatId || !message) {
+        console.warn('Invalid message data:', { chatId, message });
+        return;
+      }
+
+      setChats(prevChats => 
+        prevChats.map(chat => {
+          // Ensure chat exists and matches the message's chat ID
+          if (chat._id === chatId) {
+            // Handle potential null sender
+            const senderId = message.sender?._id || 'unknown';
+            
+            // Only increment unread count if the message is not from the current user
+            if (senderId !== user._id) {
+              setUnreadCounts(prev => ({
+                ...prev,
+                [chatId]: (prev[chatId] || 0) + 1
+              }));
+            }
+            
+            // Create a new chat object with updated messages and last message
+            return {
+              ...chat,
+              messages: [...chat.messages, message],
+              lastMessage: {
+                content: message.content || 'No message',
+                sender: senderId,
+                timestamp: message.timestamp
+              }
+            } as Chat;
+          }
+          return chat;
+        })
+      );
+    };
+
+    socket.on('newMessage', handleNewMessage);
+
+    return () => {
+      socket.off('newMessage', handleNewMessage);
+    };
+  }, [socket, user]);
+
+  // Initial fetch and auto-refresh
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    if (authLoading) return;
+    
+    fetchChats();
+    const intervalId = setInterval(fetchChats, 30000); // Increased interval to 30 seconds
+    
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(intervalId);
+    };
+  }, [authLoading, fetchChats]);
+
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    navigate('/login');
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4">
+        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+          <p className="text-red-600 dark:text-red-400">{error}</p>
+          <button
+            onClick={fetchChats}
+            className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 space-y-4">
+      {chats.length === 0 ? (
+        <p className="text-center text-gray-500">No conversations yet</p>
+      ) : (
+        chats.map((chat) => {
+          const otherParticipant = chat.participants.find(p => p._id !== user._id);
+          const lastMessage = chat.messages[chat.messages.length - 1];
+
+          return (
+            <Link 
+              key={chat._id} 
+              to={`/chat/${chat._id}`} 
+              className="block hover:bg-gray-100 dark:hover:bg-gray-800 p-4 rounded-lg transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
+                    {otherParticipant?.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{otherParticipant?.name}</h3>
+                    {lastMessage && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">
+                        <MessagePreview 
+                          message={lastMessage} 
+                          currentUserId={user._id} 
+                        />
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end">
+                  {lastMessage && (
+                    <small className="text-xs text-gray-500">
+                      {formatDistanceToNow(new Date(lastMessage.timestamp), { addSuffix: true })}
+                    </small>
+                  )}
+                  {unreadCounts[chat._id] > 0 && (
+                    <span className="ml-2 mt-1 px-2 py-1 bg-blue-500 text-white rounded-full text-xs">
+                      {unreadCounts[chat._id]}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Link>
+          );
+        })
+      )}
+    </div>
+  );
+};
+
+export default ChatList;

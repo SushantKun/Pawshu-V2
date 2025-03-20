@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
+import { useChat } from '../context/ChatContext';  // New context
 import ProfileDropdown from './ProfileDropdown';
 import CartSlideOver from './CartSlideOver';
 import { useState, useEffect } from 'react';
@@ -13,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import type { ComponentType, SVGProps } from 'react';
+import ChatWindow from './chat/ChatWindow';  // New component
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -26,6 +28,7 @@ const Navbar = () => {
   const { user, loading } = useAuth();
   const { cartItems, isCartOpen, openCart, closeCart, updateQuantity, removeFromCart, wishlist } = useCart();
   const { darkMode, toggleDarkMode } = useTheme();
+  const { unreadChats, setIsChatOpen, isChatOpen } = useChat();  // Track unread chats
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -48,6 +51,10 @@ const Navbar = () => {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  const toggleChatWindow = () => {
+    setIsChatOpen(!isChatOpen);
+  };
 
   return (
     <header className="fixed top-2 left-0 right-0 z-50">
@@ -124,6 +131,20 @@ const Navbar = () => {
                       {cartItemsCount > 0 && (
                         <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-sm rounded-full h-5 w-5 flex items-center justify-center">
                           {cartItemsCount}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={toggleChatWindow}
+                      className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
+                      aria-label="Chat"
+                    >
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                      {unreadChats > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-sm rounded-full h-5 w-5 flex items-center justify-center">
+                          {unreadChats}
                         </span>
                       )}
                     </button>
@@ -246,6 +267,19 @@ const Navbar = () => {
                     </span>
                   )}
                 </button>
+                <button
+                  onClick={toggleChatWindow}
+                  className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
+                >
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  {unreadChats > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {unreadChats}
+                    </span>
+                  )}
+                </button>
               </div>
             )}
           </div>
@@ -260,6 +294,13 @@ const Navbar = () => {
         updateQuantity={updateQuantity}
         removeItem={removeFromCart}
       />
+
+      {/* Chat Window */}
+      {isChatOpen && (
+        <div className="absolute top-full right-0 mt-2">
+          <ChatWindow onClose={() => setIsChatOpen(false)} />
+        </div>
+      )}
     </header>
   );
 };
