@@ -10,6 +10,7 @@ export interface IMessage {
     url: string;
     type: string;
     name: string;
+    thumbnailUrl?: string;
   };
   status: 'sent' | 'delivered' | 'read';
 }
@@ -52,7 +53,8 @@ const messageSchema = new Schema<IMessage>({
   attachment: {
     url: String,
     type: String,
-    name: String
+    name: String,
+    thumbnailUrl: String
   },
   status: {
     type: String,

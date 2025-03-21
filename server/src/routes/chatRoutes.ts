@@ -1,11 +1,11 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../middleware/auth';
+import { verifyToken, AuthRequest } from '../middleware/auth';
 import Chat, { IMessage, IChat } from '../models/Chat';
 import User from '../models/User';
 import mongoose, { Document } from 'mongoose';
-import { AuthRequest } from '../types/auth';
 import { v2 as cloudinary } from 'cloudinary';
 import { UploadApiResponse } from 'cloudinary';
+import { UploadedFile } from 'express-fileupload';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -16,63 +16,96 @@ cloudinary.config({
 
 const router = express.Router();
 
-// Upload file endpoint
+// @ts-ignore
 router.post('/upload', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (!req.body.file || !req.body.file.startsWith('data:')) {
-      return res.status(400).json({ message: 'No valid file data provided' });
+    // Check if any files were uploaded
+    if (!req.files || Object.keys(req.files).length === 0 || !req.files['file']) {
+      return res.status(400).json({ message: 'No file uploaded' });
     }
 
+    // Get the uploaded file (use indexing to avoid type errors)
+    const file = req.files['file'] as UploadedFile;
+    
+    // Validate file size (50MB limit)
+    const maxSize = 50 * 1024 * 1024; // 50MB in bytes
+    if (file.size > maxSize) {
+      return res.status(400).json({ message: 'File size exceeds 50MB limit' });
+    }
+
+    // Validate file type
     const allowedTypes = [
       'image/jpeg', 'image/png', 'image/gif', 
       'application/pdf', 'application/msword', 
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
 
-    const fileType = req.body.file.split(';')[0].split(':')[1];
-    if (!allowedTypes.includes(fileType)) {
-      return res.status(400).json({ message: 'Invalid file type' });
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({ 
+        message: 'Invalid file type. Allowed types: JPG, PNG, GIF, PDF, DOC, DOCX' 
+      });
     }
 
-    // Upload file to Cloudinary
-    const result: UploadApiResponse = await cloudinary.uploader.upload(req.body.file, {
-      folder: 'chat_attachments',
-      resource_type: 'auto'
-    });
+    try {
+      // Upload file to Cloudinary
+      const result = await cloudinary.uploader.upload(file.tempFilePath, {
+        folder: 'chat_attachments',
+        resource_type: 'auto',
+        // Generate thumbnails for images
+        transformation: file.mimetype.startsWith('image/') ? [
+          { width: 800, height: 800, crop: 'limit' },
+          { width: 200, height: 200, crop: 'thumb' }
+        ] : undefined
+      });
 
-    res.json({
-      url: result.secure_url,
-      type: fileType,
-      name: req.body.fileName || 'Uploaded file'
-    });
+      // Return both full size and thumbnail URLs for images
+      const response = {
+        url: result.secure_url,
+        thumbnailUrl: file.mimetype.startsWith('image/') ? result.thumbnail_url : undefined,
+        type: file.mimetype,
+        name: file.name,
+        size: file.size,
+        public_id: result.public_id
+      };
+
+      res.json(response);
+    } catch (error) {
+      const uploadError = error as Error;
+      console.error('Cloudinary upload error:', uploadError);
+      return res.status(500).json({ 
+        message: 'Failed to upload file to cloud storage',
+        error: uploadError.message 
+      });
+    }
   } catch (error) {
-    console.error('Error uploading to Cloudinary:', error);
+    console.error('File upload error:', error);
     next(error);
   }
 });
 
 // Get list of conversations for the current user
-router.get('/', verifyToken, (req: Request, res: Response, next: NextFunction) => {
-  const authReq = req as AuthRequest;
-  if (!authReq.user) {
+router.get('/', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
     return res.status(401).json({ message: 'Not authorized' });
   }
 
-  const userId = authReq.user._id;
-  console.log(`Fetching chats for user: ${userId}`);
+  try {
+    const userId = req.user._id;
+    console.log(`Fetching chats for user: ${userId}`);
 
-  Chat.find({ participants: userId })
-    .populate('participants', 'name email')
-    .populate({
-      path: 'lastMessage.sender',
-      select: 'name email'
-    })
-    .sort({ 'lastMessage.timestamp': -1 })
-    .then(chats => {
-      console.log(`Found ${chats.length} chats for user ${userId}`);
-      res.json(chats);
-    })
-    .catch(next);
+    const chats = await Chat.find({ participants: userId })
+      .populate('participants', 'name email avatar')
+      .populate({
+        path: 'lastMessage.sender',
+        select: 'name email avatar'
+      })
+      .sort({ 'lastMessage.timestamp': -1 });
+
+    console.log(`Found ${chats.length} chats for user ${userId}`);
+    res.json(chats);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Initiate a new conversation
@@ -168,10 +201,10 @@ router.post('/initiate', verifyToken, (req: Request, res: Response, next: NextFu
     })
     .then(chat => {
       return Chat.findById(chat._id)
-        .populate('participants', 'name email')
+        .populate('participants', 'name email avatar')
         .populate({
           path: 'lastMessage.sender',
-          select: 'name email'
+          select: 'name email avatar'
         });
     })
     .then(chat => {
@@ -236,16 +269,16 @@ router.get('/:chatId', verifyToken, (req: Request, res: Response, next: NextFunc
           arrayFilters: [{ 'elem.read': false, 'elem.sender': { $ne: userId } }],
           new: true
         }
-      ).populate('participants', 'name email')
-        .populate('messages.sender', 'name email');
+      ).populate('participants', 'name email avatar')
+        .populate('messages.sender', 'name email avatar');
     })
     .then(updatedChat => {
       if (!updatedChat) {
         console.log(`No unread messages to mark as read in chat: ${req.params.chatId}`);
         // If no messages needed to be marked as read, we still need to return the chat with populated fields
         return Chat.findById(req.params.chatId)
-          .populate('participants', 'name email')
-          .populate('messages.sender', 'name email');
+          .populate('participants', 'name email avatar')
+          .populate('messages.sender', 'name email avatar');
       }
       return updatedChat;
     })
@@ -322,8 +355,8 @@ router.post('/:chatId/messages', verifyToken, (req: Request, res: Response, next
     .then(chat => {
       // Return the new message with populated sender
       return Chat.findById(chat._id)
-        .populate('participants', 'name email')
-        .populate('messages.sender', 'name email');
+        .populate('participants', 'name email avatar')
+        .populate('messages.sender', 'name email avatar');
     })
     .then(updatedChat => {
       if (!updatedChat) {

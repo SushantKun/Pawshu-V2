@@ -702,7 +702,7 @@ router.post('/charities', adminAuth as RequestHandler, (async (req: AuthRequest,
     const { name, description, goal, image } = req.body;
     
     // Upload image to Cloudinary if provided
-    let imageData = null;
+    let imageData: { public_id: string; url: string; } | null = null;
     if (image && typeof image === 'string' && image.startsWith('data:image/')) {
       try {
         const uploadResult = await uploadImage(image);

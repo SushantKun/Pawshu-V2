@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ChatProvider } from './context/ChatContext';
@@ -34,6 +34,7 @@ import DoctorSidebar from './components/doctor/DoctorSidebar';
 import Doctors from './pages/Doctors';
 import Chat from './pages/Chat';
 import AdminSidebar from './components/admin/AdminSidebar';
+import ChatWindow from './components/chat/ChatWindow';
 
 // Protected route component for admin routes
 const ProtectedAdminRoute = ({ children }: { children: JSX.Element }) => {
@@ -154,6 +155,25 @@ const AdminLayout = ({ children }: { children: JSX.Element }) => {
       </div>
     </div>
   );
+};
+
+// Protected route component
+const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-gray-900 text-white justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  return children;
 };
 
 function App() {
@@ -277,7 +297,16 @@ function App() {
                 <Route path="/doctors" element={<UserLayout><Doctors /></UserLayout>} />
                 <Route path="/wishlist" element={<UserLayout><Wishlist /></UserLayout>} />
                 <Route path="/checkout" element={<UserLayout><Checkout /></UserLayout>} />
-                <Route path="/chat/*" element={<UserLayout><Chat /></UserLayout>} />
+                <Route path="/chat" element={
+                  <ProtectedRoute>
+                    <ChatWindow />
+                  </ProtectedRoute>
+                } />
+                <Route path="/chat/:chatId" element={
+                  <ProtectedRoute>
+                    <ChatWindow />
+                  </ProtectedRoute>
+                } />
               </Routes>
             </Router>
           </ChatProvider>

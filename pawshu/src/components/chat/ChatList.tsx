@@ -10,10 +10,15 @@ interface Message {
   sender: {
     _id: string;
     name: string;
+    avatar?: {
+      url: string;
+      public_id: string;
+    };
   };
   content: string;
   timestamp: string;
   read: boolean;
+  status?: 'sent' | 'delivered' | 'read';
 }
 
 interface Chat {
@@ -22,6 +27,10 @@ interface Chat {
     _id: string;
     name: string;
     email: string;
+    avatar?: {
+      url: string;
+      public_id: string;
+    };
   }>;
   messages: Message[];
   lastMessage?: {
@@ -31,42 +40,28 @@ interface Chat {
   };
 }
 
+interface ChatListProps {
+  setChatId?: (chatId: string) => void;
+}
+
 const MessagePreview: React.FC<{ 
   message: Message, 
   currentUserId: string 
 }> = ({ message, currentUserId }) => {
-  // Handle potential null sender
-  const senderId = message.sender?._id || 'unknown';
-  const senderName = message.sender?.name || 'Unknown Sender';
+  if (!message.sender) {
+    return <div className="text-sm text-gray-600 dark:text-gray-400">Message</div>;
+  }
+  
+  const isCurrentUser = message.sender._id === currentUserId;
 
   return (
-    <div 
-      className={`flex ${senderId === currentUserId ? 'justify-end' : 'justify-start'}`}
-    >
-      <div 
-        className={`max-w-[70%] p-2 rounded-lg ${
-          senderId === currentUserId 
-            ? 'bg-blue-500 text-white' 
-            : 'bg-gray-200 dark:bg-gray-700'
-        }`}
-      >
-        <div className="flex items-center space-x-2">
-          {message.sender && (
-            <span className="text-xs opacity-70">{senderName}</span>
-          )}
-          <p>{message.content || 'No message'}</p>
-        </div>
-        <small className="text-xs opacity-70 block mt-1">
-          {message.timestamp 
-            ? formatDistanceToNow(new Date(message.timestamp), { addSuffix: true }) 
-            : 'Unknown time'}
-        </small>
-      </div>
+    <div className="text-sm text-gray-600 dark:text-gray-400">
+      {isCurrentUser ? 'You: ' : ''}{message.content || 'No message'}
     </div>
   );
 };
 
-const ChatList: React.FC = () => {
+const ChatList: React.FC<ChatListProps> = ({ setChatId }) => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
@@ -127,7 +122,9 @@ const ChatList: React.FC = () => {
         const counts: Record<string, number> = {};
         response.data.forEach((chat: Chat) => {
           counts[chat._id] = chat.messages.filter(msg => 
-            msg.sender._id !== user._id && !msg.read
+            msg.sender && 
+            msg.sender._id !== user._id && 
+            !msg.read
           ).length;
         });
         
@@ -207,10 +204,40 @@ const ChatList: React.FC = () => {
       );
     };
 
+    // Add handler for when messages are read
+    const handleMessageRead = ({ chatId, readBy }: { chatId: string, readBy: string }) => {
+      // If current user read the messages, update the unread count for this chat
+      if (readBy === user._id) {
+        setUnreadCounts(prev => ({
+          ...prev,
+          [chatId]: 0
+        }));
+        
+        // Also update the messages array to mark all as read
+        setChats(prevChats => 
+          prevChats.map(chat => {
+            if (chat._id === chatId) {
+              return {
+                ...chat,
+                messages: chat.messages.map(msg => 
+                  msg.sender && msg.sender._id !== user._id
+                    ? { ...msg, read: true }
+                    : msg
+                )
+              } as Chat;
+            }
+            return chat;
+          })
+        );
+      }
+    };
+
     socket.on('newMessage', handleNewMessage);
+    socket.on('messagesRead', handleMessageRead);
 
     return () => {
       socket.off('newMessage', handleNewMessage);
+      socket.off('messagesRead', handleMessageRead);
     };
   }, [socket, user]);
 
@@ -228,6 +255,14 @@ const ChatList: React.FC = () => {
       clearInterval(intervalId);
     };
   }, [authLoading, fetchChats]);
+
+  // Add an effect to handle chat selection from parent component
+  useEffect(() => {
+    if (setChatId) {
+      // This ensures the component is ready to handle chat selection
+      console.log('ChatList ready to handle chat selection');
+    }
+  }, [setChatId]);
 
   if (authLoading) {
     return (
@@ -267,53 +302,197 @@ const ChatList: React.FC = () => {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      {chats.length === 0 ? (
-        <p className="text-center text-gray-500">No conversations yet</p>
-      ) : (
-        chats.map((chat) => {
-          const otherParticipant = chat.participants.find(p => p._id !== user._id);
-          const lastMessage = chat.messages[chat.messages.length - 1];
+    <div className="flex flex-col h-full bg-gray-800 text-white">
+      {/* Chat List Header */}
+      <div className="py-3 px-4 border-b border-gray-700 bg-gray-800 flex justify-between items-center">
+        <h2 className="text-base font-semibold text-white">Conversations</h2>
+      </div>
 
-          return (
-            <Link 
-              key={chat._id} 
-              to={`/chat/${chat._id}`} 
-              className="block hover:bg-gray-100 dark:hover:bg-gray-800 p-4 rounded-lg transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
-                    {otherParticipant?.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">{otherParticipant?.name}</h3>
-                    {lastMessage && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[200px]">
-                        <MessagePreview 
-                          message={lastMessage} 
-                          currentUserId={user._id} 
+      {/* Loading State */}
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-b-transparent border-white"></div>
+        </div>
+      ) : error ? (
+        <div className="flex-1 p-4 text-center text-red-400">
+          <p>{error}</p>
+          <button 
+            onClick={fetchChats} 
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      ) : chats.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-gray-400">
+          <div className="text-center p-4">
+            <svg className="h-16 w-16 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p>No conversations yet</p>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-grow overflow-y-auto px-2 py-2">
+          {chats.map((chat) => {
+            const otherParticipant = chat.participants.find(p => p._id !== user._id);
+            const lastMessage = chat.messages[chat.messages.length - 1];
+
+            return (
+              <div 
+                key={chat._id} 
+                onClick={() => {
+                  if (setChatId) {
+                    console.log('Setting chat ID in ChatList:', chat._id);
+                    // Clear unread count immediately when selecting this chat
+                    setUnreadCounts(prev => ({
+                      ...prev,
+                      [chat._id]: 0
+                    }));
+                    
+                    // Emit socket event to mark messages as read
+                    if (socket) {
+                      socket.emit('readMessages', { 
+                        chatId: chat._id,
+                        readBy: user._id  
+                      });
+                      
+                      // Also mark messages as read locally
+                      setChats(prevChats => 
+                        prevChats.map(c => {
+                          if (c._id === chat._id) {
+                            return {
+                              ...c,
+                              messages: c.messages.map(msg => 
+                                msg.sender && msg.sender._id !== user._id
+                                  ? { ...msg, read: true }
+                                  : msg
+                              )
+                            };
+                          }
+                          return c;
+                        })
+                      );
+                    }
+                    
+                    setTimeout(() => {
+                      setChatId(chat._id);
+                    }, 10);
+                  } else {
+                    navigate(`/chat/${chat._id}`);
+                  }
+                }}
+                className="block hover:bg-gray-700 p-3 rounded-lg transition-colors mb-1 cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${
+                      otherParticipant?.avatar?.url ? '' : 'bg-indigo-600 text-white font-semibold'
+                    }`}>
+                      {otherParticipant?.avatar?.url ? (
+                        <img 
+                          src={otherParticipant.avatar.url} 
+                          alt={otherParticipant.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            console.error('Avatar failed to load:', otherParticipant.name);
+                            e.currentTarget.style.display = 'none';
+                            if (e.currentTarget.parentElement) {
+                              e.currentTarget.parentElement.innerHTML = otherParticipant.name.charAt(0).toUpperCase();
+                            }
+                          }}
                         />
-                      </p>
-                    )}
+                      ) : (
+                        otherParticipant?.name.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white">
+                        {otherParticipant?.name}
+                      </h3>
+                      {lastMessage && (
+                        <div className="flex items-center space-x-2">
+                          <MessagePreview 
+                            message={lastMessage} 
+                            currentUserId={user._id} 
+                          />
+                          <span className="text-xs text-gray-400">
+                            · {formatDistanceToNow(new Date(lastMessage.timestamp), { addSuffix: true })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  {lastMessage && (
-                    <small className="text-xs text-gray-500">
-                      {formatDistanceToNow(new Date(lastMessage.timestamp), { addSuffix: true })}
-                    </small>
-                  )}
-                  {unreadCounts[chat._id] > 0 && (
-                    <span className="ml-2 mt-1 px-2 py-1 bg-blue-500 text-white rounded-full text-xs">
-                      {unreadCounts[chat._id]}
-                    </span>
-                  )}
+                  {/* Display message status based on whether there are unread messages or not */}
+                  {(() => {
+                    // If there are unread messages from the OTHER user, show a small status indicator
+                    const unreadCount = unreadCounts[chat._id] || 0;
+                    
+                    if (unreadCount > 0) {
+                      // For multiple unread messages, show the count
+                      return (
+                        <div className="flex-shrink-0 bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center" title={`${unreadCount} unread messages`}>
+                          {unreadCount}
+                        </div>
+                      );
+                    }
+                    
+                    // Otherwise show status of the last message from the current user
+                    const lastOwnMessage = [...chat.messages]
+                      .reverse()
+                      .find(msg => msg.sender && msg.sender._id === user._id);
+                      
+                    if (lastOwnMessage) {
+                      if (lastOwnMessage.status === 'read') {
+                        return (
+                          <div className="flex items-center" title="Read">
+                            <div className="relative h-4 w-6">
+                              {/* First checkmark */}
+                              <svg className="absolute left-0 h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              {/* Second checkmark */}
+                              <svg className="absolute left-2 h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          </div>
+                        );
+                      } else if (lastOwnMessage.status === 'delivered') {
+                        return (
+                          <div className="flex items-center" title="Delivered">
+                            <div className="relative h-4 w-6">
+                              {/* First checkmark */}
+                              <svg className="absolute left-0 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              {/* Second checkmark */}
+                              <svg className="absolute left-2 h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="flex items-center" title="Sent">
+                            {/* Single checkmark */}
+                            <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        );
+                      }
+                    }
+                    
+                    // Default case - no status indicator needed
+                    return null;
+                  })()}
                 </div>
               </div>
-            </Link>
-          );
-        })
+            );
+          })}
+        </div>
       )}
     </div>
   );

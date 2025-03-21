@@ -28,9 +28,10 @@ const Navbar = () => {
   const { user, loading } = useAuth();
   const { cartItems, isCartOpen, openCart, closeCart, updateQuantity, removeFromCart, wishlist } = useCart();
   const { darkMode, toggleDarkMode } = useTheme();
-  const { unreadChats, setIsChatOpen, isChatOpen } = useChat();  // Track unread chats
+  const { unreadChats, setUnreadChats, setIsChatOpen, isChatOpen } = useChat();  // Use setUnreadChats
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [selectedChatId, setSelectedChatId] = useState<string | undefined>(undefined);
 
   const cartItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const wishlistCount = wishlist.length;
@@ -53,7 +54,26 @@ const Navbar = () => {
   }, []);
 
   const toggleChatWindow = () => {
+    if (isChatOpen) {
+      // Reset selected chat ID when closing
+      setSelectedChatId(undefined);
+    } else {
+      // Reset unread count when opening chat window
+      setUnreadChats(0);
+    }
     setIsChatOpen(!isChatOpen);
+  };
+
+  const openChatWithId = (chatId: string) => {
+    console.log('Opening chat with ID in Navbar:', chatId);
+    // First make sure we reset any previous selection
+    setSelectedChatId(undefined);
+    
+    // Use setTimeout to ensure state updates properly
+    setTimeout(() => {
+      setSelectedChatId(chatId);
+      setIsChatOpen(true);
+    }, 10);
   };
 
   return (
@@ -82,9 +102,6 @@ const Navbar = () => {
             </Link>
             <Link to="/donate" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
               Donate
-            </Link>
-            <Link to="/chat" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
-              Chat
             </Link>
           </div>
           
@@ -204,12 +221,6 @@ const Navbar = () => {
             <Link to="/donate" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
               Donate
             </Link>
-            <Link to="/chat" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
-              Chat
-            </Link>
-            <Link to="/contact" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
-              Contact
-            </Link>
             
             {/* Dark Mode Toggle in Mobile Menu */}
             <button 
@@ -290,15 +301,21 @@ const Navbar = () => {
       <CartSlideOver 
         isOpen={isCartOpen} 
         setIsOpen={closeCart} 
-        cartItems={cartItems}
-        updateQuantity={updateQuantity}
+        cartItems={cartItems} 
+        updateQuantity={updateQuantity} 
         removeItem={removeFromCart}
       />
-
+      
       {/* Chat Window */}
       {isChatOpen && (
-        <div className="absolute top-full right-0 mt-2">
-          <ChatWindow onClose={() => setIsChatOpen(false)} />
+        <div className="fixed right-0 top-16 z-50 mr-4">
+          <div className="relative w-96 h-[500px] rounded-lg overflow-hidden shadow-2xl border border-gray-700">
+            <ChatWindow 
+              key={`chat-window-${selectedChatId || 'default'}`}
+              onClose={() => setIsChatOpen(false)} 
+              selectedChatId={selectedChatId}
+            />
+          </div>
         </div>
       )}
     </header>

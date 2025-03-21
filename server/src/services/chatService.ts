@@ -69,7 +69,13 @@ class ChatService {
   static async addMessageToChat(
     chatId: string, 
     senderId: string, 
-    content: string
+    content: string,
+    attachmentData?: {
+      url: string;
+      type: string;
+      name: string;
+      thumbnailUrl?: string;
+    }
   ): Promise<{ success: boolean; data?: IMessage & { _id: mongoose.Types.ObjectId }; error?: string }> {
     try {
       const chat = await Chat.findById(chatId);
@@ -103,6 +109,15 @@ class ChatService {
         status: 'sent' as 'sent' | 'delivered' | 'read'
       };
 
+      if (attachmentData) {
+        newMessage.attachment = {
+          url: attachmentData.url,
+          type: attachmentData.type,
+          name: attachmentData.name,
+          thumbnailUrl: attachmentData.thumbnailUrl
+        };
+      }
+
       chat.messages.push(newMessage);
       await chat.save();
 
@@ -121,6 +136,10 @@ class ChatService {
         read: newMessage.read,
         status: newMessage.status
       };
+
+      if (attachmentData) {
+        messageData.attachment = newMessage.attachment;
+      }
 
       return { 
         success: true, 
@@ -146,7 +165,7 @@ class ChatService {
         return false;
       }
 
-      // Mark messages from other participants as read
+      // Mark messages from other participants as read and update status
       const updatedChat = await Chat.updateOne(
         { 
           _id: chatId, 
@@ -154,7 +173,10 @@ class ChatService {
           'messages.read': false 
         },
         { 
-          $set: { 'messages.$[].read': true } 
+          $set: { 
+            'messages.$[].read': true,
+            'messages.$[].status': 'read'
+          } 
         }
       );
 
@@ -223,11 +245,21 @@ const setupSocketIO = (server: HttpServer): SocketServer => {
 
     // Send message
     socket.on('sendMessage', async (
-      { chatId, content, uniqueMessageKey }: { chatId: string; content: string; uniqueMessageKey?: string }, 
+      { chatId, content, uniqueMessageKey, attachmentData }: { 
+        chatId: string; 
+        content: string; 
+        uniqueMessageKey?: string;
+        attachmentData?: {
+          url: string;
+          type: string;
+          name: string;
+          thumbnailUrl?: string;
+        }
+      }, 
       callback?: (response: { success: boolean; messageId?: string; error?: string }) => void
     ) => {
       // Validate inputs
-      if (!chatId || !content || content.trim() === '') {
+      if (!chatId || (!content || content.trim() === '') && !attachmentData) {
         if (callback) {
           return callback({ 
             success: false, 
@@ -238,7 +270,7 @@ const setupSocketIO = (server: HttpServer): SocketServer => {
       }
 
       try {
-        const result = await ChatService.addMessageToChat(chatId, userId, content);
+        const result = await ChatService.addMessageToChat(chatId, userId, content, attachmentData);
         
         if (!result.success) {
           if (callback) {
@@ -313,7 +345,7 @@ const setupSocketIO = (server: HttpServer): SocketServer => {
         );
         
         if (otherParticipantId) {
-          // Emit a 'messagesRead' event to the other user
+          // Emit a 'messagesRead' event to the other user (matches client event name)
           const connectedSocketIds = connectedUsers.get(otherParticipantId.toString()) || [];
           
           for (const socketId of connectedSocketIds) {
