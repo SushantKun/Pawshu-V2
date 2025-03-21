@@ -99,7 +99,8 @@ class ChatService {
         sender: new mongoose.Types.ObjectId(senderId),
         content: content.trim(),
         timestamp: new Date(),
-        read: false
+        read: false,
+        status: 'sent' as 'sent' | 'delivered' | 'read'
       };
 
       chat.messages.push(newMessage);
@@ -117,7 +118,8 @@ class ChatService {
         sender: newMessage.sender,
         content: newMessage.content,
         timestamp: newMessage.timestamp,
-        read: newMessage.read
+        read: newMessage.read,
+        status: newMessage.status
       };
 
       return { 
@@ -221,8 +223,8 @@ const setupSocketIO = (server: HttpServer): SocketServer => {
 
     // Send message
     socket.on('sendMessage', async (
-      { chatId, content }: { chatId: string; content: string }, 
-      callback?: (response: { success: boolean; messageId?: string; uniqueMessageKey?: string; error?: string }) => void
+      { chatId, content, uniqueMessageKey }: { chatId: string; content: string; uniqueMessageKey?: string }, 
+      callback?: (response: { success: boolean; messageId?: string; error?: string }) => void
     ) => {
       // Validate inputs
       if (!chatId || !content || content.trim() === '') {
@@ -251,12 +253,6 @@ const setupSocketIO = (server: HttpServer): SocketServer => {
         // Ensure data is not undefined
         const messageData = result.data!;
 
-        // Ensure unique message identification
-        const messageId = messageData._id.toString();
-        const uniqueMessageKey = crypto.createHash('md5')
-          .update(`${messageId}-${content}-${userId}-${Date.now()}`)
-          .digest('hex');
-
         // Emit to room EXCEPT the sender
         socket.to(chatId).emit('newMessage', { 
           chatId, 
@@ -283,8 +279,7 @@ const setupSocketIO = (server: HttpServer): SocketServer => {
         if (callback) {
           callback({ 
             success: true,
-            messageId: messageId,
-            uniqueMessageKey
+            messageId: messageData._id.toString()
           });
         }
       } catch (error) {

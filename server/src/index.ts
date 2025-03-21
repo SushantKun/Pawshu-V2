@@ -7,7 +7,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import fileUpload, { UploadedFile } from 'express-fileupload';
+import fileUpload, { UploadedFile, FileArray } from 'express-fileupload';
 import { verifyToken, adminAuth, AuthRequest } from './middleware/auth';
 import http from 'http';
 import productRoutes from './routes/productRoutes';
@@ -52,7 +52,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(fileUpload({
   useTempFiles: true,
   tempFileDir: '/tmp/',
-  limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
 }));
 
 // Configure Cloudinary
@@ -463,12 +463,17 @@ app.use('/api/chats', chatRoutes);
 // Upload endpoint
 app.post('/api/upload', async (req: Request, res: Response) => {
   try {
-    if (!req.files || !req.files.file) {
+    const files = req.files as FileArray | null | undefined;
+    if (!files) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const file = req.files.file as UploadedFile;
-    const result = await cloudinary.uploader.upload(file.tempFilePath || '', {
+    const uploadedFile = files.file as UploadedFile | UploadedFile[];
+    if (!uploadedFile || Array.isArray(uploadedFile)) {
+      return res.status(400).json({ message: 'Invalid file upload' });
+    }
+
+    const result = await cloudinary.uploader.upload(uploadedFile.tempFilePath, {
       folder: 'pawshu/users',
       use_filename: true,
       unique_filename: false,

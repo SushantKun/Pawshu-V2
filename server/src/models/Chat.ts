@@ -6,6 +6,12 @@ export interface IMessage {
   content: string;
   timestamp: Date;
   read: boolean;
+  attachment?: {
+    url: string;
+    type: string;
+    name: string;
+  };
+  status: 'sent' | 'delivered' | 'read';
 }
 
 export interface IChat extends Document {
@@ -19,6 +25,7 @@ export interface IChat extends Document {
     content: string;
     timestamp: Date;
     sender: mongoose.Types.ObjectId;
+    status: 'sent' | 'delivered' | 'read';
   };
   createdAt: Date;
   updatedAt: Date;
@@ -41,6 +48,16 @@ const messageSchema = new Schema<IMessage>({
   read: {
     type: Boolean,
     default: false
+  },
+  attachment: {
+    url: String,
+    type: String,
+    name: String
+  },
+  status: {
+    type: String,
+    enum: ['sent', 'delivered', 'read'],
+    default: 'sent'
   }
 });
 
@@ -69,6 +86,11 @@ const chatSchema = new Schema<IChat>({
     sender: {
       type: Schema.Types.ObjectId,
       ref: 'User'
+    },
+    status: {
+      type: String,
+      enum: ['sent', 'delivered', 'read'],
+      default: 'sent'
     }
   }
 }, {
