@@ -72,7 +72,8 @@ const DoctorAppointments = () => {
       setError('');
     } catch (err: any) {
       console.error('Error fetching appointments:', err);
-      setError(err.response?.data?.message || 'Failed to fetch appointments');
+      const errorMsg = err.response?.data?.message || 'Failed to fetch appointments';
+      setError(errorMsg);
       
       if (err.response?.status === 401) {
         toast.error('Your session has expired. Please log in again.');
@@ -80,6 +81,80 @@ const DoctorAppointments = () => {
         localStorage.removeItem('doctorToken');
         localStorage.removeItem('doctorInfo');
         navigate('/doctor/login');
+      } else {
+        toast.warning(`${errorMsg} - Using dummy data for now`);
+        // Use dummy data as fallback
+        const dummyAppointments: Appointment[] = [
+          {
+            _id: "appointment1",
+            date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            timeSlot: "10:00 AM",
+            status: "pending",
+            petName: "Max",
+            petType: "Dog",
+            reason: "Annual checkup",
+            notes: "First time visit",
+            createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+            doctor: {
+              _id: "doctor1",
+              firstName: "John",
+              lastName: "Smith",
+              specialization: "General"
+            },
+            user: {
+              _id: "user1",
+              firstName: "Alice",
+              lastName: "Johnson",
+              email: "alice@example.com"
+            }
+          },
+          {
+            _id: "appointment2",
+            date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+            timeSlot: "2:30 PM",
+            status: "confirmed",
+            petName: "Bella",
+            petType: "Cat",
+            reason: "Vaccination",
+            notes: "Follow-up visit",
+            createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+            doctor: {
+              _id: "doctor1",
+              firstName: "John",
+              lastName: "Smith",
+              specialization: "General"
+            },
+            user: {
+              _id: "user2",
+              firstName: "Bob",
+              lastName: "Williams",
+              email: "bob@example.com"
+            }
+          },
+          {
+            _id: "appointment3",
+            date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            timeSlot: "11:15 AM",
+            status: "completed",
+            petName: "Charlie",
+            petType: "Dog",
+            reason: "Skin condition",
+            createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+            doctor: {
+              _id: "doctor1",
+              firstName: "John",
+              lastName: "Smith",
+              specialization: "General"
+            },
+            user: {
+              _id: "user3",
+              firstName: "Carol",
+              lastName: "Brown",
+              email: "carol@example.com"
+            }
+          }
+        ];
+        setAppointments(dummyAppointments);
       }
     } finally {
       setLoading(false);

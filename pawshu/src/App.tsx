@@ -148,9 +148,9 @@ const AdminLayout = ({ children }: { children: JSX.Element }) => {
   }, [darkMode]);
   
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <AdminSidebar />
-      <div className="ml-64 p-6 overflow-x-hidden min-h-screen">
+      <div className="flex-1 p-6 overflow-x-hidden ml-64">
         {children}
       </div>
     </div>

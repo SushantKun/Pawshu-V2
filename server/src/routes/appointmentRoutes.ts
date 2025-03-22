@@ -60,24 +60,29 @@ router.get('/my-appointments', verifyToken, (async (req: AuthRequest, res: Respo
 // @route   GET /api/appointments/doctor
 // @desc    Get all appointments for the logged-in doctor
 // @access  Private (Doctor)
-router.get('/doctor', doctorAuth, (async (req: AuthRequest, res: Response) => {
+router.get('/doctor', doctorAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/appointments/doctor - Fetching doctor appointments');
-    console.log('Doctor ID:', req.user?._id);
     
-    if (!req.user?._id) {
-      return res.status(401).json({ message: 'Doctor ID not found in token' });
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
     }
-
+    
+    console.log(`Finding appointments for doctor: ${req.user._id}`);
+    
     const appointments = await Appointment.find({ doctor: req.user._id })
       .populate('user', 'name email')
-      .sort({ date: -1 });
-    
+      .sort({ date: 1 });
+
     console.log(`Found ${appointments.length} appointments for doctor ${req.user._id}`);
+    
     res.json(appointments);
   } catch (error) {
     console.error('Error fetching doctor appointments:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ 
+      message: 'Server error', 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
   }
 }) as RequestHandler);
 

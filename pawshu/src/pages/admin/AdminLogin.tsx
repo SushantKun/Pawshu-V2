@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useTheme } from '../../context/ThemeContext';
@@ -12,6 +12,15 @@ const AdminLogin = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { darkMode } = useTheme();
+
+  // Check for existing token on load
+  useEffect(() => {
+    const adminToken = localStorage.getItem('adminToken');
+    if (adminToken) {
+      console.log('Admin token found in localStorage, redirecting to dashboard');
+      navigate('/admin');
+    }
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +40,10 @@ const AdminLogin = () => {
       localStorage.setItem('adminToken', response.data.token);
       
       // Redirect to admin dashboard
-      navigate('/admin');
+      console.log('Admin login successful, redirecting to dashboard');
+      setTimeout(() => {
+        navigate('/admin/dashboard');
+      }, 500); // Small delay to ensure token is set before redirect
     } catch (err: any) {
       console.error('Login error details:', {
         message: err.message,

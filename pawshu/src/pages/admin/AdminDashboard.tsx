@@ -127,6 +127,41 @@ const StatCard = ({ title, value, icon, color }: StatCardProps) => (
   </div>
 );
 
+// Helper functions for generating dummy data
+const generateDummyData = (months: number) => {
+  const data = [];
+  const now = new Date();
+  
+  for (let i = months - 1; i >= 0; i--) {
+    const date = new Date();
+    date.setMonth(now.getMonth() - i);
+    
+    data.push({
+      date: `${date.getFullYear()}-${date.getMonth() + 1}`,
+      amount: Math.floor(Math.random() * 4000) + 1000
+    });
+  }
+  
+  return data;
+};
+
+const generateUserGrowthData = (months: number) => {
+  const data = [];
+  const now = new Date();
+  
+  for (let i = months - 1; i >= 0; i--) {
+    const date = new Date();
+    date.setMonth(now.getMonth() - i);
+    
+    data.push({
+      date: `${date.getFullYear()}-${date.getMonth() + 1}`,
+      users: Math.floor(Math.random() * 9) + 1
+    });
+  }
+  
+  return data;
+};
+
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
@@ -174,20 +209,124 @@ const AdminDashboard = () => {
   });
   const [error, setError] = useState<string | null>(null);
 
+  const testServerConnection = async () => {
+    try {
+      const response = await api.get('/admin/test');
+      console.log('Server test result:', response.data);
+    } catch (err) {
+      console.error('Error testing server connection:', err);
+    }
+  };
+
+  const testAuthConnection = async () => {
+    try {
+      const response = await api.get('/admin/test-auth');
+      console.log('Auth test result:', response.data);
+    } catch (err) {
+      console.error('Error testing auth connection:', err);
+    }
+  };
+
+  const testHealthEndpoint = async () => {
+    try {
+      console.log('Testing health endpoint...');
+      const response = await fetch('http://localhost:5000/api/admin/health');
+      const data = await response.json();
+      console.log('Health check result:', data);
+      return data;
+    } catch (err) {
+      console.error('Error testing health endpoint:', err);
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetchDashboardStats();
     fetchChartData();
+    testServerConnection();
+    testAuthConnection();
+    testHealthEndpoint();
   }, []);
 
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
+      console.log('Fetching dashboard stats...');
+      
+      // Try direct fetch for diagnosis
+      try {
+        console.log('Trying direct fetch to dashboard-stats endpoint...');
+        const directResponse = await fetch('http://localhost:5000/api/admin/dashboard-stats', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          }
+        });
+        const directData = await directResponse.json();
+        console.log('Direct fetch response:', directData);
+        
+        // If direct fetch succeeds, use the data
+        setStats(directData);
+        setError(null);
+        setLoading(false);
+        return;
+      } catch (directErr) {
+        console.error('Direct fetch failed:', directErr);
+        // Continue with axios as fallback
+      }
+      
       const response = await api.get('/admin/dashboard-stats');
+      console.log('Dashboard stats response:', response.data);
       setStats(response.data);
       setError(null);
     } catch (err: any) {
       console.error('Error fetching dashboard stats:', err);
-      setError(err.response?.data?.message || 'Failed to fetch dashboard statistics');
+      // Capture more detailed error information
+      const errorMessage = err.response?.data?.message || 'Failed to fetch dashboard statistics';
+      const errorStatus = err.response?.status || 'Unknown status';
+      const errorDetails = err.response?.data?.error || err.message || 'No details available';
+      
+      setError(`Error (${errorStatus}): ${errorMessage}. Details: ${errorDetails}`);
+      
+      // Fallback to dummy data when the API fails
+      setStats({
+        counts: {
+          users: 25,
+          doctors: 5,
+          appointments: {
+            total: 30,
+            pending: 10,
+            confirmed: 8,
+            completed: 7,
+            cancelled: 5
+          },
+          charities: 3,
+          donations: {
+            totalAmount: 25000,
+            count: 15,
+            avgAmount: 1666,
+            maxAmount: 5000,
+            minAmount: 500
+          },
+          orders: {
+            total: 18,
+            revenue: 36000
+          }
+        },
+        revenue: 61000,
+        revenueData: generateDummyData(6),
+        userGrowthData: generateUserGrowthData(6),
+        recentOrders: [],
+        trends: {
+          monthlyDonations: [],
+          monthlyAppointments: []
+        },
+        recent: {
+          donations: [],
+          appointments: [],
+          users: [],
+          orders: []
+        }
+      });
     } finally {
       setLoading(false);
     }
@@ -195,27 +334,41 @@ const AdminDashboard = () => {
 
   const fetchChartData = async () => {
     try {
+      console.log('Fetching chart data...');
       const response = await api.get('/admin/chart-stats');
-      const { userRegistrationTrends, orderTrends } = response.data;
+      console.log('Chart data response:', response.data);
+      
+      const { userRegistrationTrends = [], orderTrends = [] } = response.data || {};
 
-      // Format revenue data
-      const revenueData = orderTrends.map((trend: any) => ({
-        date: `${trend._id.year}-${trend._id.month}`,
-        amount: trend.totalAmount
+      // Format revenue data safely
+      const revenueData = (orderTrends || []).map((trend: any) => ({
+        date: trend?._id?.year && trend?._id?.month ? `${trend._id.year}-${trend._id.month}` : 'Unknown',
+        amount: trend?.totalAmount || 0
       }));
 
-      // Format user growth data
-      const userGrowthData = userRegistrationTrends.map((trend: any) => ({
-        date: `${trend._id.year}-${trend._id.month}`,
-        users: trend.count
+      // Format user growth data safely
+      const userGrowthData = (userRegistrationTrends || []).map((trend: any) => ({
+        date: trend?._id?.year && trend?._id?.month ? `${trend._id.year}-${trend._id.month}` : 'Unknown',
+        users: trend?.count || 0
       }));
 
       setChartData({
         revenueData,
         userGrowthData
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching chart data:', err);
+      // Don't set an error state here, but log it clearly
+      const errorMessage = err.response?.data?.message || 'Failed to fetch chart data';
+      const errorStatus = err.response?.status || 'Unknown status';
+      
+      console.error(`Chart data error (${errorStatus}): ${errorMessage}`);
+      
+      // Set empty chart data as fallback
+      setChartData({
+        revenueData: [],
+        userGrowthData: []
+      });
     }
   };
 
@@ -396,11 +549,11 @@ const AdminDashboard = () => {
                   <div key={order._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">{order.userId?.name || 'Unknown User'}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">Order #{order._id.slice(-6)}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Order #{order._id?.slice(-6) || 'N/A'}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-gray-900 dark:text-white">NPR {order.totalAmount.toLocaleString()}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">NPR {(order.totalAmount || 0).toLocaleString()}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}</p>
                     </div>
                   </div>
                 ))}
@@ -414,14 +567,16 @@ const AdminDashboard = () => {
                 {stats?.recent?.appointments?.map((appointment: any) => (
                   <div key={appointment._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{appointment.user?.name}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{appointment.user?.name || 'Unknown User'}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Dr. {appointment.doctor?.firstName} {appointment.doctor?.lastName}
+                        Dr. {appointment.doctor?.firstName || ''} {appointment.doctor?.lastName || ''}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-gray-900 dark:text-white">{appointment.status}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{new Date(appointment.date).toLocaleDateString()}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{appointment.status || 'Unknown'}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {appointment.date ? new Date(appointment.date).toLocaleDateString() : 'N/A'}
+                      </p>
                     </div>
                   </div>
                 ))}
