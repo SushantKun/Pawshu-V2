@@ -454,11 +454,11 @@ app.use('/api/products', productRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/admin', adminRoutes);
-app.use('/api/charities', charityRoutes);
 app.use('/api/donations', donationRoutes);
-app.use('/api/orders', orderRoutes);
+app.use('/api/charities', charityRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
-app.use('/api/chats', chatRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Upload endpoint
 app.post('/api/upload', async (req: Request, res: Response) => {

@@ -2,9 +2,25 @@
 <html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/PawshuLogo.png" />
+    <link rel="icon" type="image/svg+xml" href="/pawshu-icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pawshu - Your Pet Care Partner</title>
+    <title>Pawshu - Pet Care & Products</title>
+    <style>
+      /* Fix for reCAPTCHA accessibility focus issues */
+      .g-recaptcha iframe:focus,
+      .g-recaptcha div:focus,
+      .g-recaptcha span:focus,
+      .g-recaptcha iframe:focus-within,
+      .g-recaptcha div:focus-within,
+      .g-recaptcha span:focus-within,
+      #rc-imageselect:focus,
+      #rc-imageselect:focus-within {
+        outline: 2px solid #4285f4 !important;
+        outline-offset: 2px !important;
+      }
+    </style>
+    <!-- Add Google reCAPTCHA script with explicit render -->
+    <script src="https://www.google.com/recaptcha/api.js?render=explicit" async defer></script>
   </head>
   <body class="bg-gray-900">
     <div id="root"></div>

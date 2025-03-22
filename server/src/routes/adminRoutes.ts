@@ -9,6 +9,7 @@ import { Charity } from '../models/Charity';
 import Order from '../models/Order';
 import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
+import Product from '../models/Product';
 
 const router = express.Router();
 
@@ -1190,6 +1191,64 @@ router.get('/health', (req: Request, res: Response) => {
       message: 'Health check failed',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
+  }
+});
+
+// Get all orders (admin only)
+router.get('/orders', adminAuth as RequestHandler, async (req: AuthRequest, res: Response) => {
+  try {
+    console.log('Admin fetching all orders');
+    
+    // Check MongoDB connection
+    if (!mongoose.connection.readyState) {
+      console.error('MongoDB connection is not ready');
+      return res.status(500).json({ message: 'Database connection error' });
+    }
+    
+    const orders = await Order.find()
+      .populate('userId', 'name email')
+      .sort({ createdAt: -1 });
+    
+    console.log(`Fetched ${orders.length} orders for admin`);
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching orders for admin:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update order status (admin only)
+router.put('/orders/:id/status', adminAuth as RequestHandler, async (req: AuthRequest, res: Response) => {
+  try {
+    console.log(`Admin updating order status: ${req.params.id} to ${req.body.status}`);
+    
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ message: 'Please provide status' });
+    }
+    
+    // Validate status value
+    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+      });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      console.log(`Order not found: ${req.params.id}`);
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    order.status = status;
+    await order.save();
+
+    console.log(`Order ${req.params.id} status updated to ${status}`);
+    res.json({ message: 'Order status updated', order });
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

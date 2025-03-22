@@ -38,4 +38,28 @@ router.put('/:id/progress', verifyToken, (async (req: Request, res: Response) =>
   }
 }) as RequestHandler);
 
+// Reset all charity progress to zero
+router.post('/reset-progress', (async (req: Request, res: Response) => {
+  try {
+    console.log('Resetting all charity progress to zero');
+    
+    // Update all charities to set raised amount to 0
+    const result = await Charity.updateMany({}, { $set: { raised: 0 } });
+    
+    console.log('Reset complete. Updated', result.modifiedCount, 'charities');
+    
+    // Get the updated charities to return
+    const updatedCharities = await Charity.find();
+    
+    res.json({ 
+      message: 'All charity progress reset to zero', 
+      modifiedCount: result.modifiedCount,
+      charities: updatedCharities
+    });
+  } catch (error) {
+    console.error('Error resetting charity progress:', error);
+    res.status(500).json({ message: 'Failed to reset charity progress' });
+  }
+}) as RequestHandler);
+
 export default router; 

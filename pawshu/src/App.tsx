@@ -17,6 +17,7 @@ import LostFound from './pages/LostFound';
 import Donate from './pages/Donate';
 import Wishlist from './pages/Wishlist';
 import Checkout from './pages/Checkout';
+import CheckoutSuccess from './pages/checkout/Success';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ProductManagement from './pages/admin/ProductManagement';
 import AdminLogin from './pages/admin/AdminLogin';
@@ -25,6 +26,8 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminDoctors from './pages/admin/AdminDoctors';
 import CharityManagement from './pages/admin/CharityManagement';
+import OrderDetail from './components/orders/OrderDetail';
+import AdminOrders from './pages/admin/AdminOrders';
 // Import doctor components
 import DoctorLogin from './components/doctor/DoctorLogin';
 import DoctorDashboard from './components/doctor/DoctorDashboard';
@@ -234,6 +237,13 @@ function App() {
                     </AdminLayout>
                   </ProtectedAdminRoute>
                 } />
+                <Route path="/admin/orders" element={
+                  <ProtectedAdminRoute>
+                    <AdminLayout>
+                      <AdminOrders />
+                    </AdminLayout>
+                  </ProtectedAdminRoute>
+                } />
                 <Route path="/admin/settings" element={
                   <ProtectedAdminRoute>
                     <AdminLayout>
@@ -286,17 +296,19 @@ function App() {
                 
                 {/* User Routes */}
                 <Route path="/" element={<UserLayout><Home /></UserLayout>} />
-                <Route path="/login" element={<UserLayout showFooter={false}><Login /></UserLayout>} />
-                <Route path="/register" element={<UserLayout showFooter={false}><Register /></UserLayout>} />
+                <Route path="/login" element={<UserLayout><Login /></UserLayout>} />
+                <Route path="/register" element={<UserLayout><Register /></UserLayout>} />
                 <Route path="/profile" element={<UserLayout><Profile /></UserLayout>} />
                 <Route path="/products" element={<UserLayout><Products /></UserLayout>} />
                 <Route path="/cart" element={<UserLayout><Cart /></UserLayout>} />
-                <Route path="/booking" element={<UserLayout showFooter={false}><Booking /></UserLayout>} />
+                <Route path="/checkout" element={<UserLayout><Checkout /></UserLayout>} />
+                <Route path="/checkout/success" element={<UserLayout><CheckoutSuccess /></UserLayout>} />
+                <Route path="/checkout/failure" element={<Navigate to="/checkout" />} />
+                <Route path="/booking" element={<UserLayout><Booking /></UserLayout>} />
                 <Route path="/lost-found" element={<UserLayout><LostFound /></UserLayout>} />
                 <Route path="/donate" element={<UserLayout><Donate /></UserLayout>} />
                 <Route path="/doctors" element={<UserLayout><Doctors /></UserLayout>} />
                 <Route path="/wishlist" element={<UserLayout><Wishlist /></UserLayout>} />
-                <Route path="/checkout" element={<UserLayout><Checkout /></UserLayout>} />
                 <Route path="/chat" element={
                   <ProtectedRoute>
                     <ChatWindow />
@@ -307,6 +319,7 @@ function App() {
                     <ChatWindow />
                   </ProtectedRoute>
                 } />
+                <Route path="/order/:id" element={<UserLayout><OrderDetail /></UserLayout>} />
               </Routes>
             </Router>
           </ChatProvider>

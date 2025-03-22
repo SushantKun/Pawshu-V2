@@ -100,7 +100,12 @@ const Home = () => {
 
     const fetchCharities = async () => {
       try {
-        const response = await axios.get(`${API_URL}/charities`);
+        const response = await axios.get(`${API_URL}/charities`, {
+          // Add cache-busting parameter to force a fresh request
+          params: {
+            _t: new Date().getTime()
+          }
+        });
         setCharities(response.data);
       } catch (err) {
         console.error('Error fetching charities:', err);

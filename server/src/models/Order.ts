@@ -23,6 +23,7 @@ export interface IOrder extends Document {
   };
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   paymentStatus: 'pending' | 'completed' | 'failed';
+  esewaRefId?: string;
   createdAt: Date;
 }
 
@@ -101,6 +102,10 @@ const orderSchema = new Schema<IOrder>({
     type: String,
     enum: ['pending', 'completed', 'failed'],
     default: 'pending'
+  },
+  esewaRefId: {
+    type: String,
+    required: false
   },
   createdAt: {
     type: Date,

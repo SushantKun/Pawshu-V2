@@ -28,6 +28,18 @@ const donationSchema = new mongoose.Schema({
     enum: ['pending', 'completed', 'failed'],
     default: 'completed'
   },
+  paymentMethod: {
+    type: String,
+    enum: ['card', 'esewa', 'other'],
+    default: 'card'
+  },
+  transactionId: {
+    type: String,
+    index: true
+  },
+  esewaRefId: {
+    type: String
+  },
   date: {
     type: Date,
     default: Date.now

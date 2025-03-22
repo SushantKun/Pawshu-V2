@@ -3,11 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import api from '../api/axios';
 import { showSuccessNotification, NOTIFICATIONS } from '../utils/notification';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, CreditCardIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const XMarkIconComponent = XMarkIcon as IconComponent;
+const CreditCardIconComponent = CreditCardIcon as IconComponent;
+const ArrowLeftIconComponent = ArrowLeftIcon as IconComponent;
 
 interface Charity {
   _id: string;
@@ -22,47 +25,55 @@ interface Charity {
 
 const DONATION_AMOUNTS = [100, 500, 1000, 2000, 5000];
 
-interface PaymentDetails {
-  cardNumber: string;
-  expiryDate: string;
-  cvv: string;
-}
-
-interface PaymentValidation {
-  cardNumber: boolean;
-  expiryDate: boolean;
-  cvv: boolean;
-}
-
 const Donate = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [charities, setCharities] = useState<Charity[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCharity, setSelectedCharity] = useState<Charity | null>(null);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>({
-    cardNumber: '',
-    expiryDate: '',
-    cvv: ''
-  });
   const [isProcessing, setIsProcessing] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<PaymentValidation>({
-    cardNumber: true,
-    expiryDate: true,
-    cvv: true
-  });
   const [donationComplete, setDonationComplete] = useState(false);
+  const [donationDetails, setDonationDetails] = useState<any>(null);
+  const [step, setStep] = useState<'select' | 'payment'>('select');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa'>('esewa');
 
   // Fetch charities data
   useEffect(() => {
     fetchCharities();
-  }, []);
+    
+    // Check for donation success/failure status in URL
+    const searchParams = new URLSearchParams(location.search);
+    const status = searchParams.get('status');
+    const donationId = searchParams.get('donationId');
+    
+    if (status === 'success' && donationId) {
+      showSuccessNotification(
+        NOTIFICATIONS.DONATION.title,
+        `Your donation was processed successfully. Thank you for your support!`
+      );
+      setDonationComplete(true);
+      fetchCharities(); // Refresh charities to show updated progress
+    } else if (status === 'failed') {
+      const reason = searchParams.get('reason') || 'unknown';
+      toast.error(`Donation failed: ${reason}. Please try again.`);
+    }
+    
+    // Clean up the URL
+    if (status) {
+      navigate('/donate', { replace: true });
+    }
+  }, [location.search]);
 
   const fetchCharities = async () => {
     try {
-      const response = await api.get<Charity[]>('/charities');
+      const response = await api.get<Charity[]>('/charities', {
+        params: {
+          _t: new Date().getTime() // Cache busting
+        }
+      });
       setCharities(response.data);
     } catch (error) {
       console.error('Error fetching charities:', error);
@@ -70,84 +81,6 @@ const Donate = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Update charity progress after successful donation
-  const updateCharityProgress = async (charityId: string, amount: number) => {
-    try {
-      const response = await api.put(`/charities/${charityId}/progress`, { amount });
-      setCharities(prevCharities => 
-        prevCharities.map(charity => 
-          charity._id === charityId 
-            ? { ...charity, raised: response.data.raised }
-            : charity
-        )
-      );
-    } catch (error) {
-      console.error('Error updating charity progress:', error);
-    }
-  };
-
-  const handleProceedToPayment = () => {
-    if (!selectedCharity || (!selectedAmount && !customAmount)) return;
-    setShowPaymentForm(true);
-  };
-
-  const validateCardNumber = (number: string) => {
-    const cleaned = number.replace(/\s/g, '');
-    return cleaned.length === 16 && /^\d+$/.test(cleaned);
-  };
-
-  const validateExpiryDate = (date: string) => {
-    if (!/^\d{2}\/\d{2}$/.test(date)) return false;
-    
-    const [month, year] = date.split('/').map(num => parseInt(num));
-    const now = new Date();
-    const currentYear = parseInt(now.getFullYear().toString().slice(-2));
-    const currentMonth = now.getMonth() + 1;
-
-    if (month < 1 || month > 12) return false;
-    if (year < currentYear) return false;
-    if (year === currentYear && month < currentMonth) return false;
-    
-    return true;
-  };
-
-  const validateCVV = (cvv: string) => {
-    return /^\d{3}$/.test(cvv);
-  };
-
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatCardNumber(e.target.value);
-    setPaymentDetails(prev => ({ ...prev, cardNumber: formatted }));
-    setValidationErrors(prev => ({
-      ...prev,
-      cardNumber: validateCardNumber(formatted)
-    }));
-  };
-
-  const handleExpiryDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value;
-    
-    // Auto-format MM/YY
-    if (value.length === 2 && paymentDetails.expiryDate.length === 1) {
-      value += '/';
-    }
-    
-    setPaymentDetails(prev => ({ ...prev, expiryDate: value }));
-    setValidationErrors(prev => ({
-      ...prev,
-      expiryDate: validateExpiryDate(value)
-    }));
-  };
-
-  const handleCVVChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setPaymentDetails(prev => ({ ...prev, cvv: value }));
-    setValidationErrors(prev => ({
-      ...prev,
-      cvv: validateCVV(value)
-    }));
   };
 
   const handleAmountSelect = (amount: number) => {
@@ -160,64 +93,146 @@ const Donate = () => {
     setSelectedAmount(null);
   };
 
-  const handleDonationSubmit = async () => {
-    if (!selectedCharity) return;
+  const proceedToPayment = () => {
+    if (!selectedCharity) {
+      toast.error('Please select a charity');
+      return;
+    }
 
     const amount = selectedAmount || parseInt(customAmount);
-    if (!amount) return;
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid donation amount');
+      return;
+    }
+
+    if (!user) {
+      toast.info('Please log in to make a donation');
+      navigate('/login', { state: { from: '/donate' } });
+      return;
+    }
+
+    setStep('payment');
+  };
+
+  const handlePaymentMethodChange = (method: 'card' | 'esewa') => {
+    setPaymentMethod(method);
+  };
+
+  const initiateDirectEsewaPayment = async (charityId: string, amount: number) => {
+    try {
+      // We're going directly to the eSewa sandbox environment
+      window.location.href = `https://esewa.com.np/#/`;
+      
+    } catch (error) {
+      console.error('Error initiating eSewa payment:', error);
+      toast.error('Failed to initialize payment. Please try again.');
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDonation = async () => {
+    if (!selectedCharity) return;
+    if (!user) {
+      toast.info('Please log in to make a donation');
+      navigate('/login', { state: { from: '/donate' } });
+      return;
+    }
+
+    const amount = selectedAmount || parseInt(customAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid donation amount');
+      return;
+    }
 
     try {
-      setLoading(true);
-      await api.post('/donations', {
-        charityId: selectedCharity._id,
-        charityName: selectedCharity.name,
-        amount
-      });
-
-      showSuccessNotification(
-        NOTIFICATIONS.DONATION.title,
-        `Your support of NPR ${amount.toLocaleString()} helps make a difference for animals in need.`
-      );
-      setDonationComplete(true);
-      fetchCharities(); // Refresh charities to update progress
+      setIsProcessing(true);
+      
+      if (paymentMethod === 'card') {
+        // For card payment, create and complete the donation directly
+        const response = await api.post('/donations', {
+          charityId: selectedCharity._id,
+          charityName: selectedCharity.name,
+          amount,
+          status: 'completed',
+          paymentMethod: 'card'
+        });
+        
+        setDonationDetails(response.data);
+        setDonationComplete(true);
+        
+        showSuccessNotification(
+          NOTIFICATIONS.DONATION.title,
+          `Thank you for your donation of NPR ${amount.toLocaleString()} to ${selectedCharity.name}!`
+        );
+        
+        // Refresh charities to show updated progress
+        fetchCharities();
+      } else if (paymentMethod === 'esewa') {
+        // Store donation info in sessionStorage so we can create it after successful payment
+        sessionStorage.setItem('pendingDonation', JSON.stringify({
+          charityId: selectedCharity._id,
+          charityName: selectedCharity.name,
+          amount
+        }));
+        
+        // Direct to eSewa payment page (no server interaction for payment initiation)
+        await initiateDirectEsewaPayment(selectedCharity._id, amount);
+      }
     } catch (error) {
       console.error('Error processing donation:', error);
-      showErrorNotification(
-        'Donation Failed',
-        'There was an error processing your donation. Please try again.'
-      );
-    } finally {
-      setLoading(false);
+      toast.error('There was a problem processing your donation. Please try again.');
+      setIsProcessing(false);
     }
   };
 
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-    const matches = v.match(/\d{4,16}/g);
-    const match = (matches && matches[0]) || '';
-    const parts = [];
-
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
+  useEffect(() => {
+    // Check for pending donation in sessionStorage and success status in URL
+    const searchParams = new URLSearchParams(location.search);
+    const status = searchParams.get('status');
+    const charityId = searchParams.get('charityId');
+    const amount = searchParams.get('amount');
+    
+    const pendingDonationStr = sessionStorage.getItem('pendingDonation');
+    
+    if (status === 'success' && pendingDonationStr) {
+      // Process successful eSewa payment
+      const pendingDonation = JSON.parse(pendingDonationStr);
+      
+      const createDonation = async () => {
+        try {
+          const response = await api.post('/donations', {
+            charityId: pendingDonation.charityId,
+            charityName: pendingDonation.charityName,
+            amount: pendingDonation.amount,
+            status: 'completed',
+            paymentMethod: 'esewa'
+          });
+          
+          setDonationDetails(response.data);
+          setDonationComplete(true);
+          
+          showSuccessNotification(
+            NOTIFICATIONS.DONATION.title,
+            `Thank you for your donation of NPR ${pendingDonation.amount.toLocaleString()} to ${pendingDonation.charityName}!`
+          );
+          
+          // Refresh charities to show updated progress
+          fetchCharities();
+          
+          // Clear the pending donation
+          sessionStorage.removeItem('pendingDonation');
+          
+          // Update URL to remove query params
+          navigate('/donate', { replace: true });
+        } catch (error) {
+          console.error('Error completing donation after eSewa payment:', error);
+          toast.error('There was a problem finalizing your donation. Please contact support.');
+        }
+      };
+      
+      createDonation();
     }
-
-    if (parts.length) {
-      return parts.join(' ');
-    } else {
-      return value;
-    }
-  };
-
-  const showErrorNotification = (title: string, message: string) => {
-    toast.error(message, {
-      position: "top-right",
-      autoClose: 3000,
-      hideProgressBar: false,
-      closeOnClick: true,
-      pauseOnHover: true,
-      draggable: true,
-    });
-  };
+  }, [location.search]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 pt-24">
@@ -251,14 +266,122 @@ const Donate = () => {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Thank You for Your Donation!</h2>
             <p className="text-gray-600 dark:text-gray-300 mb-6">
-              Your generous contribution of NPR {selectedAmount ? selectedAmount.toLocaleString() : customAmount} to {selectedCharity?.name} will make a difference.
+              Your generous contribution will make a difference in the lives of animals in need.
             </p>
+            {donationDetails && (
+              <div className="mb-6 p-4 bg-gray-200 dark:bg-gray-700 rounded-lg">
+                <h3 className="text-lg font-semibold mb-2">Donation Details</h3>
+                <p><span className="font-medium">Amount:</span> NPR {donationDetails.amount.toLocaleString()}</p>
+                <p><span className="font-medium">Charity:</span> {donationDetails.charityName}</p>
+                <p><span className="font-medium">Date:</span> {new Date(donationDetails.createdAt).toLocaleDateString()}</p>
+                <p><span className="font-medium">Status:</span> <span className="text-green-500">Completed</span></p>
+              </div>
+            )}
             <button
-              onClick={() => setSelectedCharity(null)}
+              onClick={() => {
+                setSelectedCharity(null);
+                setDonationComplete(false);
+                setDonationDetails(null);
+                setStep('select');
+                fetchCharities();
+              }}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-500 transition-colors"
             >
               Donate to Another Cause
             </button>
+          </div>
+        ) : step === 'payment' ? (
+          <div className="max-w-md mx-auto bg-gray-100 dark:bg-gray-800 rounded-lg shadow-sm p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <button
+                  onClick={() => setStep('select')}
+                  className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mr-2"
+                >
+                  <ArrowLeftIconComponent className="h-5 w-5" />
+                </button>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Payment Method</h2>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                {selectedCharity?.name}
+              </h3>
+              <p className="text-md font-medium text-gray-800 dark:text-gray-200">
+                Donation Amount: NPR {(selectedAmount || parseInt(customAmount)).toLocaleString()}
+              </p>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                Choose your payment method:
+              </p>
+              
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <button
+                  onClick={() => handlePaymentMethodChange('card')}
+                  className={`flex items-center justify-center p-4 border rounded-lg ${
+                    paymentMethod === 'card'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                >
+                  <CreditCardIconComponent className="h-6 w-6 mr-2" />
+                  <span>Credit Card</span>
+                </button>
+                
+                <button
+                  onClick={() => handlePaymentMethodChange('esewa')}
+                  className={`flex items-center justify-center p-4 border rounded-lg ${
+                    paymentMethod === 'esewa'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                >
+                  <img
+                    src="/esewa-logo.png"
+                    alt="eSewa Logo"
+                    className="h-6 w-6 mr-2"
+                    onError={(e) => {
+                      // Fallback if esewa logo is missing
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.style.display = 'none';
+                    }}
+                  />
+                  <span>eSewa</span>
+                </button>
+              </div>
+              
+              <div className="mt-6">
+                <button
+                  onClick={handleDonation}
+                  disabled={isProcessing}
+                  className={`w-full py-3 px-4 rounded-lg font-semibold ${
+                    isProcessing
+                      ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-500'
+                  }`}
+                >
+                  {isProcessing ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span className="ml-2">Processing...</span>
+                    </div>
+                  ) : (
+                    `Pay with ${paymentMethod === 'card' ? 'Credit Card' : 'eSewa'}`
+                  )}
+                </button>
+              </div>
+            </div>
+            
+            <div className="mt-4 text-center">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Your donation is securely processed and will help animals in need.
+                <br />Thank you for your generosity!
+              </p>
+            </div>
           </div>
         ) : selectedCharity ? (
           <div className="max-w-md mx-auto bg-gray-100 dark:bg-gray-800 rounded-lg shadow-sm p-6">
@@ -301,59 +424,54 @@ const Donate = () => {
             </div>
             
             <div className="mb-6">
-              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Select Amount</h4>
-              <div className="grid grid-cols-3 gap-3">
-                {[500, 1000, 2000].map((amount) => (
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Select donation amount
+              </label>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {DONATION_AMOUNTS.map((amount) => (
                   <button
                     key={amount}
                     onClick={() => handleAmountSelect(amount)}
-                    className={`py-2 px-4 rounded-lg font-medium ${
+                    className={`py-2 px-4 rounded-md border ${
                       selectedAmount === amount
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-gray-600'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                        : 'border-gray-300 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-700'
                     }`}
                   >
                     NPR {amount}
                   </button>
                 ))}
               </div>
-            </div>
-            
-            <div className="mb-6">
-              <label htmlFor="customAmount" className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-                Or enter custom amount
-              </label>
               <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500 dark:text-gray-400">
-                  NPR
-                </span>
                 <input
                   type="number"
-                  id="customAmount"
+                  placeholder="Custom amount"
                   value={customAmount}
-                  onChange={(e) => handleCustomAmount(parseInt(e.target.value))}
-                  className="block w-full pl-12 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter amount"
+                  onChange={(e) => handleCustomAmount(parseInt(e.target.value) || 0)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring focus:ring-blue-300 dark:focus:ring-blue-700 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 dark:text-gray-400">NPR</span>
+                </div>
               </div>
             </div>
             
             <button
-              onClick={handleDonationSubmit}
-              disabled={!selectedAmount && !customAmount}
+              onClick={proceedToPayment}
+              disabled={(!selectedAmount && !customAmount) || isProcessing}
               className={`w-full py-3 px-4 rounded-lg font-semibold ${
-                !selectedAmount && !customAmount
+                (!selectedAmount && !customAmount) || isProcessing
                   ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 text-white hover:bg-blue-500'
               }`}
             >
-              {loading ? (
+              {isProcessing ? (
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                   <span className="ml-2">Processing...</span>
                 </div>
               ) : (
-                'Complete Donation'
+                'Proceed to Payment'
               )}
             </button>
           </div>
@@ -361,7 +479,7 @@ const Donate = () => {
           <>
             {/* Charities Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-              {charities.map((charity) => (
+              {charities.map((charity: Charity) => (
                 <div 
                   key={charity._id} 
                   className={`bg-gray-100 dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden cursor-pointer transform transition-transform hover:scale-105 ${

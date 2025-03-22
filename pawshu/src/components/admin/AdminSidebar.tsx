@@ -130,6 +130,21 @@ const AdminSidebar = () => {
           </li>
           <li>
             <NavLink
+              to="/admin/orders"
+              className={({ isActive }) =>
+                `flex items-center px-4 py-3 text-white hover:bg-blue-700 dark:hover:bg-gray-700 rounded-lg ${
+                  isActive ? 'bg-blue-700 dark:bg-gray-700' : ''
+                }`
+              }
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+              <span>Orders</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
               to="/admin/settings"
               className={({ isActive }) =>
                 `flex items-center px-4 py-3 text-white hover:bg-blue-700 dark:hover:bg-gray-700 rounded-lg ${

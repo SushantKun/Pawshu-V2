@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
+import OrderList from '../components/orders/OrderList';
 
 interface Appointment {
   _id: string;
@@ -33,6 +34,20 @@ interface Donation {
   status: string;
 }
 
+interface Order {
+  _id: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    price: number;
+    quantity: number;
+  }>;
+  totalAmount: number;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  paymentStatus: 'pending' | 'completed' | 'failed';
+  createdAt: string;
+}
+
 interface UserProfile {
   _id: string;
   name: string;
@@ -51,8 +66,10 @@ const Profile = () => {
   const { user, loading } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [donationsLoading, setDonationsLoading] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState('profile');
@@ -76,6 +93,7 @@ const Profile = () => {
       fetchProfile();
       fetchAppointments();
       fetchDonations();
+      fetchOrders();
     }
   }, [user]);
 
@@ -116,6 +134,18 @@ const Profile = () => {
       console.error('Error fetching donations:', err);
     } finally {
       setDonationsLoading(false);
+    }
+  };
+
+  const fetchOrders = async () => {
+    setOrdersLoading(true);
+    try {
+      const response = await api.get('/orders/user');
+      setOrders(response.data);
+    } catch (err: any) {
+      console.error('Error fetching orders:', err);
+    } finally {
+      setOrdersLoading(false);
     }
   };
 
@@ -435,6 +465,16 @@ const Profile = () => {
               >
                 Donations
               </button>
+              <button
+                onClick={() => setActiveTab('orders')}
+                className={`${
+                  activeTab === 'orders'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm`}
+              >
+                Orders
+              </button>
             </nav>
           </div>
 
@@ -690,6 +730,15 @@ const Profile = () => {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'orders' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Your Orders</h2>
+                </div>
+                <OrderList />
               </div>
             )}
           </div>

@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import api from '../api/axios';
 import { showSuccessNotification, NOTIFICATIONS } from '../utils/notification';
+import EsewaPayment from '../components/EsewaPayment';
+import { AxiosError } from 'axios';
 
 interface ShippingDetails {
   firstName: string;
@@ -15,6 +17,20 @@ interface ShippingDetails {
   state: string;
   postalCode: string;
   phone: string;
+}
+
+interface EsewaFormData {
+  amount: number;
+  failure_url: string;
+  product_delivery_charge: string;
+  product_service_charge: string;
+  product_code: string;
+  signature: string;
+  signed_field_names: string;
+  success_url: string;
+  tax_amount: string;
+  total_amount: number;
+  transaction_uuid: string;
 }
 
 const initialShippingDetails: ShippingDetails = {
@@ -35,6 +51,9 @@ const Checkout = () => {
   const [shippingDetails, setShippingDetails] = useState<ShippingDetails>(initialShippingDetails);
   const [step, setStep] = useState<'shipping' | 'payment'>('shipping');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa'>('card');
+  const [esewaFormData, setEsewaFormData] = useState<EsewaFormData | null>(null);
+  const [showEsewaPayment, setShowEsewaPayment] = useState(false);
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shipping = cartItems.length > 0 ? 5.99 : 0;
@@ -54,12 +73,50 @@ const Checkout = () => {
     }));
   };
 
+  const handlePaymentMethodChange = (method: 'card' | 'esewa') => {
+    setPaymentMethod(method);
+  };
+
+  const initiateEsewaPayment = async (orderId: string) => {
+    try {
+      // Start the eSewa payment flow
+      const response = await api.post('/orders/esewa-payment', {
+        orderId,
+        amount: total.toFixed(2)
+      });
+
+      if (response.data.formData) {
+        setEsewaFormData(response.data.formData);
+        setShowEsewaPayment(true);
+      } else {
+        toast.error('Failed to initialize eSewa payment');
+      }
+    } catch (error) {
+      console.error('Error initiating eSewa payment:', error);
+      toast.error('Failed to initialize payment. Please try again.');
+      setIsProcessing(false);
+    }
+  };
+
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user) {
       toast.error('Please log in to complete your purchase');
       navigate('/login');
+      return;
+    }
+
+    // Validate shipping details
+    const requiredFields = [
+      'firstName', 'lastName', 'email', 'address', 'city', 'state', 'postalCode', 'phone'
+    ];
+    
+    const missingFields = requiredFields.filter(field => !shippingDetails[field as keyof ShippingDetails]);
+    
+    if (missingFields.length > 0) {
+      toast.error(`Please fill in all required fields: ${missingFields.join(', ')}`);
+      setStep('shipping');
       return;
     }
     
@@ -74,28 +131,48 @@ const Checkout = () => {
         quantity: item.quantity
       }));
       
-      // Create order
-      const response = await api.post('/orders', {
+      console.log('Submitting order with data:', {
         items,
-        totalAmount: total,
+        totalAmount: parseFloat(total.toFixed(2)),
         shippingAddress: shippingDetails
       });
       
-      // Clear cart
-      clearCart();
+      // Create order
+      const response = await api.post('/orders', {
+        items,
+        totalAmount: parseFloat(total.toFixed(2)), // Make sure it's a number, not a string
+        shippingAddress: shippingDetails
+      });
       
-      // Show success notification
-      showSuccessNotification(
-        NOTIFICATIONS.PURCHASE.title,
-        NOTIFICATIONS.PURCHASE.message
-      );
+      console.log('Order created successfully:', response.data);
       
-      // Redirect to success page
-      navigate('/');
-    } catch (error) {
+      if (paymentMethod === 'card') {
+        // Process card payment (existing flow)
+        // Clear cart
+        clearCart();
+        
+        // Show success notification
+        showSuccessNotification(
+          NOTIFICATIONS.PURCHASE.title,
+          NOTIFICATIONS.PURCHASE.message
+        );
+        
+        // Redirect to success page
+        navigate('/checkout/success?orderId=' + response.data.order._id);
+      } else if (paymentMethod === 'esewa') {
+        // Start eSewa payment flow
+        await initiateEsewaPayment(response.data.order._id);
+      }
+    } catch (error: unknown) {
       console.error('Error placing order:', error);
-      toast.error('Failed to place order. Please try again.');
-    } finally {
+      
+      if (error instanceof AxiosError && error.response?.data) {
+        console.error('Server error details:', error.response.data);
+        toast.error(error.response.data.message || 'Failed to place order. Please try again.');
+      } else {
+        toast.error('Failed to place order. Please try again.');
+      }
+      
       setIsProcessing(false);
     }
   };
@@ -113,6 +190,10 @@ const Checkout = () => {
         </button>
       </div>
     );
+  }
+
+  if (showEsewaPayment && esewaFormData) {
+    return <EsewaPayment formData={esewaFormData} />;
   }
 
   return (
@@ -258,40 +339,99 @@ const Checkout = () => {
               </form>
             ) : (
               <form onSubmit={handlePaymentSubmit} className="space-y-6">
-                <div className="space-y-6">
-                  <div>
-                    <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Card Number</label>
-                    <input
-                      type="text"
-                      id="cardNumber"
-                      required
-                      placeholder="1234 5678 9012 3456"
-                      className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label htmlFor="expiry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expiry Date</label>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Payment Method</label>
+                  <div className="flex flex-col space-y-3">
+                    <div 
+                      className={`flex items-center p-4 border rounded-md cursor-pointer
+                        ${paymentMethod === 'card' 
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700' 
+                          : 'border-gray-200 dark:border-gray-700'}`}
+                      onClick={() => handlePaymentMethodChange('card')}
+                    >
                       <input
-                        type="text"
-                        id="expiry"
-                        required
-                        placeholder="MM/YY"
-                        className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        type="radio"
+                        id="card"
+                        name="paymentMethod"
+                        checked={paymentMethod === 'card'}
+                        onChange={() => handlePaymentMethodChange('card')}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
                       />
+                      <label htmlFor="card" className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                        Credit / Debit Card
+                      </label>
                     </div>
-                    <div>
-                      <label htmlFor="cvc" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CVC</label>
+                    
+                    <div 
+                      className={`flex items-center p-4 border rounded-md cursor-pointer
+                        ${paymentMethod === 'esewa' 
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700' 
+                          : 'border-gray-200 dark:border-gray-700'}`}
+                      onClick={() => handlePaymentMethodChange('esewa')}
+                    >
                       <input
-                        type="text"
-                        id="cvc"
-                        required
-                        placeholder="123"
-                        className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        type="radio"
+                        id="esewa"
+                        name="paymentMethod"
+                        checked={paymentMethod === 'esewa'}
+                        onChange={() => handlePaymentMethodChange('esewa')}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
                       />
+                      <label htmlFor="esewa" className="ml-3 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                        Pay with eSewa
+                        <span className="bg-green-600 text-white text-xs px-2 py-1 rounded ml-2">Recommended</span>
+                      </label>
                     </div>
                   </div>
                 </div>
+                
+                {paymentMethod === 'card' && (
+                  <div className="space-y-6">
+                    <div>
+                      <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Card Number</label>
+                      <input
+                        type="text"
+                        id="cardNumber"
+                        required
+                        placeholder="1234 5678 9012 3456"
+                        className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label htmlFor="expiry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expiry Date</label>
+                        <input
+                          type="text"
+                          id="expiry"
+                          required
+                          placeholder="MM/YY"
+                          className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="cvc" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CVC</label>
+                        <input
+                          type="text"
+                          id="cvc"
+                          required
+                          placeholder="123"
+                          className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {paymentMethod === 'esewa' && (
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        You will be redirected to eSewa to complete your payment. Once the payment is successful, you will be redirected back to this site.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex justify-between">
                   <button
                     type="button"
@@ -302,9 +442,19 @@ const Checkout = () => {
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                    disabled={isProcessing}
+                    className={`px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 ${
+                      isProcessing ? 'opacity-70 cursor-not-allowed' : ''
+                    }`}
                   >
-                    Place Order
+                    {isProcessing ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                        <span>Processing...</span>
+                      </div>
+                    ) : (
+                      `Pay NPR ${total.toFixed(2)}`
+                    )}
                   </button>
                 </div>
               </form>

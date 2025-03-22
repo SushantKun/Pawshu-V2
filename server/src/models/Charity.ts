@@ -50,7 +50,7 @@ export const initialCharities = [
       url: "https://placehold.co/300x300"
     },
     goal: 50000,
-    raised: 35000
+    raised: 0 // 0% progress
   },
   {
     name: "Street Dog Welfare",
@@ -59,17 +59,17 @@ export const initialCharities = [
       public_id: "charity_placeholder",
       url: "https://placehold.co/300x300"
     },
-    goal: 30000,
-    raised: 15000
+    goal: 25000,
+    raised: 0 // 0% progress
   },
   {
-    name: "Cat Protection Nepal",
-    description: "Rescuing and rehabilitating abandoned cats. Your support helps us find forever homes for rescued cats.",
+    name: "Cat Shelter",
+    description: "Meoww!",
     image: {
       public_id: "charity_placeholder",
       url: "https://placehold.co/300x300"
     },
-    goal: 25000,
-    raised: 20000
+    goal: 20000,
+    raised: 0 // 0% progress
   }
 ]; 
