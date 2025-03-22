@@ -19,27 +19,36 @@ const DoctorLogin = () => {
     setLoading(true);
 
     try {
+      console.log('Attempting doctor login with email:', email);
       const response = await axios.post(`${API_URL}/doctors/login`, {
         email,
         password
       });
 
+      console.log('Login response:', response.data);
+      
       // Store token in localStorage
       localStorage.setItem('doctorToken', response.data.token);
       
-      // Store doctor info
+      // Store doctor info (fixing potential property access issues)
+      const doctorData = response.data.doctor || {};
       localStorage.setItem('doctorInfo', JSON.stringify({
-        id: response.data.doctor.id,
-        firstName: response.data.doctor.firstName,
-        lastName: response.data.doctor.lastName,
-        email: response.data.doctor.email,
-        specialization: response.data.doctor.specialization
+        id: doctorData._id || doctorData.id || '',
+        firstName: doctorData.firstName || '',
+        lastName: doctorData.lastName || '',
+        email: doctorData.email || '',
+        specialization: doctorData.specialization || ''
       }));
 
       // Redirect to doctor dashboard
+      console.log('Doctor login successful, redirecting to dashboard');
       navigate('/doctor');
     } catch (err: any) {
       console.error('Login error:', err);
+      if (err.response) {
+        console.error('Error response data:', err.response.data);
+        console.error('Error status:', err.response.status);
+      }
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);

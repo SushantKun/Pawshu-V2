@@ -88,8 +88,22 @@ doctorSchema.pre('save', async function(next) {
 // Compare password method
 doctorSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
   try {
-    return await bcrypt.compare(candidatePassword, this.password);
+    console.log('Comparing password for doctor:', this.email);
+    if (!candidatePassword) {
+      console.error('Empty candidate password provided');
+      return false;
+    }
+    
+    if (!this.password) {
+      console.error('Doctor has no stored password');
+      return false;
+    }
+    
+    const isMatch = await bcrypt.compare(candidatePassword, this.password);
+    console.log('Password comparison result:', isMatch);
+    return isMatch;
   } catch (error) {
+    console.error('Password comparison error:', error);
     throw new Error('Password comparison failed');
   }
 };

@@ -152,7 +152,8 @@ router.put('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest
       experience, 
       bio, 
       availability,
-      profileImage 
+      profileImage,
+      password 
     } = req.body;
     
     // Find doctor
@@ -169,6 +170,12 @@ router.put('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest
     if (experience !== undefined) doctor.experience = experience;
     if (bio) doctor.bio = bio;
     if (availability) doctor.availability = availability;
+    
+    // Handle password update
+    if (password) {
+      console.log(`Updating password for doctor: ${doctor._id}`);
+      doctor.password = password; // This will be hashed by the pre-save middleware
+    }
     
     // Handle profile image upload if provided
     if (profileImage && typeof profileImage === 'string' && profileImage.startsWith('data:image/')) {
