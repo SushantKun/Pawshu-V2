@@ -12,8 +12,6 @@ const CheckoutSuccess = () => {
   const [orderDetails, setOrderDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
-  const [verificationAttempted, setVerificationAttempted] = useState(false);
   
   // Use refs to track if we've already performed these operations
   const orderFetchedRef = useRef(false);
@@ -48,27 +46,6 @@ const CheckoutSuccess = () => {
         console.log('Received order details:', response.data);
         setOrderDetails(response.data);
         
-        // Now verify the transaction with eSewa if it was an eSewa payment
-        if (!verificationAttempted && (response.data.paymentStatus === 'completed' || response.data.paymentStatus === 'pending')) {
-          try {
-            setVerificationAttempted(true); // Prevent multiple verification attempts
-            console.log('Verifying eSewa transaction for order:', orderIdParam);
-            const verificationResponse = await api.get(`/orders/esewa/verify/${orderIdParam}`);
-            console.log('Transaction verification response:', verificationResponse.data);
-            
-            setVerificationStatus(verificationResponse.data.status);
-            
-            // If verification updated the order, refresh order details
-            if (verificationResponse.data.verified) {
-              const refreshResponse = await axios.get(`http://localhost:5000/api/orders/${orderIdParam}`, config);
-              setOrderDetails(refreshResponse.data);
-            }
-          } catch (verifyErr: any) {
-            console.error('Failed to verify transaction:', verifyErr);
-            // Don't set main error - we still have order details
-          }
-        }
-        
         // Clear the cart after successful purchase
         clearCart();
         console.log('Cart cleared after successful purchase');
@@ -83,7 +60,7 @@ const CheckoutSuccess = () => {
     };
 
     fetchOrderDetails();
-  }, [location.search, clearCart, verificationAttempted]);
+  }, [location.search, clearCart]);
 
   // Fall back to just displaying order ID if we have no details
   const renderOrderConfirmation = () => {
@@ -156,22 +133,6 @@ const CheckoutSuccess = () => {
                     </p>
                     <p className="text-gray-600 dark:text-gray-300">Status: {orderDetails.status || 'Completed'}</p>
                     <p className="text-gray-600 dark:text-gray-300">Payment Status: {orderDetails.paymentStatus || 'N/A'}</p>
-                    
-                    {/* Display eSewa verification status if available */}
-                    {verificationStatus && (
-                      <div className={`mt-2 p-2 rounded ${
-                        verificationStatus === 'COMPLETE' 
-                          ? 'bg-green-100 dark:bg-green-800/20 text-green-800 dark:text-green-200' 
-                          : 'bg-yellow-100 dark:bg-yellow-800/20 text-yellow-800 dark:text-yellow-200'
-                      }`}>
-                        <p className="text-sm font-medium">
-                          eSewa Verification: {verificationStatus}
-                          {orderDetails.esewaRefId && (
-                            <span className="block text-xs mt-1">Reference ID: {orderDetails.esewaRefId}</span>
-                          )}
-                        </p>
-                      </div>
-                    )}
                   </div>
 
                   <div className="space-y-4 mb-4">

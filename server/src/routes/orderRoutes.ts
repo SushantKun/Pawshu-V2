@@ -3,23 +3,28 @@ import { AuthRequest, verifyToken } from '../middleware/auth';
 import Order from '../models/Order';
 import Product from '../models/Product';
 import crypto from 'crypto';
+import axios from 'axios';
 
 const router = express.Router();
 
 // Create eSewa payment signature
 const createEsewaSignature = (message: string): string => {
-  const secret = "8gBm/:&EnhH.1/q"; // Test mode secret key - this would be different in production
+  const secret = "8gBm/:&EnhH.1/q"; // eSewa test mode secret key
   
-  // Log the inputs for debugging
-  console.log('Creating signature with:', { message, secret });
+  console.log('Creating eSewa signature with message:', message);
   
-  // Use the correct HMAC algorithm and encoding
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(message);
-  const signature = hmac.digest("base64");
-  
-  console.log('Generated signature:', signature);
-  return signature;
+  try {
+    // Use HMAC-SHA256 algorithm with base64 encoding as specified in eSewa docs
+    const hmac = crypto.createHmac("sha256", secret);
+    hmac.update(message);
+    const signature = hmac.digest("base64");
+    
+    console.log('Generated eSewa signature:', signature);
+    return signature;
+  } catch (error) {
+    console.error('Error generating eSewa signature:', error);
+    return '';
+  }
 };
 
 // Create a new order
@@ -28,28 +33,44 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: Next
     console.log('Creating new order, request body:', JSON.stringify(req.body, null, 2));
 
     if (!req.user) {
+      console.error('Authentication error: User not found in request');
       res.status(401).json({ message: 'Please authenticate' });
       return;
     }
+
+    console.log('Authenticated user:', JSON.stringify({
+      _id: req.user._id,
+      name: `${req.user.firstName} ${req.user.lastName}`,
+      email: req.user.email
+    }, null, 2));
 
     const { items, totalAmount, shippingAddress } = req.body;
 
     // Validate required fields with detailed error messages
     if (!items || !Array.isArray(items) || items.length === 0) {
       console.error('Missing or invalid items in order request');
-      res.status(400).json({ message: 'Please provide valid items array' });
+      res.status(400).json({ 
+        message: 'Please provide valid items array',
+        detail: 'The items field must be a non-empty array of products'
+      });
       return;
     }
     
-    if (!totalAmount) {
-      console.error('Missing totalAmount in order request');
-      res.status(400).json({ message: 'Please provide totalAmount' });
+    if (totalAmount === undefined || totalAmount === null || isNaN(parseFloat(totalAmount))) {
+      console.error('Missing or invalid totalAmount in order request:', totalAmount);
+      res.status(400).json({ 
+        message: 'Please provide a valid totalAmount',
+        detail: 'The totalAmount must be a valid number'
+      });
       return;
     }
     
-    if (!shippingAddress) {
-      console.error('Missing shippingAddress in order request');
-      res.status(400).json({ message: 'Please provide shippingAddress' });
+    if (!shippingAddress || typeof shippingAddress !== 'object') {
+      console.error('Missing or invalid shippingAddress in order request');
+      res.status(400).json({ 
+        message: 'Please provide valid shipping address',
+        detail: 'The shippingAddress must be an object with required address fields'
+      });
       return;
     }
     
@@ -61,7 +82,8 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: Next
       console.error('Missing shipping address fields:', missingFields);
       res.status(400).json({ 
         message: `Missing required shipping address fields: ${missingFields.join(', ')}`,
-        missingFields
+        missingFields,
+        detail: 'All address fields must be provided'
       });
       return;
     }
@@ -70,20 +92,32 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: Next
     for (const item of items) {
       if (!item.productId) {
         console.error('Missing productId in item:', item);
-        res.status(400).json({ message: 'Each item must have a productId' });
+        res.status(400).json({ 
+          message: 'Each item must have a productId',
+          detail: 'Found an item without productId'
+        });
         return;
       }
+
+      // Log the productId to check its format
+      console.log('Looking up product with ID:', item.productId);
 
       const product = await Product.findById(item.productId);
       if (!product) {
         console.error(`Product not found: ${item.productId}`);
-        res.status(404).json({ message: `Product not found: ${item.productId}` });
+        res.status(404).json({ 
+          message: `Product not found: ${item.productId}`,
+          detail: 'The requested product does not exist in the database'
+        });
         return;
       }
 
       if (product.stock < item.quantity) {
         console.error(`Not enough stock for product: ${product.name}. Requested: ${item.quantity}, Available: ${product.stock}`);
-        res.status(400).json({ message: `Not enough stock for product: ${product.name}` });
+        res.status(400).json({ 
+          message: `Not enough stock for product: ${product.name}`,
+          detail: `Requested ${item.quantity} units but only ${product.stock} available`
+        });
         return;
       }
 
@@ -94,7 +128,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: Next
 
     const order = new Order({
       userId: req.user._id,
-      userName: req.user.name,
+      userName: `${req.user.firstName} ${req.user.lastName}`,
       items,
       totalAmount,
       shippingAddress,
@@ -102,9 +136,17 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: Next
       paymentStatus: 'pending', // Start with pending, will be completed after payment
     });
 
-    console.log('Saving order:', JSON.stringify(order.toObject(), null, 2));
+    console.log('Preparing to save order with data:', JSON.stringify({
+      userId: order.userId,
+      userName: order.userName,
+      totalAmount: order.totalAmount,
+      items: order.items.length,
+      status: order.status,
+      paymentStatus: order.paymentStatus
+    }, null, 2));
+    
     await order.save();
-    console.log('Order saved successfully:', order._id);
+    console.log('Order saved successfully with ID:', order._id);
 
     res.status(201).json({
       message: 'Order placed successfully!',
@@ -117,104 +159,129 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: Next
   } catch (error) {
     console.error('Error creating order:', error);
     if (error instanceof Error) {
-      res.status(500).json({ message: 'Failed to create order', error: error.message });
+      // Check for MongoDB validation errors which have a more specific format
+      if (error.name === 'ValidationError') {
+        res.status(400).json({ 
+          message: 'Invalid order data', 
+          error: error.message,
+          detail: 'The order data failed validation checks'
+        });
+      } else if (error.name === 'CastError') {
+        res.status(400).json({ 
+          message: 'Invalid ID format', 
+          error: error.message,
+          detail: 'One of the provided IDs is in an incorrect format'
+        });
+      } else {
+        res.status(500).json({ 
+          message: 'Failed to create order', 
+          error: error.message,
+          detail: 'An unexpected error occurred while processing your order'
+        });
+      }
     } else {
-      res.status(500).json({ message: 'Failed to create order', error: 'Unknown error' });
+      res.status(500).json({ 
+        message: 'Failed to create order', 
+        error: 'Unknown error',
+        detail: 'An unknown error occurred while processing your order'
+      });
     }
   }
 });
 
-// eSewa payment initiation
+// Generate eSewa payment data according to documentation
+const generateEsewaPaymentData = async (order: any) => {
+  // Format values exactly as required by eSewa
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const amount = String(order.totalAmount);
+  const totalAmount = String(order.totalAmount); // Since we don't have extra charges
+  const transactionUuid = String(order._id);
+  const productCode = "EPAYTEST"; // Fixed product code for testing
+  
+  // Create signed_field_names and message in correct order as specified in docs
+  const signedFieldNames = "total_amount,transaction_uuid,product_code";
+  const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
+  
+  // Generate signature
+  const signature = createEsewaSignature(message);
+  
+  console.log('eSewa payment details:', {
+    orderId: order._id,
+    amount,
+    totalAmount,
+    transactionUuid,
+    signedFieldNames,
+    message,
+    signature
+  });
+
+  // Return data in the exact format required by eSewa v2 API
+  return {
+    amount: amount,
+    tax_amount: "0",
+    total_amount: totalAmount,
+    transaction_uuid: transactionUuid,
+    product_code: productCode,
+    product_service_charge: "0",
+    product_delivery_charge: "0",
+    success_url: `${clientUrl}/checkout/success?orderId=${transactionUuid}`,
+    failure_url: `${clientUrl}/checkout/failure`,
+    signed_field_names: signedFieldNames,
+    signature: signature
+  };
+};
+
+// Standalone eSewa payment initiation route
 router.post('/esewa-payment', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
     console.log('Initiating eSewa payment with data:', JSON.stringify(req.body, null, 2));
 
     if (!req.user) {
+      console.error('Authentication error: User not found in request');
       res.status(401).json({ message: 'Please authenticate' });
       return;
     }
 
-    const { orderId, amount } = req.body;
+    const { orderId } = req.body;
     
-    if (!orderId || !amount) {
-      res.status(400).json({ message: 'Please provide orderId and amount' });
+    if (!orderId) {
+      res.status(400).json({ message: 'Please provide orderId' });
       return;
     }
 
-    // Verify the order exists and belongs to this user
+    // Get order details
     const order = await Order.findById(orderId);
     if (!order) {
-      console.error('Order not found:', orderId);
       res.status(404).json({ message: 'Order not found' });
       return;
     }
-
-    if (order.userId.toString() !== req.user._id.toString()) {
-      console.error('Access denied: Order does not belong to user');
-      res.status(403).json({ message: 'Access denied' });
-      return;
-    }
-
-    // Server URL configuration - ensure these are correct in your environment
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-    const serverUrl = process.env.SERVER_URL || 'http://localhost:5000';
     
-    console.log('Using URLs:', { clientUrl, serverUrl });
-
-    // Create eSewa payment request payload
-    const signatureMessage = `total_amount=${amount},transaction_uuid=${orderId},product_code=EPAYTEST`;
-    const signature = createEsewaSignature(signatureMessage);
-    console.log('Payment request signature message:', signatureMessage);
-    console.log('Payment request signature:', signature);
-
-    const formData = {
-      amount: amount,
-      failure_url: `${clientUrl}/checkout/failure`,
-      product_delivery_charge: "0",
-      product_service_charge: "0",
-      product_code: "EPAYTEST",
-      signature: signature,
-      signed_field_names: "total_amount,transaction_uuid,product_code",
-      success_url: `${serverUrl}/api/orders/esewa/success`,
-      tax_amount: "0",
-      total_amount: amount,
-      transaction_uuid: orderId,
-    };
-
-    console.log('Generated eSewa formData:', JSON.stringify(formData, null, 2));
-    console.log('Expected callback URL:', `${serverUrl}/api/orders/esewa/success`);
-
-    // Update order status to pending payment
-    order.paymentStatus = 'pending';
-    await order.save();
-    console.log('Order updated with pending payment status');
-
-    // Return the form data to be submitted client-side
-    res.json({
-      message: 'eSewa payment initiated',
-      payment_method: 'esewa',
-      formData
-    });
-  } catch (error) {
+    // Generate payment data using the eSewa format
+    const paymentData = await generateEsewaPaymentData(order);
+    
+    // Return the payment data to the client
+    console.log('eSewa payment data prepared:', paymentData);
+    res.status(200).json(paymentData);
+    
+  } catch (error: any) {
     console.error('Error initiating eSewa payment:', error);
-    if (error instanceof Error) {
-      res.status(500).json({ message: 'Failed to initiate payment', error: error.message });
-    } else {
-      res.status(500).json({ message: 'Failed to initiate payment', error: 'Unknown error' });
-    }
+    res.status(500).json({ 
+      message: 'Failed to initiate eSewa payment', 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
   }
 });
 
-// eSewa success callback handler
-router.get('/esewa/success', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// eSewa success callback handler - Map this directly to the route
+router.get('/esewa-success', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     console.log('eSewa success callback received with query params:', JSON.stringify(req.query, null, 2));
     
     const { data } = req.query;
     
     if (!data || typeof data !== 'string') {
-      console.error('Invalid eSewa callback data - missing or invalid data parameter');
-      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout`);
+      console.error('Invalid eSewa callback - missing or invalid data parameter');
+      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=missing_data`);
       return;
     }
 
@@ -226,46 +293,24 @@ router.get('/esewa/success', async (req: Request, res: Response, next: NextFunct
       const decodedData = JSON.parse(decodedString);
       console.log('Parsed eSewa callback data:', JSON.stringify(decodedData, null, 2));
 
+      // Verify if transaction was successful
       if (decodedData.status !== "COMPLETE") {
         console.error('eSewa payment not complete. Status:', decodedData.status);
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout`);
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=payment_incomplete`);
         return;
       }
 
-      // Verify signature
-      if (!decodedData.signed_field_names) {
-        console.error('Missing signed_field_names in eSewa response');
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout`);
-        return;
-      }
-      
-      const fieldsToSign = decodedData.signed_field_names.split(",");
-      console.log('Fields to sign:', fieldsToSign);
-      
-      // Construct the message in the exact same format as eSewa expects
-      const message = fieldsToSign
-        .map((field: string) => `${field}=${decodedData[field] || ""}`)
-        .join(",");
-      
-      console.log('Signature verification message:', message);
-      
-      const signature = createEsewaSignature(message);
-      console.log('Generated signature:', signature);
-      console.log('Received signature:', decodedData.signature);
+      // Get the transaction details
+      const transactionUuid = decodedData.transaction_uuid;
+      const transactionCode = decodedData.transaction_code || '';
 
-      // Always bypass signature verification - eSewa test mode signatures are unreliable
-      console.log('Bypassing signature verification - accepting payment regardless of signature match');
+      console.log('Looking for order with ID:', transactionUuid);
       
-      // Update order with payment information
-      const orderId = decodedData.transaction_uuid;
-      const transactionCode = decodedData.transaction_code;
-
-      console.log('Looking for order:', orderId);
-      
-      const order = await Order.findById(orderId);
+      // Find and update the order
+      const order = await Order.findById(transactionUuid);
       if (!order) {
-        console.error('Order not found for transaction_uuid:', orderId);
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout`);
+        console.error('Order not found for transaction_uuid:', transactionUuid);
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=order_not_found`);
         return;
       }
 
@@ -273,24 +318,25 @@ router.get('/esewa/success', async (req: Request, res: Response, next: NextFunct
       console.log('Updating order payment status to completed');
       order.paymentStatus = 'completed';
       order.status = 'processing';
+      order.paymentMethod = 'esewa';
+      order.esewaRefId = transactionCode;
       await order.save();
 
-      console.log('Order payment completed:', orderId, 'Transaction:', transactionCode);
+      console.log('Order payment completed. OrderID:', transactionUuid, 'Transaction code:', transactionCode);
       
-      // Redirect back to client success page - updated to use port 5173
+      // Redirect back to client success page
       const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-      const redirectUrl = `${clientUrl}/checkout/success?orderId=${orderId}`;
+      const redirectUrl = `${clientUrl}/checkout/success?orderId=${transactionUuid}`;
       console.log('Redirecting to:', redirectUrl);
       
       res.redirect(redirectUrl);
     } catch (parseError) {
-      console.error('Error parsing eSewa data:', parseError);
-      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout`);
-      return;
+      console.error('Error parsing eSewa response data:', parseError);
+      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=parse_error`);
     }
   } catch (error) {
     console.error('Error processing eSewa success callback:', error);
-    res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout`);
+    res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=server_error`);
   }
 });
 
@@ -421,31 +467,22 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
     if ('user' in req && req.user) {
       const authReq = req as AuthRequest;
       // Only allow users to view their own orders unless they're an admin
-      if (authReq.user && 
-          (order.userId.toString() !== authReq.user._id.toString() && 
-           !authReq.user.isAdmin)) {
-        console.log('Access denied: User tried to access another user\'s order');
-        res.status(403).json({ message: 'Access denied' });
-        return;
-      }
-    } else {
-      console.log('Processing unauthenticated order view (likely after payment)');
-      // For unauthenticated requests, only allow viewing if the order was just created (last 30 minutes)
-      const orderCreationTime = new Date(order.createdAt).getTime();
-      const currentTime = new Date().getTime();
-      const timeDifferenceInMinutes = (currentTime - orderCreationTime) / (1000 * 60);
-      
-      if (timeDifferenceInMinutes > 30) {
-        console.log('Access denied: Unauthenticated request for old order');
-        res.status(403).json({ message: 'Please log in to view this order' });
+      if (authReq.user && order.userId.toString() !== authReq.user._id.toString() && !authReq.user.isAdmin) {
+        res.status(403).json({ message: 'You do not have permission to view this order' });
         return;
       }
     }
 
-    console.log('Order found, returning details');
-    res.json(order);
+    // Return the order data with a flag indicating if payment can be retried
+    // Only allow payment retry for orders with failed payment status
+    const canRetryPayment = order.paymentStatus === 'failed' && order.status === 'pending';
+
+    res.json({
+      ...order.toObject(),
+      canRetryPayment
+    });
   } catch (error) {
-    console.error('Error fetching order by ID:', error);
+    console.error('Error fetching order:', error);
     next(error);
   }
 });
@@ -569,6 +606,272 @@ router.put('/:id/cancel', verifyToken, async (req: AuthRequest, res: Response, n
     res.json({ message: 'Order cancelled successfully', order });
   } catch (error) {
     next(error);
+  }
+});
+
+// Retry payment for failed orders
+router.post('/:id/retry-payment', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: 'Please authenticate' });
+      return;
+    }
+
+    const { paymentMethod } = req.body;
+    if (!paymentMethod) {
+      res.status(400).json({ message: 'Payment method is required' });
+      return;
+    }
+
+    const orderId = req.params.id;
+    const order = await Order.findById(orderId);
+    
+    if (!order) {
+      res.status(404).json({ message: 'Order not found' });
+      return;
+    }
+
+    // Only allow users to retry payment for their own orders
+    if (order.userId.toString() !== req.user._id.toString()) {
+      res.status(403).json({ message: 'Access denied' });
+      return;
+    }
+
+    // Only allow payment retry for orders with failed payment status and pending status
+    if (order.status !== 'pending' || order.paymentStatus !== 'failed') {
+      res.status(400).json({ 
+        message: `Cannot retry payment for this order. Order must be in pending status with failed payment.`
+      });
+      return;
+    }
+
+    // Reset payment status to pending
+    order.paymentStatus = 'pending';
+    order.paymentMethod = paymentMethod;
+    await order.save();
+
+    // Return the information needed based on the payment method
+    if (paymentMethod === 'esewa') {
+      // Generate eSewa payment data
+      const esewaPaymentData = await generateEsewaPaymentData(order);
+      res.json({ 
+        message: 'Payment retry initiated', 
+        order,
+        paymentData: esewaPaymentData
+      });
+    } else if (paymentMethod === 'khalti') {
+      res.json({ 
+        message: 'Payment retry initiated', 
+        order,
+        orderId: order._id
+      });
+    } else {
+      res.json({ 
+        message: 'Payment status reset to pending', 
+        order 
+      });
+    }
+  } catch (error) {
+    console.error('Error retrying payment:', error);
+    next(error);
+  }
+});
+
+// Khalti payment initiation
+router.post('/khalti-payment', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    console.log('Initiating Khalti payment with data:', JSON.stringify(req.body, null, 2));
+    console.log('Auth user:', req.user);
+
+    if (!req.user) {
+      console.error('Authentication error: User not found in request');
+      res.status(401).json({ message: 'Please authenticate' });
+      return;
+    }
+
+    const { orderId, amount } = req.body;
+    
+    if (!orderId || !amount) {
+      res.status(400).json({ message: 'Please provide orderId and amount' });
+      return;
+    }
+
+    // Get Khalti keys from environment variables
+    const khaltiSecretKey = process.env.KHALTI_SECRET_KEY;
+    if (!khaltiSecretKey) {
+      console.error('KHALTI_SECRET_KEY is not defined in environment variables');
+      res.status(500).json({ message: 'Server configuration error - Khalti keys not configured' });
+      return;
+    }
+    
+    // Get order details
+    const order = await Order.findById(orderId);
+    if (!order) {
+      res.status(404).json({ message: 'Order not found' });
+      return;
+    }
+
+    // Convert amount to paisa (Khalti requires amount in paisa)
+    const amountInPaisa = Math.round(parseFloat(amount) * 100);
+    
+    // Prepare payload for Khalti API
+    const khaltiPayload = {
+      return_url: `${process.env.CLIENT_URL}/checkout/success?orderId=${orderId}`,
+      website_url: process.env.CLIENT_URL || 'http://localhost:5173',
+      amount: amountInPaisa,
+      purchase_order_id: orderId,
+      purchase_order_name: `Order #${orderId}`,
+      customer_info: {
+        name: `${req.user.firstName} ${req.user.lastName}`,
+        email: req.user.email,
+        phone: req.user.phone || ''
+      },
+      amount_breakdown: [
+        {
+          label: 'Order Payment',
+          amount: amountInPaisa
+        }
+      ],
+      product_details: order.items.map(item => ({
+        identity: item.productId.toString(),
+        name: item.productName,
+        total_price: Math.round(item.price * item.quantity * 100),
+        quantity: item.quantity,
+        unit_price: Math.round(item.price * 100)
+      }))
+    };
+
+    console.log('Sending Khalti request with payload:', JSON.stringify(khaltiPayload, null, 2));
+    console.log('Using Khalti secret key:', khaltiSecretKey.substring(0, 5) + '...');
+
+    // Use Khalti sandbox API URL
+    const khaltiApiUrl = 'https://dev.khalti.com/api/v2/epayment/initiate/';
+
+    // Make request to Khalti API with CORRECT AUTHORIZATION FORMAT
+    try {
+      const khaltiResponse = await axios.post(
+        khaltiApiUrl, 
+        khaltiPayload,
+        {
+          headers: {
+            'Authorization': `Key ${khaltiSecretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('Khalti API response:', JSON.stringify(khaltiResponse.data, null, 2));
+
+      // Return the payment URL to the client
+      res.status(200).json({
+        paymentUrl: khaltiResponse.data.payment_url,
+        pidx: khaltiResponse.data.pidx
+      });
+    } catch (apiError: any) {
+      console.error('Khalti API request failed:', apiError.message);
+      if (apiError.response) {
+        console.error('Khalti API error response:', apiError.response.data);
+        res.status(apiError.response.status).json({ 
+          message: 'Failed to initiate Khalti payment', 
+          error: apiError.response.data 
+        });
+      } else {
+        res.status(500).json({ 
+          message: 'Failed to connect to Khalti API', 
+          error: apiError.message
+        });
+      }
+    }
+  } catch (error: any) {
+    console.error('Error initiating Khalti payment:', error);
+    res.status(500).json({ 
+      message: 'Failed to initiate Khalti payment', 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+// Khalti success verification endpoint
+router.get('/khalti/verify', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    console.log('Khalti verification callback received with query params:', JSON.stringify(req.query, null, 2));
+    
+    const { pidx, purchase_order_id, amount, transaction_id } = req.query;
+    
+    if (!pidx || !purchase_order_id) {
+      console.error('Invalid Khalti callback data - missing pidx or purchase_order_id');
+      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=missing_params`);
+      return;
+    }
+
+    const orderId = purchase_order_id.toString();
+    
+    try {
+      // Get Khalti keys from environment variables
+      const khaltiSecretKey = process.env.KHALTI_SECRET_KEY;
+      if (!khaltiSecretKey) {
+        console.error('KHALTI_SECRET_KEY is not defined in environment variables');
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=server_config_error`);
+        return;
+      }
+      
+      // Use Khalti sandbox API URL for verification
+      const khaltiVerifyUrl = 'https://dev.khalti.com/api/v2/epayment/lookup/';
+      
+      // Verify the transaction with Khalti
+      const verificationResponse = await axios.post(
+        khaltiVerifyUrl, 
+        { pidx },
+        {
+          headers: {
+            'Authorization': `Key ${khaltiSecretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      console.log('Khalti verification response:', JSON.stringify(verificationResponse.data, null, 2));
+
+      const paymentStatus = verificationResponse.data.status;
+      
+      if (paymentStatus === 'Completed') {
+        // Update order with payment information
+        const order = await Order.findById(orderId);
+        if (!order) {
+          console.error('Order not found for purchase_order_id:', orderId);
+          res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=order_not_found`);
+          return;
+        }
+
+        // Update order status
+        console.log('Updating order payment status to completed');
+        order.paymentStatus = 'completed';
+        order.status = 'processing';
+        order.khaltiReference = transaction_id?.toString() || pidx?.toString();
+        await order.save();
+
+        console.log('Order payment completed:', orderId, 'Transaction:', transaction_id);
+        
+        // Redirect back to client success page
+        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const redirectUrl = `${clientUrl}/checkout/success?orderId=${orderId}`;
+        console.log('Redirecting to:', redirectUrl);
+        
+        res.redirect(redirectUrl);
+      } else {
+        console.error('Khalti payment not complete. Status:', paymentStatus);
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=payment_incomplete`);
+      }
+    } catch (verificationError) {
+      console.error('Error verifying Khalti transaction:', verificationError);
+      if (verificationError.response) {
+        console.error('Khalti verification API error:', verificationError.response.data);
+      }
+      res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=verification_failed`);
+    }
+  } catch (error) {
+    console.error('Error processing Khalti success callback:', error);
+    res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/checkout?status=failed&reason=unknown_error`);
   }
 });
 

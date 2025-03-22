@@ -2,13 +2,16 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { Types } from 'mongoose';
 import { FileArray, UploadedFile } from 'express-fileupload';
+import User from '../models/User';
 
 export interface UserPayload {
   _id: Types.ObjectId;
   email: string;
-  role: string;
-  name: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
   isAdmin: boolean;
+  isDoctor: boolean;
 }
 
 // Extend the Express Request type
@@ -23,22 +26,82 @@ export function hasFiles(req: Request): req is Request & { files: FileArray } {
 }
 
 export const verifyToken = async (
-  req: Request,
+  req: AuthRequest,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-
-    if (!token) {
-      return res.status(401).json({ message: 'No token provided' });
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    console.log(`[Auth Debug] Verifying token for path: ${req.path}`);
+    console.log(`[Auth Debug] Authorization header present: ${!!req.header('Authorization')}`);
+    
+    // Log full Authorization header for debugging
+    console.log(`[Auth Debug] Auth header value: ${req.header('Authorization')?.substring(0, 20)}...`);
+    
+    // For payment endpoints, log additional details
+    if (req.path.includes('payment')) {
+      console.log('[Auth Debug] Payment endpoint detected');
+      console.log('[Auth Debug] Request body:', JSON.stringify(req.body));
+      console.log('[Auth Debug] Request method:', req.method);
+      console.log('[Auth Debug] Request query params:', JSON.stringify(req.query));
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as UserPayload;
-    (req as AuthRequest).user = decoded;
-    next();
+    if (!token) {
+      console.log('[Auth Debug] No token provided in Authorization header');
+      res.status(401).json({ message: 'No token, authorization denied' });
+      return;
+    }
+
+    // Log token length for verification
+    console.log(`[Auth Debug] Token length: ${token.length}`);
+    
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error('[Auth Debug] JWT_SECRET is not defined in environment variables');
+      res.status(500).json({ message: 'Server error' });
+      return;
+    }
+
+    try {
+      const decoded = jwt.verify(token, jwtSecret) as any;
+      console.log(`[Auth Debug] Token verified successfully for user: ${decoded._id}`);
+      
+      req.user = {
+        ...decoded,
+        _id: new Types.ObjectId(decoded._id) // Convert string _id to ObjectId
+      };
+      
+      if (req.user) {
+        console.log(`[Auth Debug] User object set on request: ${JSON.stringify({
+          _id: req.user._id.toString(),
+          email: req.user.email,
+          isAdmin: req.user.isAdmin, 
+          isDoctor: req.user.isDoctor
+        })}`);
+      }
+
+      next();
+    } catch (jwtError) {
+      console.error('[Auth Debug] JWT verification failed:', jwtError);
+      
+      // Try to decode the token for debugging, even if it's not valid
+      try {
+        const tokenParts = token.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+          console.log('[Auth Debug] Token payload:', payload);
+          console.log('[Auth Debug] Token expiration:', new Date(payload.exp * 1000));
+          console.log('[Auth Debug] Current time:', new Date());
+        }
+      } catch (e) {
+        console.error('[Auth Debug] Could not decode token for debugging:', e);
+      }
+      
+      res.status(401).json({ message: 'Token is not valid' });
+    }
   } catch (error) {
-    return res.status(401).json({ message: 'Invalid token' });
+    console.error('[Auth Debug] Token processing error:', error);
+    res.status(401).json({ message: 'Token is not valid' });
   }
 };
 
@@ -60,8 +123,7 @@ export const adminAuth = async (
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret') as UserPayload;
       console.log('Token decoded:', { 
         userId: decoded._id, 
-        email: decoded.email, 
-        role: decoded.role,
+        email: decoded.email,
         isAdmin: decoded.isAdmin 
       });
       (req as AuthRequest).user = decoded;
@@ -72,11 +134,10 @@ export const adminAuth = async (
         return res.status(401).json({ message: 'Authorization denied' });
       }
       
-      // Allow access if either isAdmin flag is true or role is explicitly 'admin'
-      if (!authReq.user.isAdmin && authReq.user.role !== 'admin') {
+      // Allow access if isAdmin flag is true
+      if (!authReq.user.isAdmin) {
         console.log('Admin auth failed: User is not admin', { 
-          isAdmin: authReq.user.isAdmin, 
-          role: authReq.user.role 
+          isAdmin: authReq.user.isAdmin
         });
         return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
       }
@@ -114,8 +175,8 @@ export const doctorAuth = async (
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret') as UserPayload;
       console.log('Token decoded:', { 
         userId: decoded._id, 
-        email: decoded.email, 
-        role: decoded.role
+        email: decoded.email,
+        isDoctor: decoded.isDoctor
       });
       (req as AuthRequest).user = decoded;
       
@@ -125,8 +186,8 @@ export const doctorAuth = async (
         return res.status(401).json({ message: 'Authorization denied' });
       }
       
-      if (authReq.user.role !== 'doctor') {
-        console.log('Doctor auth failed: User is not a doctor', { role: authReq.user.role });
+      if (!authReq.user.isDoctor) {
+        console.log('Doctor auth failed: User is not a doctor', { isDoctor: authReq.user.isDoctor });
         return res.status(403).json({ message: 'Access denied. Doctor privileges required.' });
       }
       
@@ -145,34 +206,18 @@ export const doctorAuth = async (
   }
 };
 
-export const isAdmin = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const authReq = req as AuthRequest;
-    if (!authReq.user?.isAdmin && authReq.user?.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin role required.' });
-    }
-    next();
-  } catch (error) {
-    return res.status(500).json({ message: 'Error checking admin role' });
+export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  if (!req.user || !req.user.isAdmin) {
+    res.status(403).json({ message: 'Access denied' });
+    return;
   }
+  next();
 };
 
-export const isDoctor = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const authReq = req as AuthRequest;
-    if (authReq.user?.role !== 'doctor') {
-      return res.status(403).json({ message: 'Access denied. Doctor role required.' });
-    }
-    next();
-  } catch (error) {
-    return res.status(500).json({ message: 'Error checking doctor role' });
+export const isDoctor = (req: AuthRequest, res: Response, next: NextFunction): void => {
+  if (!req.user || !req.user.isDoctor) {
+    res.status(403).json({ message: 'Access denied' });
+    return;
   }
+  next();
 }; 

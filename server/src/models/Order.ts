@@ -1,10 +1,22 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
 
-export interface OrderItem {
+// Order item subschema
+interface OrderItem {
   productId: mongoose.Types.ObjectId;
   productName: string;
   price: number;
   quantity: number;
+}
+
+interface ShippingAddress {
+  firstName: string;
+  lastName: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  phone: string;
 }
 
 export interface IOrder extends Document {
@@ -12,22 +24,17 @@ export interface IOrder extends Document {
   userName: string;
   items: OrderItem[];
   totalAmount: number;
-  shippingAddress: {
-    firstName: string;
-    lastName: string;
-    address: string;
-    city: string;
-    state: string;
-    postalCode: string;
-    phone: string;
-  };
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  paymentStatus: 'pending' | 'completed' | 'failed';
-  esewaRefId?: string;
+  status: string;
+  paymentStatus: string;
+  paymentMethod?: string;
+  shippingAddress: ShippingAddress;
   createdAt: Date;
+  updatedAt: Date;
+  khaltiReference?: string;
+  esewaRefId?: string;
 }
 
-const orderSchema = new Schema<IOrder>({
+const OrderSchema: Schema = new Schema({
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
@@ -37,61 +44,29 @@ const orderSchema = new Schema<IOrder>({
     type: String,
     required: true
   },
-  items: [
-    {
-      productId: {
-        type: Schema.Types.ObjectId,
-        ref: 'Product',
-        required: true
-      },
-      productName: {
-        type: String,
-        required: true
-      },
-      price: {
-        type: Number,
-        required: true
-      },
-      quantity: {
-        type: Number,
-        required: true,
-        min: 1
-      }
+  items: [{
+    productId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Product',
+      required: true
+    },
+    productName: {
+      type: String,
+      required: true
+    },
+    price: {
+      type: Number,
+      required: true
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1
     }
-  ],
+  }],
   totalAmount: {
     type: Number,
     required: true
-  },
-  shippingAddress: {
-    firstName: {
-      type: String,
-      required: true
-    },
-    lastName: {
-      type: String,
-      required: true
-    },
-    address: {
-      type: String,
-      required: true
-    },
-    city: {
-      type: String,
-      required: true
-    },
-    state: {
-      type: String,
-      required: true
-    },
-    postalCode: {
-      type: String,
-      required: true
-    },
-    phone: {
-      type: String,
-      required: true
-    }
   },
   status: {
     type: String,
@@ -100,19 +75,27 @@ const orderSchema = new Schema<IOrder>({
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'completed', 'failed'],
+    enum: ['pending', 'completed', 'failed', 'refunded'],
     default: 'pending'
   },
-  esewaRefId: {
+  paymentMethod: {
     type: String,
-    required: false
+    enum: ['card', 'esewa', 'khalti', 'cash'],
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+  shippingAddress: {
+    firstName: String,
+    lastName: String,
+    email: String,
+    address: String,
+    city: String,
+    state: String,
+    postalCode: String,
+    phone: String
+  },
+  khaltiReference: String,
+  esewaRefId: String
 }, {
   timestamps: true
 });
 
-export default mongoose.model<IOrder>('Order', orderSchema); 
+export default mongoose.model<IOrder>('Order', OrderSchema); 

@@ -38,7 +38,7 @@ const Donate = () => {
   const [donationComplete, setDonationComplete] = useState(false);
   const [donationDetails, setDonationDetails] = useState<any>(null);
   const [step, setStep] = useState<'select' | 'payment'>('select');
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa'>('esewa');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa' | 'khalti'>('esewa');
 
   // Fetch charities data
   useEffect(() => {
@@ -114,7 +114,7 @@ const Donate = () => {
     setStep('payment');
   };
 
-  const handlePaymentMethodChange = (method: 'card' | 'esewa') => {
+  const handlePaymentMethodChange = (method: 'card' | 'esewa' | 'khalti') => {
     setPaymentMethod(method);
   };
 
@@ -125,6 +125,55 @@ const Donate = () => {
       
     } catch (error) {
       console.error('Error initiating eSewa payment:', error);
+      toast.error('Failed to initialize payment. Please try again.');
+      setIsProcessing(false);
+    }
+  };
+
+  const initiateKhaltiPayment = async (charityId: string, amount: number) => {
+    try {
+      setIsProcessing(true);
+      
+      // First create a pending donation
+      const donationResponse = await api.post('/donations', {
+        charityId: charityId,
+        charityName: selectedCharity?.name,
+        amount,
+        status: 'pending',
+        paymentMethod: 'khalti'
+      });
+      
+      if (!donationResponse.data || !donationResponse.data._id) {
+        toast.error('Failed to initialize donation. Please try again.');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Then initiate Khalti payment with the donation ID
+      const khaltiResponse = await api.post('/donations/khalti-payment', {
+        donationId: donationResponse.data._id,
+        amount,
+        charityId
+      });
+      
+      // If successful, redirect to Khalti payment URL
+      if (khaltiResponse.data && khaltiResponse.data.paymentUrl) {
+        // Store donation info in sessionStorage
+        sessionStorage.setItem('pendingDonation', JSON.stringify({
+          donationId: donationResponse.data._id,
+          charityId,
+          charityName: selectedCharity?.name,
+          amount
+        }));
+        
+        // Redirect to Khalti payment page
+        window.location.href = khaltiResponse.data.paymentUrl;
+      } else {
+        toast.error('Failed to initialize Khalti payment. Please try again.');
+        setIsProcessing(false);
+      }
+    } catch (error) {
+      console.error('Error initiating Khalti payment:', error);
       toast.error('Failed to initialize payment. Please try again.');
       setIsProcessing(false);
     }
@@ -177,6 +226,9 @@ const Donate = () => {
         
         // Direct to eSewa payment page (no server interaction for payment initiation)
         await initiateDirectEsewaPayment(selectedCharity._id, amount);
+      } else if (paymentMethod === 'khalti') {
+        // Initiate Khalti payment which handles the donation creation
+        await initiateKhaltiPayment(selectedCharity._id, amount);
       }
     } catch (error) {
       console.error('Error processing donation:', error);
@@ -189,48 +241,63 @@ const Donate = () => {
     // Check for pending donation in sessionStorage and success status in URL
     const searchParams = new URLSearchParams(location.search);
     const status = searchParams.get('status');
-    const charityId = searchParams.get('charityId');
-    const amount = searchParams.get('amount');
+    const donationId = searchParams.get('donationId');
     
     const pendingDonationStr = sessionStorage.getItem('pendingDonation');
     
-    if (status === 'success' && pendingDonationStr) {
-      // Process successful eSewa payment
-      const pendingDonation = JSON.parse(pendingDonationStr);
+    if (status === 'success' && (donationId || pendingDonationStr)) {
+      // Process successful payment
+      const pendingDonation = pendingDonationStr ? JSON.parse(pendingDonationStr) : null;
       
-      const createDonation = async () => {
+      const createOrCompleteDonation = async () => {
         try {
-          const response = await api.post('/donations', {
-            charityId: pendingDonation.charityId,
-            charityName: pendingDonation.charityName,
-            amount: pendingDonation.amount,
-            status: 'completed',
-            paymentMethod: 'esewa'
-          });
+          let donation;
           
-          setDonationDetails(response.data);
-          setDonationComplete(true);
+          // If we have a donation ID, it means it's a Khalti payment that already created the donation
+          if (donationId && donationId.startsWith('donation_')) {
+            // For an existing donation (Khalti), complete it
+            const existingDonationId = donationId.replace('donation_', '');
+            const response = await api.put(`/donations/${existingDonationId}/complete`, {
+              paymentMethod: 'khalti'
+            });
+            donation = response.data.donation;
+          } else if (pendingDonation) {
+            // For eSewa or creating a new donation
+            const response = await api.post('/donations', {
+              charityId: pendingDonation.charityId,
+              charityName: pendingDonation.charityName,
+              amount: pendingDonation.amount,
+              status: 'completed',
+              paymentMethod: pendingDonation.paymentMethod || 'esewa'
+            });
+            donation = response.data;
+          }
           
-          showSuccessNotification(
-            NOTIFICATIONS.DONATION.title,
-            `Thank you for your donation of NPR ${pendingDonation.amount.toLocaleString()} to ${pendingDonation.charityName}!`
-          );
-          
-          // Refresh charities to show updated progress
-          fetchCharities();
-          
-          // Clear the pending donation
-          sessionStorage.removeItem('pendingDonation');
-          
-          // Update URL to remove query params
-          navigate('/donate', { replace: true });
+          if (donation) {
+            setDonationDetails(donation);
+            setDonationComplete(true);
+            
+            showSuccessNotification(
+              NOTIFICATIONS.DONATION.title,
+              `Thank you for your donation of NPR ${donation.amount.toLocaleString()} to ${donation.charityName}!`
+            );
+            
+            // Refresh charities to show updated progress
+            fetchCharities();
+            
+            // Clear the pending donation
+            sessionStorage.removeItem('pendingDonation');
+            
+            // Update URL to remove query params
+            navigate('/donate', { replace: true });
+          }
         } catch (error) {
-          console.error('Error completing donation after eSewa payment:', error);
+          console.error('Error completing donation after payment:', error);
           toast.error('There was a problem finalizing your donation. Please contact support.');
         }
       };
       
-      createDonation();
+      createOrCompleteDonation();
     }
   }, [location.search]);
 
@@ -318,7 +385,7 @@ const Donate = () => {
                 Choose your payment method:
               </p>
               
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-3 gap-4 mb-4">
                 <button
                   onClick={() => handlePaymentMethodChange('card')}
                   className={`flex items-center justify-center p-4 border rounded-lg ${
@@ -328,7 +395,7 @@ const Donate = () => {
                   }`}
                 >
                   <CreditCardIconComponent className="h-6 w-6 mr-2" />
-                  <span>Credit Card</span>
+                  <span>Card</span>
                 </button>
                 
                 <button
@@ -352,6 +419,28 @@ const Donate = () => {
                   />
                   <span>eSewa</span>
                 </button>
+                
+                <button
+                  onClick={() => handlePaymentMethodChange('khalti')}
+                  className={`flex items-center justify-center p-4 border rounded-lg ${
+                    paymentMethod === 'khalti'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                      : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                >
+                  <img
+                    src="/khalti-logo.png"
+                    alt="Khalti Logo"
+                    className="h-6 w-6 mr-2"
+                    onError={(e) => {
+                      // Fallback if khalti logo is missing
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.style.display = 'none';
+                    }}
+                  />
+                  <span>Khalti</span>
+                </button>
               </div>
               
               <div className="mt-6">
@@ -370,7 +459,7 @@ const Donate = () => {
                       <span className="ml-2">Processing...</span>
                     </div>
                   ) : (
-                    `Pay with ${paymentMethod === 'card' ? 'Credit Card' : 'eSewa'}`
+                    `Pay with ${paymentMethod === 'card' ? 'Credit Card' : paymentMethod === 'esewa' ? 'eSewa' : 'Khalti'}`
                   )}
                 </button>
               </div>

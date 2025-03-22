@@ -1,6 +1,7 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import Appointment, { IAppointment } from '../models/Appointment';
 import { verifyToken, adminAuth, doctorAuth, AuthRequest } from '../middleware/auth';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
@@ -40,22 +41,45 @@ router.post('/', verifyToken, (async (req: AuthRequest, res: Response) => {
 // @route   GET /api/appointments
 // @desc    Get all appointments for the logged-in user
 // @access  Private (User)
-router.get('/my-appointments', verifyToken, (async (req: AuthRequest, res: Response) => {
+router.get('/my-appointments', verifyToken, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    const appointments = await Appointment.find({ user: req.user._id })
-      .populate('doctor', 'firstName lastName specialization')
-      .sort({ date: 1 });
+    // Determine if user is a doctor or admin to adjust query
+    const isDoctor = req.user.isDoctor;
+    const isAdmin = req.user.isAdmin;
 
-    res.json(appointments);
+    let appointments;
+    
+    if (isAdmin) {
+      // Admin can see all appointments
+      appointments = await Appointment.find()
+        .sort({ date: -1, time: -1 })
+        .populate('user', 'firstName lastName email phone')
+        .populate('doctor', 'firstName lastName specialization');
+    } else if (isDoctor) {
+      // Doctor can see their own appointments
+      appointments = await Appointment.find({ doctor: req.user._id })
+        .sort({ date: -1, time: -1 })
+        .populate('user', 'firstName lastName email phone');
+    } else {
+      // Regular user can see their own appointments
+      appointments = await Appointment.find({ user: req.user._id })
+        .sort({ date: -1, time: -1 })
+        .populate('doctor', 'firstName lastName specialization');
+    }
+
+    res.json({
+      appointments,
+      userType: isDoctor ? 'doctor' : isAdmin ? 'admin' : 'user'
+    });
   } catch (error) {
-    console.error('Error fetching user appointments:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error fetching appointments:', error);
+    res.status(500).json({ message: 'Error fetching appointments' });
   }
-}) as RequestHandler);
+});
 
 // @route   GET /api/appointments/doctor
 // @desc    Get all appointments for the logged-in doctor
@@ -153,8 +177,8 @@ router.put('/:id/status', verifyToken, (async (req: AuthRequest, res: Response) 
     }
 
     // Check if the user is a doctor or admin
-    const isDoctor = req.user.role === 'doctor';
-    const isAdmin = req.user.isAdmin || req.user.role === 'admin';
+    const isDoctor = req.user.isDoctor;
+    const isAdmin = req.user.isAdmin;
     
     // For doctors, check if they're assigned to this appointment
     const appointmentDoctorId = appointment.doctor.toString();
@@ -167,7 +191,7 @@ router.put('/:id/status', verifyToken, (async (req: AuthRequest, res: Response) 
       isDoctor,
       isAdmin,
       isAssignedDoctor,
-      userRole: req.user.role
+      userType: isDoctor ? 'doctor' : isAdmin ? 'admin' : 'user'
     });
     
     // Allow admin or the assigned doctor to update

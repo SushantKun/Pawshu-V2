@@ -38,6 +38,8 @@ import Doctors from './pages/Doctors';
 import Chat from './pages/Chat';
 import AdminSidebar from './components/admin/AdminSidebar';
 import ChatWindow from './components/chat/ChatWindow';
+import RetryPayment from './pages/RetryPayment';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // Protected route component for admin routes
 const ProtectedAdminRoute = ({ children }: { children: JSX.Element }) => {
@@ -179,6 +181,45 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
+// Create a component to handle eSewa success redirect
+const EsewaRedirect = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const data = searchParams.get('data');
+    if (data) {
+      // Try to extract the order ID from the data
+      try {
+        const decodedString = atob(data);
+        const esewaData = JSON.parse(decodedString);
+        const orderId = esewaData.transaction_uuid;
+        if (orderId) {
+          // Redirect to our success page with the order ID
+          navigate(`/checkout/success?orderId=${orderId}`, { replace: true });
+          return;
+        }
+      } catch (error) {
+        console.error("Error parsing eSewa data:", error);
+      }
+    }
+    
+    // If we couldn't extract the order ID or there was an error, redirect to the checkout page
+    navigate('/checkout', { replace: true });
+  }, [navigate, location]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Processing Payment</h2>
+        <p className="text-gray-600 dark:text-gray-400">Please wait, we're processing your payment...</p>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -301,8 +342,9 @@ function App() {
                 <Route path="/profile" element={<UserLayout><Profile /></UserLayout>} />
                 <Route path="/products" element={<UserLayout><Products /></UserLayout>} />
                 <Route path="/cart" element={<UserLayout><Cart /></UserLayout>} />
-                <Route path="/checkout" element={<UserLayout><Checkout /></UserLayout>} />
-                <Route path="/checkout/success" element={<UserLayout><CheckoutSuccess /></UserLayout>} />
+                <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
+                <Route path="/checkout/retry-payment/:id" element={<ProtectedRoute><RetryPayment /></ProtectedRoute>} />
                 <Route path="/checkout/failure" element={<Navigate to="/checkout" />} />
                 <Route path="/booking" element={<UserLayout><Booking /></UserLayout>} />
                 <Route path="/lost-found" element={<UserLayout><LostFound /></UserLayout>} />
@@ -320,6 +362,7 @@ function App() {
                   </ProtectedRoute>
                 } />
                 <Route path="/order/:id" element={<UserLayout><OrderDetail /></UserLayout>} />
+                <Route path="/esewa-success" element={<EsewaRedirect />} />
               </Routes>
             </Router>
           </ChatProvider>

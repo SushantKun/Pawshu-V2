@@ -4,9 +4,12 @@ import { MulterFile } from './multer';
 
 export interface AuthUser {
   _id: Types.ObjectId;
-  name: string;
   email: string;
-  role: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  isAdmin: boolean;
+  isDoctor: boolean;
 }
 
 export interface AuthRequest extends Request {

@@ -4,9 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import api from '../api/axios';
+import axios from 'axios';
 import { showSuccessNotification, NOTIFICATIONS } from '../utils/notification';
 import EsewaPayment from '../components/EsewaPayment';
 import { AxiosError } from 'axios';
+
+// Khalti public key for the frontend
+const KHALTI_PUBLIC_KEY = "995aacc263dc4f20b4beed4b2950dfba";
 
 interface ShippingDetails {
   firstName: string;
@@ -44,6 +48,17 @@ const initialShippingDetails: ShippingDetails = {
   phone: '',
 };
 
+// Add this helper function to handle API errors
+const handleApiError = (error: unknown, defaultMessage: string) => {
+  console.error(defaultMessage, error);
+  if (error instanceof AxiosError && error.response) {
+    console.error('Error details:', error.response.data);
+    toast.error(`Payment error: ${error.response.data.message || 'Unknown error'}`);
+  } else {
+    toast.error(`${defaultMessage}. Please try again.`);
+  }
+};
+
 const Checkout = () => {
   const { cartItems, clearCart } = useCart();
   const { user } = useAuth();
@@ -51,14 +66,12 @@ const Checkout = () => {
   const [shippingDetails, setShippingDetails] = useState<ShippingDetails>(initialShippingDetails);
   const [step, setStep] = useState<'shipping' | 'payment'>('shipping');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa' | 'khalti'>('card');
   const [esewaFormData, setEsewaFormData] = useState<EsewaFormData | null>(null);
   const [showEsewaPayment, setShowEsewaPayment] = useState(false);
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = cartItems.length > 0 ? 5.99 : 0;
-  const tax = subtotal * 0.1; // 10% tax
-  const total = subtotal + shipping + tax;
+  // Calculate total directly from items without any additional fees
+  const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const handleShippingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,27 +86,96 @@ const Checkout = () => {
     }));
   };
 
-  const handlePaymentMethodChange = (method: 'card' | 'esewa') => {
+  const handlePaymentMethodChange = (method: 'card' | 'esewa' | 'khalti') => {
     setPaymentMethod(method);
   };
 
   const initiateEsewaPayment = async (orderId: string) => {
     try {
-      // Start the eSewa payment flow
-      const response = await api.post('/orders/esewa-payment', {
-        orderId,
-        amount: total.toFixed(2)
-      });
-
-      if (response.data.formData) {
-        setEsewaFormData(response.data.formData);
+      console.log('Starting eSewa payment with order ID:', orderId);
+      setIsProcessing(true);
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication error. Please try logging in again.');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Call the eSewa payment endpoint
+      const response = await axios.post(
+        'http://localhost:5000/api/orders/esewa-payment', 
+        { orderId },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      console.log('eSewa payment response:', response.data);
+      
+      // If successful, set the eSewa form data and show payment form
+      if (response.data) {
+        setEsewaFormData(response.data);
         setShowEsewaPayment(true);
+        // Processing will be disabled when the user returns from eSewa
       } else {
         toast.error('Failed to initialize eSewa payment');
+        setIsProcessing(false);
       }
     } catch (error) {
-      console.error('Error initiating eSewa payment:', error);
-      toast.error('Failed to initialize payment. Please try again.');
+      handleApiError(error, 'Failed to initialize eSewa payment');
+      setIsProcessing(false);
+    }
+  };
+
+  const initiateKhaltiPayment = async (orderId: string) => {
+    try {
+      console.log('Starting Khalti payment with direct axios call');
+      const token = localStorage.getItem('token');
+      console.log('Using token:', token ? 'Found token' : 'No token');
+      
+      if (!token) {
+        toast.error('Authentication error. Please try logging in again.');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Use direct axios call bypassing the interceptor
+      const response = await axios.post(
+        'http://localhost:5000/api/orders/khalti-payment', 
+        {
+          orderId,
+          amount: total.toFixed(2)
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` // Our API expects Bearer token format
+          }
+        }
+      );
+
+      console.log('Khalti payment response:', response.data);
+
+      if (response.data && response.data.paymentUrl) {
+        // Redirect to Khalti payment page
+        window.location.href = response.data.paymentUrl;
+      } else {
+        toast.error('Failed to initialize Khalti payment');
+        setIsProcessing(false);
+      }
+    } catch (error: unknown) {
+      console.error('Error initiating Khalti payment:', error);
+      if (error instanceof AxiosError && error.response) {
+        console.error('Error details:', error.response.data);
+        // Show a more detailed error message to help with debugging
+        toast.error(`Payment error: ${error.response.data.message || error.response.data.error || 'Unknown error'}`);
+      } else {
+        toast.error('Failed to initialize payment. Please try again.');
+      }
       setIsProcessing(false);
     }
   };
@@ -131,24 +213,25 @@ const Checkout = () => {
         quantity: item.quantity
       }));
       
-      console.log('Submitting order with data:', {
+      const orderData = {
         items,
         totalAmount: parseFloat(total.toFixed(2)),
         shippingAddress: shippingDetails
-      });
+      };
+      
+      console.log('Submitting order with data:', JSON.stringify(orderData, null, 2));
       
       // Create order
-      const response = await api.post('/orders', {
-        items,
-        totalAmount: parseFloat(total.toFixed(2)), // Make sure it's a number, not a string
-        shippingAddress: shippingDetails
-      });
+      const response = await api.post('/orders', orderData);
       
       console.log('Order created successfully:', response.data);
       
+      // Get the order ID from the response
+      const orderId = response.data.order._id;
+      console.log('Created order ID:', orderId);
+      
       if (paymentMethod === 'card') {
         // Process card payment (existing flow)
-        // Clear cart
         clearCart();
         
         // Show success notification
@@ -158,17 +241,25 @@ const Checkout = () => {
         );
         
         // Redirect to success page
-        navigate('/checkout/success?orderId=' + response.data.order._id);
+        navigate('/checkout/success?orderId=' + orderId);
       } else if (paymentMethod === 'esewa') {
         // Start eSewa payment flow
-        await initiateEsewaPayment(response.data.order._id);
+        console.log('Starting eSewa payment flow for order:', orderId);
+        await initiateEsewaPayment(orderId);
+      } else if (paymentMethod === 'khalti') {
+        // Start Khalti payment flow
+        console.log('Starting Khalti payment flow for order:', orderId);
+        await initiateKhaltiPayment(orderId);
       }
     } catch (error: unknown) {
       console.error('Error placing order:', error);
       
       if (error instanceof AxiosError && error.response?.data) {
         console.error('Server error details:', error.response.data);
-        toast.error(error.response.data.message || 'Failed to place order. Please try again.');
+        const errorMsg = typeof error.response.data === 'object' 
+          ? JSON.stringify(error.response.data)
+          : error.response.data.toString();
+        toast.error(`Order failed: ${errorMsg}`);
       } else {
         toast.error('Failed to place order. Please try again.');
       }
@@ -379,7 +470,26 @@ const Checkout = () => {
                       />
                       <label htmlFor="esewa" className="ml-3 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
                         Pay with eSewa
-                        <span className="bg-green-600 text-white text-xs px-2 py-1 rounded ml-2">Recommended</span>
+                      </label>
+                    </div>
+                    
+                    <div 
+                      className={`flex items-center p-4 border rounded-md cursor-pointer
+                        ${paymentMethod === 'khalti' 
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700' 
+                          : 'border-gray-200 dark:border-gray-700'}`}
+                      onClick={() => handlePaymentMethodChange('khalti')}
+                    >
+                      <input
+                        type="radio"
+                        id="khalti"
+                        name="paymentMethod"
+                        checked={paymentMethod === 'khalti'}
+                        onChange={() => handlePaymentMethodChange('khalti')}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
+                      />
+                      <label htmlFor="khalti" className="ml-3 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                        Pay with Khalti
                       </label>
                     </div>
                   </div>
@@ -432,6 +542,16 @@ const Checkout = () => {
                   </div>
                 )}
                 
+                {paymentMethod === 'khalti' && (
+                  <div className="space-y-6">
+                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        You will be redirected to Khalti to complete your payment. Once the payment is successful, you will be redirected back to this site.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex justify-between">
                   <button
                     type="button"
@@ -477,18 +597,6 @@ const Checkout = () => {
                 </div>
               ))}
               <div className="border-t pt-4">
-                <div className="flex justify-between mb-2">
-                  <p className="text-gray-600 dark:text-gray-400">Subtotal</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-300">NPR {subtotal.toFixed(2)}</p>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <p className="text-gray-600 dark:text-gray-400">Shipping</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-300">NPR {shipping.toFixed(2)}</p>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <p className="text-gray-600 dark:text-gray-400">Tax</p>
-                  <p className="font-medium text-gray-800 dark:text-gray-300">NPR {tax.toFixed(2)}</p>
-                </div>
                 <div className="flex justify-between border-t pt-2">
                   <p className="font-semibold text-gray-900 dark:text-white">Total</p>
                   <p className="font-semibold text-gray-900 dark:text-white">NPR {total.toFixed(2)}</p>

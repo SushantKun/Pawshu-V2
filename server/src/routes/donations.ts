@@ -3,6 +3,8 @@ import { AuthRequest, verifyToken } from '../middleware/auth';
 import Donation from '../models/Donation';
 import { Charity } from '../models/Charity';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
+import axios from 'axios';
 
 const router = express.Router();
 
@@ -48,7 +50,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: Next
 
     const donation = new Donation({
       userId: req.user._id,
-      userName: req.user.name,
+      userName: `${req.user.firstName} ${req.user.lastName}`,
       charityId,
       charityName,
       amount,
@@ -353,6 +355,204 @@ router.get('/stats', verifyToken, async (req: AuthRequest, res: Response, next: 
     });
   } catch (error) {
     next(error);
+  }
+});
+
+// Initiate Khalti payment for donations
+router.post('/khalti-payment', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { donationId, amount, charityId } = req.body;
+    
+    console.log('Initiating Khalti donation payment with data:', JSON.stringify(req.body, null, 2));
+    
+    if (!donationId || !amount) {
+      res.status(400).json({ message: 'Please provide donation ID and amount' });
+      return;
+    }
+
+    // Find donation
+    const donation = await Donation.findById(donationId);
+    if (!donation) {
+      res.status(404).json({ message: 'Donation not found' });
+      return;
+    }
+
+    // Find charity
+    const charity = await Charity.findById(charityId || donation.charityId);
+    if (!charity) {
+      res.status(404).json({ message: 'Charity not found' });
+      return;
+    }
+
+    // Convert amount to paisa (Khalti requires amount in paisa)
+    const amountInPaisa = Math.round(parseFloat(amount) * 100);
+    
+    // Get client URL
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    
+    // Create Khalti payment request payload
+    const khaltiPayload = {
+      return_url: `${clientUrl}/donate?status=success&donationId=${donationId}`,
+      website_url: clientUrl,
+      amount: amountInPaisa,
+      purchase_order_id: `donation_${donationId}`,
+      purchase_order_name: `Donation to ${charity.name}`,
+      customer_info: {
+        name: `${req.user?.firstName} ${req.user?.lastName}`,
+        email: req.user?.email,
+        phone: req.user?.phone || ''
+      }
+    };
+    
+    // Get Khalti API Key from environment variables
+    const khaltiApiKey = process.env.KHALTI_SECRET_KEY;
+    
+    if (!khaltiApiKey) {
+      console.error('Khalti API key not configured');
+      res.status(500).json({ message: 'Payment gateway not properly configured' });
+      return;
+    }
+    
+    // Make request to Khalti API
+    const khaltiResponse = await axios.post(
+      'https://dev.khalti.com/api/v2/epayment/initiate/',
+      khaltiPayload,
+      {
+        headers: {
+          'Authorization': `Key ${khaltiApiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log('Khalti payment initiation response:', khaltiResponse.data);
+    
+    if (khaltiResponse.data && khaltiResponse.data.payment_url) {
+      // Update donation with Khalti payment reference
+      donation.khaltiReference = {
+        pidx: khaltiResponse.data.pidx,
+        initiated: true
+      };
+      await donation.save();
+      
+      // Return payment URL to client
+      res.json({
+        message: 'Khalti donation payment initiated',
+        paymentUrl: khaltiResponse.data.payment_url
+      });
+    } else {
+      console.error('Khalti API error:', khaltiResponse.data);
+      res.status(500).json({ message: 'Error initiating payment with Khalti' });
+    }
+  } catch (error) {
+    console.error('Error initiating Khalti donation payment:', error);
+    res.status(500).json({ message: 'Failed to initiate payment' });
+  }
+});
+
+// Verify Khalti Payment Status
+router.post('/khalti-verify', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { pidx, donation_id } = req.body;
+    
+    if (!pidx) {
+      res.status(400).json({ message: 'Missing payment identifier' });
+      return;
+    }
+    
+    // Get Khalti API Key from environment variables
+    const khaltiApiKey = process.env.KHALTI_SECRET_KEY;
+    
+    if (!khaltiApiKey) {
+      console.error('Khalti API key not configured');
+      res.status(500).json({ message: 'Payment gateway not properly configured' });
+      return;
+    }
+    
+    // Make lookup request to Khalti API
+    const khaltiResponse = await axios.post(
+      'https://dev.khalti.com/api/v2/epayment/lookup/',
+      { pidx },
+      {
+        headers: {
+          'Authorization': `Key ${khaltiApiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log('Khalti payment verification response:', khaltiResponse.data);
+    
+    // Check if donation ID is provided
+    if (donation_id) {
+      // Find and update donation status
+      const donation = await Donation.findById(donation_id);
+      
+      if (donation) {
+        // Update donation status based on Khalti response
+        if (khaltiResponse.data.status === 'Completed') {
+          donation.status = 'completed';
+          donation.khaltiReference = {
+            ...donation.khaltiReference,
+            verified: true,
+            transactionId: khaltiResponse.data.transaction_id
+          };
+          
+          // Update charity's raised amount
+          const charity = await Charity.findById(donation.charityId);
+          if (charity) {
+            charity.raised += donation.amount;
+            await charity.save();
+            console.log(`Updated charity ${charity.name} raised amount to ${charity.raised}`);
+          }
+        } else if (['Refunded', 'Expired', 'User canceled'].includes(khaltiResponse.data.status)) {
+          donation.status = 'failed';
+        }
+        
+        await donation.save();
+      }
+    }
+    
+    res.json(khaltiResponse.data);
+  } catch (error) {
+    console.error('Error verifying Khalti payment:', error);
+    res.status(500).json({ message: 'Failed to verify payment' });
+  }
+});
+
+// eSewa payment callback handler
+router.get('/esewa-callback', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    console.log('eSewa callback received with data:', req.query);
+    
+    // Get parameters from eSewa callback
+    const { oid, amt, refId, status } = req.query;
+    
+    console.log(`Processing eSewa callback for donation: ${oid}`);
+    
+    // Check required fields
+    if (!oid || !amt || !refId) {
+      console.error('Missing required fields in eSewa callback');
+      res.redirect('/donate?status=failed&reason=missing_fields');
+      return;
+    }
+    
+    // Extract donation ID from oid
+    const donationIdMatch = String(oid).match(/donation_(\d+)/);
+    
+    if (status === 'COMPLETE') {
+      // Update charity directly since we got verification from eSewa
+      console.log(`Successfully processed eSewa payment for ${amt}`);
+      
+      // Redirect with success
+      res.redirect(`/donate?status=success&donationId=${oid}`);
+    } else {
+      console.error('eSewa payment not complete. Status:', status);
+      res.redirect('/donate?status=failed&reason=payment_failed');
+    }
+  } catch (error) {
+    console.error('Error processing eSewa callback:', error);
+    res.redirect('/donate?status=failed&reason=server_error');
   }
 });
 

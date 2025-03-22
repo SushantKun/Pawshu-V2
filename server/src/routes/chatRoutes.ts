@@ -154,7 +154,7 @@ router.post('/initiate', verifyToken, (req: Request, res: Response, next: NextFu
         console.log('Found existing chat:', existingChat._id);
         // Add new message to existing chat
         existingChat.messages.push({
-          sender: authReq.user!._id,
+          sender: new mongoose.Types.ObjectId(authReq.user!._id),
           content: initialMessage,
           timestamp: new Date(),
           read: false,
@@ -165,7 +165,7 @@ router.post('/initiate', verifyToken, (req: Request, res: Response, next: NextFu
         existingChat.lastMessage = {
           content: initialMessage,
           timestamp: new Date(),
-          sender: authReq.user!._id,
+          sender: new mongoose.Types.ObjectId(authReq.user!._id),
           status: 'sent' as const
         };
 
@@ -182,7 +182,7 @@ router.post('/initiate', verifyToken, (req: Request, res: Response, next: NextFu
           referenceId: new mongoose.Types.ObjectId(referenceId)
         },
         messages: [{
-          sender: authReq.user!._id,
+          sender: new mongoose.Types.ObjectId(authReq.user!._id),
           content: initialMessage,
           timestamp: new Date(),
           read: false,
@@ -192,7 +192,7 @@ router.post('/initiate', verifyToken, (req: Request, res: Response, next: NextFu
         lastMessage: {
           content: initialMessage,
           timestamp: new Date(),
-          sender: authReq.user!._id,
+          sender: new mongoose.Types.ObjectId(authReq.user!._id),
           status: 'sent' as const
         }
       });
@@ -333,8 +333,8 @@ router.post('/:chatId/messages', verifyToken, (req: Request, res: Response, next
       }
 
       // Add message to chat
-      const message: IMessage = {
-        sender: userId,
+      const newMessage: IMessage = {
+        sender: new mongoose.Types.ObjectId(userId),
         content: content || '',
         timestamp: new Date(),
         read: false,
@@ -342,11 +342,11 @@ router.post('/:chatId/messages', verifyToken, (req: Request, res: Response, next
         attachment
       };
 
-      chat.messages.push(message);
+      chat.messages.push(newMessage);
       chat.lastMessage = {
         content: content || 'Attachment',
         timestamp: new Date(),
-        sender: userId,
+        sender: new mongoose.Types.ObjectId(userId),
         status: 'sent' as const
       };
 

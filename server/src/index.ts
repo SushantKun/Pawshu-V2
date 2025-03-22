@@ -89,7 +89,7 @@ mongoose.connect(MONGODB_URI)
 const registerHandler = async (req: Request, res: Response) => {
   try {
     console.log('POST /api/auth/register - Registering new user');
-    const { name, email, password } = req.body;
+    const { firstName, lastName, email, password } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -103,10 +103,12 @@ const registerHandler = async (req: Request, res: Response) => {
 
     // Create new user
     const user = new User({
-      name,
+      firstName,
+      lastName,
       email,
       password: hashedPassword,
-      role: 'user'
+      isAdmin: false,
+      isDoctor: false
     });
 
     await user.save();
@@ -115,9 +117,11 @@ const registerHandler = async (req: Request, res: Response) => {
     const token = jwt.sign(
       { 
         _id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
-        isAdmin: user.role === 'admin'
+        isAdmin: user.isAdmin,
+        isDoctor: user.isDoctor
       },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
@@ -127,9 +131,11 @@ const registerHandler = async (req: Request, res: Response) => {
       token,
       user: {
         _id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
-        isAdmin: user.role === 'admin'
+        isAdmin: user.isAdmin,
+        isDoctor: user.isDoctor
       }
     });
   } catch (error) {
@@ -160,9 +166,12 @@ const loginHandler = async (req: Request, res: Response) => {
     const token = jwt.sign(
       { 
         _id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
-        isAdmin: user.role === 'admin'
+        isAdmin: user.isAdmin,
+        isDoctor: user.isDoctor,
+        phone: user.phone
       },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
@@ -172,9 +181,12 @@ const loginHandler = async (req: Request, res: Response) => {
       token,
       user: {
         _id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
-        isAdmin: user.role === 'admin'
+        isAdmin: user.isAdmin,
+        isDoctor: user.isDoctor,
+        phone: user.phone
       }
     });
   } catch (error) {
@@ -196,8 +208,9 @@ const adminLoginHandler = async (req: Request, res: Response) => {
     console.log('User found:', user ? {
       _id: user._id,
       email: user.email,
-      role: user.role,
-      name: user.name
+      isAdmin: user.isAdmin,
+      firstName: user.firstName,
+      lastName: user.lastName
     } : 'No');
     
     if (!user) {
@@ -215,20 +228,21 @@ const adminLoginHandler = async (req: Request, res: Response) => {
     }
 
     // Check if user is admin
-    console.log('User role:', user.role);
-    if (user.role !== 'admin') {
+    console.log('User admin status:', user.isAdmin);
+    if (!user.isAdmin) {
       console.log('User is not an admin:', email);
       return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
     }
 
-    // Create JWT token with explicit role information
+    // Create JWT token with explicit admin information
     const token = jwt.sign(
       { 
         _id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         isAdmin: true,
-        role: 'admin'
+        isDoctor: user.isDoctor
       },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
@@ -239,10 +253,11 @@ const adminLoginHandler = async (req: Request, res: Response) => {
       token,
       user: {
         _id: user._id,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         isAdmin: true,
-        role: 'admin'
+        isDoctor: user.isDoctor
       }
     });
   } catch (error) {
@@ -279,7 +294,7 @@ const updateProfileHandler = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Not authorized' });
     }
     
-    const { name, email, phone, address, avatar } = req.body;
+    const { firstName, lastName, email, phone, address, avatar } = req.body;
     
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -287,7 +302,8 @@ const updateProfileHandler = async (req: AuthRequest, res: Response) => {
     }
     
     // Update fields
-    if (name) user.name = name;
+    if (firstName) user.firstName = firstName;
+    if (lastName) user.lastName = lastName;
     if (email) user.email = email;
     if (phone) user.phone = phone;
     if (address) user.address = address;
@@ -409,7 +425,7 @@ const updateUserHandler = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
     }
 
-    const { firstName, lastName, email, role, status } = req.body;
+    const { firstName, lastName, email, isAdmin, isDoctor } = req.body;
     
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -417,15 +433,11 @@ const updateUserHandler = async (req: AuthRequest, res: Response) => {
     }
     
     // Update fields
-    if (firstName && lastName) user.name = `${firstName} ${lastName}`;
+    if (firstName) user.firstName = firstName;
+    if (lastName) user.lastName = lastName;
     if (email) user.email = email;
-    if (role) {
-      if (!['user', 'admin'].includes(role)) {
-        return res.status(400).json({ message: 'Invalid role. Must be either "user" or "admin"' });
-      }
-      user.role = role;
-    }
-    if (status) user.status = status;
+    if (isAdmin !== undefined) user.isAdmin = isAdmin;
+    if (isDoctor !== undefined) user.isDoctor = isDoctor;
     
     await user.save();
     
