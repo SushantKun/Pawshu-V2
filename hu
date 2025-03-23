@@ -1,0 +1,10 @@
+[33m29a3572[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m remaking chat
+[33m32a166a[m implemented khalti for additional payment method
+[33me06c96c[m Updated checkout process to support eSewa payment method, added order management features in admin panel, and improved donation handling with success and failure notifications. Enhanced accessibility for reCAPTCHA and updated various components for better user experience.
+[33mfc64e2b[m fixed the routes for admin and doctor panel and also updated doctor dashboard
+[33m17122c8[m fixed admin panel
+[33m4726f85[m improved chat system
+[33mb5ac0fc[m fixed double text issue
+[33m0b8618a[m chat fixes
+[33m276f9d7[m Enhanced chat functionality by improving initial message context in LostFoundCard, implementing relative timestamp formatting in ChatDetail, and adding unread message indicators in ChatList. Updated Chat component layout for better user experience.
+[33m702711e[m Added chat feature with socket.io integration; updated package dependencies including date-fns and socket.io-client; refactored admin components for better organization and dark mode support; improved loading indicators and error handling in various components.

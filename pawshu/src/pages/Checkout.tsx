@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import api from '../api/axios';
 import { showSuccessNotification, NOTIFICATIONS } from '../utils/notification';
 import EsewaPayment from '../components/EsewaPayment';
+import KhaltiPayment from '../components/KhaltiPayment';
 import { AxiosError } from 'axios';
 
 interface ShippingDetails {
@@ -33,6 +34,12 @@ interface EsewaFormData {
   transaction_uuid: string;
 }
 
+interface KhaltiFormData {
+  amount: number;
+  orderId: string;
+  returnUrl: string;
+}
+
 const initialShippingDetails: ShippingDetails = {
   firstName: '',
   lastName: '',
@@ -51,9 +58,11 @@ const Checkout = () => {
   const [shippingDetails, setShippingDetails] = useState<ShippingDetails>(initialShippingDetails);
   const [step, setStep] = useState<'shipping' | 'payment'>('shipping');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa' | 'khalti'>('card');
   const [esewaFormData, setEsewaFormData] = useState<EsewaFormData | null>(null);
+  const [khaltiFormData, setKhaltiFormData] = useState<KhaltiFormData | null>(null);
   const [showEsewaPayment, setShowEsewaPayment] = useState(false);
+  const [showKhaltiPayment, setShowKhaltiPayment] = useState(false);
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shipping = cartItems.length > 0 ? 5.99 : 0;
@@ -73,7 +82,7 @@ const Checkout = () => {
     }));
   };
 
-  const handlePaymentMethodChange = (method: 'card' | 'esewa') => {
+  const handlePaymentMethodChange = (method: 'card' | 'esewa' | 'khalti') => {
     setPaymentMethod(method);
   };
 
@@ -94,6 +103,36 @@ const Checkout = () => {
     } catch (error) {
       console.error('Error initiating eSewa payment:', error);
       toast.error('Failed to initialize payment. Please try again.');
+      setIsProcessing(false);
+    }
+  };
+
+  const initiateKhaltiPayment = async (orderId: string) => {
+    try {
+      // Start the Khalti payment flow
+      const response = await api.post('/orders/khalti-payment', {
+        orderId,
+        amount: parseInt(total.toFixed(0)) // Use integer amount to avoid decimal issues
+      });
+
+      if (response.data) {
+        setKhaltiFormData({
+          amount: parseInt(total.toFixed(0)), // Use integer amount
+          orderId: response.data.orderId,
+          returnUrl: window.location.origin + '/checkout/success'
+        });
+        setShowKhaltiPayment(true);
+      } else {
+        toast.error('Failed to initialize Khalti payment');
+      }
+    } catch (error: any) {
+      console.error('Error initiating Khalti payment:', error);
+      if (error.response?.data?.details) {
+        console.error('Khalti error details:', error.response.data.details);
+        toast.error(`Payment error: ${error.response.data.details.error_key || 'Unknown error'}`);
+      } else {
+        toast.error('Failed to initialize payment. Please try again.');
+      }
       setIsProcessing(false);
     }
   };
@@ -162,6 +201,9 @@ const Checkout = () => {
       } else if (paymentMethod === 'esewa') {
         // Start eSewa payment flow
         await initiateEsewaPayment(response.data.order._id);
+      } else if (paymentMethod === 'khalti') {
+        // Start Khalti payment flow
+        await initiateKhaltiPayment(response.data.order._id);
       }
     } catch (error: unknown) {
       console.error('Error placing order:', error);
@@ -194,6 +236,10 @@ const Checkout = () => {
 
   if (showEsewaPayment && esewaFormData) {
     return <EsewaPayment formData={esewaFormData} />;
+  }
+
+  if (showKhaltiPayment && khaltiFormData) {
+    return <KhaltiPayment formData={khaltiFormData} />;
   }
 
   return (
@@ -339,122 +385,124 @@ const Checkout = () => {
               </form>
             ) : (
               <form onSubmit={handlePaymentSubmit} className="space-y-6">
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Payment Method</label>
-                  <div className="flex flex-col space-y-3">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Payment Method</h3>
+                  
+                  <div className="space-y-4">
                     <div 
-                      className={`flex items-center p-4 border rounded-md cursor-pointer
-                        ${paymentMethod === 'card' 
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700' 
-                          : 'border-gray-200 dark:border-gray-700'}`}
+                      className={`p-4 border rounded-md cursor-pointer ${
+                        paymentMethod === 'card' 
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400' 
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
                       onClick={() => handlePaymentMethodChange('card')}
                     >
-                      <input
-                        type="radio"
-                        id="card"
-                        name="paymentMethod"
-                        checked={paymentMethod === 'card'}
-                        onChange={() => handlePaymentMethodChange('card')}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                      />
-                      <label htmlFor="card" className="ml-3 block text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                        Credit / Debit Card
-                      </label>
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          name="paymentMethod" 
+                          id="card" 
+                          value="card" 
+                          checked={paymentMethod === 'card'} 
+                          onChange={() => handlePaymentMethodChange('card')} 
+                          className="mr-2"
+                        />
+                        <label htmlFor="card" className="text-base text-gray-900 dark:text-white">Credit / Debit Card</label>
+                      </div>
                     </div>
                     
                     <div 
-                      className={`flex items-center p-4 border rounded-md cursor-pointer
-                        ${paymentMethod === 'esewa' 
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700' 
-                          : 'border-gray-200 dark:border-gray-700'}`}
+                      className={`p-4 border rounded-md cursor-pointer ${
+                        paymentMethod === 'esewa' 
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400' 
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
                       onClick={() => handlePaymentMethodChange('esewa')}
                     >
-                      <input
-                        type="radio"
-                        id="esewa"
-                        name="paymentMethod"
-                        checked={paymentMethod === 'esewa'}
-                        onChange={() => handlePaymentMethodChange('esewa')}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                      />
-                      <label htmlFor="esewa" className="ml-3 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                        Pay with eSewa
-                        <span className="bg-green-600 text-white text-xs px-2 py-1 rounded ml-2">Recommended</span>
-                      </label>
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          name="paymentMethod" 
+                          id="esewa" 
+                          value="esewa" 
+                          checked={paymentMethod === 'esewa'} 
+                          onChange={() => handlePaymentMethodChange('esewa')} 
+                          className="mr-2"
+                        />
+                        <label htmlFor="esewa" className="text-base text-gray-900 dark:text-white flex items-center">
+                          Pay with eSewa
+                          <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 rounded">Recommended</span>
+                        </label>
+                      </div>
+                    </div>
+                    
+                    <div 
+                      className={`p-4 border rounded-md cursor-pointer ${
+                        paymentMethod === 'khalti' 
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400' 
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                      onClick={() => handlePaymentMethodChange('khalti')}
+                    >
+                      <div className="flex items-center">
+                        <input 
+                          type="radio" 
+                          name="paymentMethod" 
+                          id="khalti" 
+                          value="khalti" 
+                          checked={paymentMethod === 'khalti'} 
+                          onChange={() => handlePaymentMethodChange('khalti')} 
+                          className="mr-2"
+                        />
+                        <label htmlFor="khalti" className="text-base text-gray-900 dark:text-white">
+                          Pay with Khalti
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
-                
+
+                {/* Payment description */}
                 {paymentMethod === 'card' && (
-                  <div className="space-y-6">
-                    <div>
-                      <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Card Number</label>
-                      <input
-                        type="text"
-                        id="cardNumber"
-                        required
-                        placeholder="1234 5678 9012 3456"
-                        className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-6">
-                      <div>
-                        <label htmlFor="expiry" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Expiry Date</label>
-                        <input
-                          type="text"
-                          id="expiry"
-                          required
-                          placeholder="MM/YY"
-                          className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="cvc" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CVC</label>
-                        <input
-                          type="text"
-                          id="cvc"
-                          required
-                          placeholder="123"
-                          className="mt-1 block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                        />
-                      </div>
-                    </div>
+                  <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md">
+                    <p className="text-gray-700 dark:text-gray-300">
+                      You will be redirected to a secure payment page to complete your payment.
+                    </p>
                   </div>
                 )}
                 
                 {paymentMethod === 'esewa' && (
-                  <div className="space-y-6">
-                    <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
-                      <p className="text-sm text-gray-600 dark:text-gray-300">
-                        You will be redirected to eSewa to complete your payment. Once the payment is successful, you will be redirected back to this site.
-                      </p>
-                    </div>
+                  <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md">
+                    <p className="text-gray-700 dark:text-gray-300">
+                      You will be redirected to eSewa to complete your payment. Once the payment is successful, you will be redirected back to this site.
+                    </p>
                   </div>
                 )}
                 
+                {paymentMethod === 'khalti' && (
+                  <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md">
+                    <p className="text-gray-700 dark:text-gray-300">
+                      You will be redirected to Khalti to complete your payment. Once the payment is successful, you will be redirected back to this site.
+                    </p>
+                  </div>
+                )}
+
+                {/* Buttons */}
                 <div className="flex justify-between">
                   <button
                     type="button"
                     onClick={() => setStep('shipping')}
-                    className="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-800"
+                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                   >
                     Back to Shipping
                   </button>
+                  
                   <button
                     type="submit"
                     disabled={isProcessing}
-                    className={`px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 ${
-                      isProcessing ? 'opacity-70 cursor-not-allowed' : ''
-                    }`}
+                    className="px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isProcessing ? (
-                      <div className="flex items-center space-x-2">
-                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                        <span>Processing...</span>
-                      </div>
-                    ) : (
-                      `Pay NPR ${total.toFixed(2)}`
-                    )}
+                    {isProcessing ? 'Processing...' : `Pay NPR ${total.toFixed(2)}`}
                   </button>
                 </div>
               </form>

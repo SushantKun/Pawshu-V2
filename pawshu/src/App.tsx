@@ -18,6 +18,7 @@ import Donate from './pages/Donate';
 import Wishlist from './pages/Wishlist';
 import Checkout from './pages/Checkout';
 import CheckoutSuccess from './pages/checkout/Success';
+import KhaltiRedirect from './components/KhaltiRedirect';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ProductManagement from './pages/admin/ProductManagement';
 import AdminLogin from './pages/admin/AdminLogin';
@@ -96,7 +97,7 @@ const ProtectedDoctorRoute = ({ children }: { children: JSX.Element }) => {
 // Layout component for user routes
 const UserLayout = ({ children, showFooter = true }: { children: JSX.Element, showFooter?: boolean }) => {
   const { darkMode } = useTheme();
-  
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -104,7 +105,7 @@ const UserLayout = ({ children, showFooter = true }: { children: JSX.Element, sh
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
-  
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <Navbar />
@@ -117,7 +118,7 @@ const UserLayout = ({ children, showFooter = true }: { children: JSX.Element, sh
 // Layout component for doctor routes
 const DoctorLayout = ({ children }: { children: JSX.Element }) => {
   const { darkMode } = useTheme();
-  
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -125,7 +126,7 @@ const DoctorLayout = ({ children }: { children: JSX.Element }) => {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
-  
+
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <div className="w-64 flex-shrink-0">
@@ -141,7 +142,7 @@ const DoctorLayout = ({ children }: { children: JSX.Element }) => {
 // Layout component for admin routes
 const AdminLayout = ({ children }: { children: JSX.Element }) => {
   const { darkMode } = useTheme();
-  
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -149,7 +150,7 @@ const AdminLayout = ({ children }: { children: JSX.Element }) => {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
-  
+
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <AdminSidebar />
@@ -193,7 +194,7 @@ function App() {
                     <AdminLogin />
                   </div>
                 } />
-                
+
                 {/* Protected Admin Routes */}
                 <Route path="/admin" element={
                   <ProtectedAdminRoute>
@@ -293,7 +294,7 @@ function App() {
                     </DoctorLayout>
                   </ProtectedDoctorRoute>
                 } />
-                
+
                 {/* User Routes */}
                 <Route path="/" element={<UserLayout><Home /></UserLayout>} />
                 <Route path="/login" element={<UserLayout><Login /></UserLayout>} />
@@ -304,6 +305,7 @@ function App() {
                 <Route path="/checkout" element={<UserLayout><Checkout /></UserLayout>} />
                 <Route path="/checkout/success" element={<UserLayout><CheckoutSuccess /></UserLayout>} />
                 <Route path="/checkout/failure" element={<Navigate to="/checkout" />} />
+                <Route path="/payment/khalti/success" element={<KhaltiRedirect />} />
                 <Route path="/booking" element={<UserLayout><Booking /></UserLayout>} />
                 <Route path="/lost-found" element={<UserLayout><LostFound /></UserLayout>} />
                 <Route path="/donate" element={<UserLayout><Donate /></UserLayout>} />

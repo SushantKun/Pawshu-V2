@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { 
+import {
   ShoppingBagIcon,
-  UserIcon, 
-  CurrencyDollarIcon, 
+  UserIcon,
+  CurrencyDollarIcon,
   ClockIcon,
   HeartIcon,
   UserGroupIcon,
@@ -131,34 +131,34 @@ const StatCard = ({ title, value, icon, color }: StatCardProps) => (
 const generateDummyData = (months: number) => {
   const data = [];
   const now = new Date();
-  
+
   for (let i = months - 1; i >= 0; i--) {
     const date = new Date();
     date.setMonth(now.getMonth() - i);
-    
+
     data.push({
       date: `${date.getFullYear()}-${date.getMonth() + 1}`,
       amount: Math.floor(Math.random() * 4000) + 1000
     });
   }
-  
+
   return data;
 };
 
 const generateUserGrowthData = (months: number) => {
   const data = [];
   const now = new Date();
-  
+
   for (let i = months - 1; i >= 0; i--) {
     const date = new Date();
     date.setMonth(now.getMonth() - i);
-    
+
     data.push({
       date: `${date.getFullYear()}-${date.getMonth() + 1}`,
       users: Math.floor(Math.random() * 9) + 1
     });
   }
-  
+
   return data;
 };
 
@@ -252,7 +252,7 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       console.log('Fetching dashboard stats...');
-      
+
       // Try direct fetch for diagnosis
       try {
         console.log('Trying direct fetch to dashboard-stats endpoint...');
@@ -263,7 +263,7 @@ const AdminDashboard = () => {
         });
         const directData = await directResponse.json();
         console.log('Direct fetch response:', directData);
-        
+
         // If direct fetch succeeds, use the data
         setStats(directData);
         setError(null);
@@ -273,7 +273,7 @@ const AdminDashboard = () => {
         console.error('Direct fetch failed:', directErr);
         // Continue with axios as fallback
       }
-      
+
       const response = await api.get('/admin/dashboard-stats');
       console.log('Dashboard stats response:', response.data);
       setStats(response.data);
@@ -284,9 +284,9 @@ const AdminDashboard = () => {
       const errorMessage = err.response?.data?.message || 'Failed to fetch dashboard statistics';
       const errorStatus = err.response?.status || 'Unknown status';
       const errorDetails = err.response?.data?.error || err.message || 'No details available';
-      
+
       setError(`Error (${errorStatus}): ${errorMessage}. Details: ${errorDetails}`);
-      
+
       // Fallback to dummy data when the API fails
       setStats({
         counts: {
@@ -337,7 +337,7 @@ const AdminDashboard = () => {
       console.log('Fetching chart data...');
       const response = await api.get('/admin/chart-stats');
       console.log('Chart data response:', response.data);
-      
+
       const { userRegistrationTrends = [], orderTrends = [] } = response.data || {};
 
       // Format revenue data safely
@@ -361,9 +361,9 @@ const AdminDashboard = () => {
       // Don't set an error state here, but log it clearly
       const errorMessage = err.response?.data?.message || 'Failed to fetch chart data';
       const errorStatus = err.response?.status || 'Unknown status';
-      
+
       console.error(`Chart data error (${errorStatus}): ${errorMessage}`);
-      
+
       // Set empty chart data as fallback
       setChartData({
         revenueData: [],
@@ -470,12 +470,12 @@ const AdminDashboard = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={chartData.revenueData}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
-                    <XAxis 
-                      dataKey="date" 
+                    <XAxis
+                      dataKey="date"
                       className="text-gray-500 dark:text-gray-400"
                       tick={{ fill: '#9CA3AF' }}
                     />
-                    <YAxis 
+                    <YAxis
                       className="text-gray-500 dark:text-gray-400"
                       tick={{ fill: '#9CA3AF' }}
                     />
@@ -488,10 +488,10 @@ const AdminDashboard = () => {
                       }}
                       labelStyle={{ color: '#F9FAFB' }}
                     />
-                    <Line 
-                      type="monotone" 
-                      dataKey="amount" 
-                      stroke="#3B82F6" 
+                    <Line
+                      type="monotone"
+                      dataKey="amount"
+                      stroke="#3B82F6"
                       strokeWidth={2}
                       dot={{ fill: '#3B82F6', strokeWidth: 2 }}
                     />
@@ -507,12 +507,12 @@ const AdminDashboard = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData.userGrowthData}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
-                    <XAxis 
-                      dataKey="date" 
+                    <XAxis
+                      dataKey="date"
                       className="text-gray-500 dark:text-gray-400"
                       tick={{ fill: '#9CA3AF' }}
                     />
-                    <YAxis 
+                    <YAxis
                       className="text-gray-500 dark:text-gray-400"
                       tick={{ fill: '#9CA3AF' }}
                     />
@@ -525,11 +525,11 @@ const AdminDashboard = () => {
                       }}
                       labelStyle={{ color: '#F9FAFB' }}
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="users" 
-                      stroke="#10B981" 
-                      fill="#059669" 
+                    <Area
+                      type="monotone"
+                      dataKey="users"
+                      stroke="#10B981"
+                      fill="#059669"
                       fillOpacity={0.2}
                       dot={{ fill: '#10B981', strokeWidth: 2 }}
                     />

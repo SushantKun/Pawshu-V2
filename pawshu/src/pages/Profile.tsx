@@ -1,9 +1,12 @@
+import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import OrderList from '../components/orders/OrderList';
+import AppointmentList from '../components/appointments/AppointmentList';
+import DonationList from '../components/donations/DonationList';
 
 interface Appointment {
   _id: string;
@@ -87,19 +90,35 @@ const Profile = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'success' | 'error' | ''>('');
   const [showNotification, setShowNotification] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    const hash = location.hash?.substring(1);
+    if (hash && ['orders', 'appointments', 'donations'].includes(hash)) {
+      setActiveTab(hash);
+    }
+
+    // Extract tab from URL parameters
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['orders', 'appointments', 'donations'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+
     if (user) {
       fetchProfile();
       fetchAppointments();
       fetchDonations();
       fetchOrders();
     }
-  }, [user]);
+  }, [user, location]);
 
   const fetchProfile = async () => {
     try {
+      console.log('Fetching user profile data');
       const response = await api.get('/auth/profile');
+      console.log('User profile fetched successfully', response.data);
       setProfile(response.data);
       setEditedProfile(response.data);
       if (response.data.avatar?.url) {
@@ -270,6 +289,11 @@ const Profile = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleTabClick = (tab: string) => {
+    setActiveTab(tab);
+    navigate(`/profile#${tab}`);
   };
 
   if (loading) {

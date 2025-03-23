@@ -81,3 +81,45 @@ The server returns appropriate HTTP status codes and error messages:
 - JWT tokens are used for authentication
 - CORS is enabled for frontend communication
 - Environment variables are used for sensitive data
+
+## Payment Integrations
+
+### Khalti Payment Gateway
+
+This project integrates the Khalti Payment Gateway using the Web Checkout method. The integration follows these steps:
+
+1. **Server Side Integration**
+
+   - The server initiates a payment through the Khalti API (`/epayment/initiate/`)
+   - When the user completes the payment, Khalti redirects to our callback URL
+   - The server verifies the payment using Khalti's lookup API (`/epayment/lookup/`)
+
+2. **Client Side Integration**
+
+   - The client redirects the user to Khalti's payment URL
+   - After payment completion, the user is redirected back to our success page
+   - The success page verifies the payment status with our server
+
+3. **Environment Variables**
+
+   - `KHALTI_SECRET_KEY`: Your Khalti secret key for API authentication
+   - `KHALTI_PUBLIC_KEY`: Your Khalti public key (used on the client side)
+
+4. **Testing**
+
+   - Use Khalti's sandbox environment (`https://dev.khalti.com/api/v2/`) for testing
+   - Use test phone numbers: 9800000000-9800000005
+   - Use test MPIN: 1111
+   - Use test OTP: 987654
+
+5. **API Endpoints**
+   - POST `/orders/khalti-payment`: Initiates a Khalti payment
+   - GET `/orders/verify-khalti`: Verifies a Khalti payment
+
+### eSewa Payment Gateway
+
+// ... existing eSewa documentation if any ...
+
+## License
+
+// ... existing license information ...

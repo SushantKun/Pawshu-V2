@@ -14,10 +14,10 @@ api.interceptors.request.use(
     if (config.headers.Authorization) {
       return config;
     }
-    
+
     // Otherwise, try to determine the right token based on URL
     let token;
-    
+
     if (config.url?.includes('/doctors/') || config.url?.includes('/appointments/doctor')) {
       token = localStorage.getItem('doctorToken');
       console.log('Using doctorToken for request to:', config.url);
@@ -28,7 +28,7 @@ api.interceptors.request.use(
       token = localStorage.getItem('token');
       console.log('Using regular token for request to:', config.url);
     }
-    
+
     // If URL doesn't match specific patterns but tokens exist, prioritize
     if (!token) {
       if (localStorage.getItem('doctorToken')) {
@@ -42,13 +42,13 @@ api.interceptors.request.use(
         console.log('Falling back to regular token');
       }
     }
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     } else {
       console.log('No token found for request to:', config.url);
     }
-    
+
     return config;
   },
   (error) => {

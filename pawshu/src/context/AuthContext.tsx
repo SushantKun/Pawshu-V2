@@ -20,8 +20,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isAuthenticated: false,
-  login: async () => {},
-  logout: () => {},
+  login: async () => { },
+  logout: () => { },
   loading: true,
   error: null
 });
@@ -46,7 +46,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const response = await axios.get(`${import.meta.env.VITE_API_URL}/auth/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (response.status === 200) {
         setUser(response.data);
         return true;
@@ -62,13 +62,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initializeAuth = async () => {
       try {
         let token = localStorage.getItem('token');
-        
+
         if (!token) {
           const cookieToken = document.cookie
             .split('; ')
             .find(row => row.startsWith('token='))
             ?.split('=')[1];
-            
+
           if (cookieToken) {
             token = cookieToken;
             localStorage.setItem('token', token);

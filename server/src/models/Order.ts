@@ -22,8 +22,11 @@ export interface IOrder extends Document {
     phone: string;
   };
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  paymentStatus: 'pending' | 'completed' | 'failed';
+  paymentStatus: 'pending' | 'completed' | 'failed' | 'paid';
+  paymentMethod?: 'card' | 'esewa' | 'khalti';
   esewaRefId?: string;
+  transactionId?: string;
+  khaltiPidx?: string;
   createdAt: Date;
 }
 
@@ -100,10 +103,23 @@ const orderSchema = new Schema<IOrder>({
   },
   paymentStatus: {
     type: String,
-    enum: ['pending', 'completed', 'failed'],
+    enum: ['pending', 'completed', 'failed', 'paid'],
     default: 'pending'
   },
+  paymentMethod: {
+    type: String,
+    enum: ['card', 'esewa', 'khalti'],
+    required: false
+  },
   esewaRefId: {
+    type: String,
+    required: false
+  },
+  transactionId: {
+    type: String,
+    required: false
+  },
+  khaltiPidx: {
     type: String,
     required: false
   },

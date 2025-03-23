@@ -6,8 +6,8 @@ import { useChat } from '../context/ChatContext';  // New context
 import ProfileDropdown from './ProfileDropdown';
 import CartSlideOver from './CartSlideOver';
 import { useState, useEffect } from 'react';
-import { 
-  ShoppingCartIcon as ShoppingCartIconOutline, 
+import {
+  ShoppingCartIcon as ShoppingCartIconOutline,
   HeartIcon as HeartIconOutline,
   SunIcon as SunIconOutline,
   MoonIcon as MoonIconOutline
@@ -68,7 +68,7 @@ const Navbar = () => {
     console.log('Opening chat with ID in Navbar:', chatId);
     // First make sure we reset any previous selection
     setSelectedChatId(undefined);
-    
+
     // Use setTimeout to ensure state updates properly
     setTimeout(() => {
       setSelectedChatId(chatId);
@@ -88,7 +88,7 @@ const Navbar = () => {
               alt="Pawshu Logo"
             />
           </Link>
-          
+
           {/* Main Navigation Links */}
           <div className="hidden md:flex items-center space-x-6">
             <Link to="/products" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 text-base font-medium transition-colors">
@@ -104,11 +104,11 @@ const Navbar = () => {
               Donate
             </Link>
           </div>
-          
+
           {/* User Actions */}
           <div className="hidden md:flex items-center space-x-4">
             {/* Dark Mode Toggle */}
-            <button 
+            <button
               onClick={toggleDarkMode}
               className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 p-2 rounded-full focus:outline-none transition-colors"
               aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
@@ -119,7 +119,7 @@ const Navbar = () => {
                 <MoonIcon className="h-6 w-6" />
               )}
             </button>
-            
+
             {!loading && (
               <>
                 {user ? (
@@ -186,7 +186,7 @@ const Navbar = () => {
               </>
             )}
           </div>
-          
+
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center">
             <button
@@ -221,9 +221,9 @@ const Navbar = () => {
             <Link to="/donate" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
               Donate
             </Link>
-            
+
             {/* Dark Mode Toggle in Mobile Menu */}
-            <button 
+            <button
               onClick={toggleDarkMode}
               className="flex items-center text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors"
             >
@@ -239,7 +239,7 @@ const Navbar = () => {
                 </>
               )}
             </button>
-            
+
             {!user && !loading && (
               <div className="flex flex-col space-y-2 pt-2 border-t border-white/20 dark:border-gray-700/20">
                 <Link to="/login" className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors">
@@ -298,21 +298,21 @@ const Navbar = () => {
       )}
 
       {/* Cart Slide Over */}
-      <CartSlideOver 
-        isOpen={isCartOpen} 
-        setIsOpen={closeCart} 
-        cartItems={cartItems} 
-        updateQuantity={updateQuantity} 
+      <CartSlideOver
+        isOpen={isCartOpen}
+        setIsOpen={closeCart}
+        cartItems={cartItems}
+        updateQuantity={updateQuantity}
         removeItem={removeFromCart}
       />
-      
+
       {/* Chat Window */}
       {isChatOpen && (
         <div className="fixed right-0 top-16 z-50 mr-4">
           <div className="relative w-96 h-[500px] rounded-lg overflow-hidden shadow-2xl border border-gray-700">
-            <ChatWindow 
+            <ChatWindow
               key={`chat-window-${selectedChatId || 'default'}`}
-              onClose={() => setIsChatOpen(false)} 
+              onClose={() => setIsChatOpen(false)}
               selectedChatId={selectedChatId}
             />
           </div>

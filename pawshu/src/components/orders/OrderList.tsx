@@ -31,11 +31,19 @@ const OrderList: React.FC = () => {
   const fetchOrders = async () => {
     setLoading(true);
     try {
+      console.log('Fetching user orders from API...');
       const response = await api.get('/orders/user');
+      console.log('Orders fetched successfully:', response.data);
       setOrders(response.data);
       setError(null);
     } catch (err: any) {
       console.error('Error fetching orders:', err);
+      if (err.response) {
+        console.error('Error response data:', err.response.data);
+        console.error('Error response status:', err.response.status);
+      } else if (err.request) {
+        console.error('No response received from server');
+      }
       setError(err.response?.data?.message || 'Failed to load your orders');
     } finally {
       setLoading(false);

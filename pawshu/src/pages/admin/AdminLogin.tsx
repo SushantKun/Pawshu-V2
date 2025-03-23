@@ -38,7 +38,7 @@ const AdminLogin = () => {
 
       // Store the token in localStorage
       localStorage.setItem('adminToken', response.data.token);
-      
+
       // Redirect to admin dashboard
       console.log('Admin login successful, redirecting to dashboard');
       setTimeout(() => {
@@ -67,13 +67,13 @@ const AdminLogin = () => {
             Sign in to access the admin dashboard
           </p>
         </div>
-        
+
         {error && (
           <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded relative" role="alert">
             <span className="block sm:inline">{error}</span>
           </div>
         )}
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>

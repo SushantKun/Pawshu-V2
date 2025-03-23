@@ -3,6 +3,7 @@ import { AuthRequest, verifyToken } from '../middleware/auth';
 import Order from '../models/Order';
 import Product from '../models/Product';
 import crypto from 'crypto';
+import * as OrderController from '../controllers/orderController';
 
 const router = express.Router();
 
@@ -387,6 +388,126 @@ router.get('/esewa/verify/:orderId', async (req: Request, res: Response, next: N
   }
 });
 
+// Add the Khalti verification endpoint before the :id routes to avoid pattern matching conflicts
+router.get('/verify-khalti', OrderController.verifyKhaltiPayment);
+
+// Add an endpoint for manually updating order payment status with Khalti details
+router.post('/update-khalti-payment', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    console.log('Manual Khalti payment update request:', req.body);
+    
+    if (!req.user) {
+      res.status(401).json({ message: 'Please authenticate' });
+      return;
+    }
+
+    const { orderId, pidx, transaction_id } = req.body;
+    
+    if (!orderId || !pidx) {
+      res.status(400).json({ message: 'Please provide orderId and pidx' });
+      return;
+    }
+
+    console.log('Looking for order with ID:', orderId);
+    const order = await Order.findById(orderId);
+    if (!order) {
+      console.error('Order not found:', orderId);
+      res.status(404).json({ message: 'Order not found' });
+      return;
+    }
+
+    // Check if this is the order owner or an admin - if we have a token
+    // But allow anonymous updates for Khalti callback handling
+    if (req.user._id && 
+        order.userId.toString() !== req.user._id.toString() && 
+        !req.user.isAdmin) {
+      console.error('Access denied: User tried to update another user\'s order');
+      res.status(403).json({ message: 'Access denied' });
+      return;
+    }
+
+    console.log('Updating order with Khalti payment details:', { 
+      orderId: order._id, 
+      pidx, 
+      paymentMethod: 'khalti', 
+      paymentStatus: 'completed'
+    });
+
+    // Update the order with Khalti payment details
+    order.khaltiPidx = pidx;
+    order.paymentMethod = 'khalti';
+    order.paymentStatus = 'completed';
+    order.status = 'processing'; // Move order to processing once payment is completed
+    
+    if (transaction_id) {
+      order.transactionId = transaction_id;
+    }
+
+    try {
+      await order.save();
+      console.log('Order updated successfully:', order._id);
+    } catch (saveError) {
+      console.error('Error saving order:', saveError);
+      
+      // Try with direct update
+      try {
+        const updatedOrder = await Order.findByIdAndUpdate(orderId, { 
+          $set: { 
+            khaltiPidx: pidx,
+            paymentMethod: 'khalti',
+            paymentStatus: 'completed',
+            status: 'processing',
+            ...(transaction_id ? { transactionId: transaction_id } : {})
+          } 
+        }, { new: true });
+        
+        if (updatedOrder) {
+          console.log('Order updated with findByIdAndUpdate:', updatedOrder._id);
+        } else {
+          console.error('Order update failed even with findByIdAndUpdate');
+        }
+      } catch (updateError) {
+        console.error('All update attempts failed for order:', orderId, updateError);
+        res.status(500).json({
+          success: false,
+          message: 'Failed to update order payment status',
+          error: updateError instanceof Error ? updateError.message : 'Unknown error'
+        });
+        return;
+      }
+    }
+
+    // Double-check the update was successful by fetching the updated order
+    const updatedOrder = await Order.findById(orderId);
+    if (!updatedOrder || updatedOrder.paymentStatus !== 'completed') {
+      console.error('Order payment status not updated correctly after save');
+      res.status(500).json({
+        success: false,
+        message: 'Order update verification failed'
+      });
+      return;
+    }
+
+    console.log('Order payment successfully completed for order:', orderId);
+    res.json({ 
+      success: true, 
+      message: 'Order payment status updated successfully',
+      order: {
+        id: order._id,
+        status: 'processing',
+        paymentStatus: 'completed'
+      }
+    });
+  } catch (error) {
+    console.error('Error updating order with Khalti payment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update order payment status',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Get user's orders
 router.get('/user', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -395,11 +516,14 @@ router.get('/user', verifyToken, async (req: AuthRequest, res: Response, next: N
       return;
     }
 
+    console.log('Fetching orders for user:', req.user._id);
     const orders = await Order.find({ userId: req.user._id })
       .sort({ createdAt: -1 });
     
+    console.log(`Found ${orders.length} orders for user`);
     res.json(orders);
   } catch (error) {
+    console.error('Error fetching user orders:', error);
     next(error);
   }
 });
@@ -408,6 +532,7 @@ router.get('/user', verifyToken, async (req: AuthRequest, res: Response, next: N
 router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     console.log('Fetching order details for ID:', req.params.id);
+    console.log('User authenticated:', 'user' in req && !!req.user);
     
     const order = await Order.findById(req.params.id);
     
@@ -417,17 +542,26 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
       return;
     }
 
+    console.log('Order found in database:', order._id);
+    
     // If this is an auth request with a user, verify permissions
     if ('user' in req && req.user) {
       const authReq = req as AuthRequest;
+      console.log('Auth request from user:', authReq.user?._id);
+      
       // Only allow users to view their own orders unless they're an admin
       if (authReq.user && 
           (order.userId.toString() !== authReq.user._id.toString() && 
            !authReq.user.isAdmin)) {
         console.log('Access denied: User tried to access another user\'s order');
+        console.log('Order userId:', order.userId.toString());
+        console.log('Request userId:', authReq.user._id.toString());
+        console.log('Is admin:', authReq.user.isAdmin);
         res.status(403).json({ message: 'Access denied' });
         return;
       }
+      
+      console.log('User authorized to view order');
     } else {
       console.log('Processing unauthenticated order view (likely after payment)');
       // For unauthenticated requests, only allow viewing if the order was just created (last 30 minutes)
@@ -435,15 +569,26 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
       const currentTime = new Date().getTime();
       const timeDifferenceInMinutes = (currentTime - orderCreationTime) / (1000 * 60);
       
+      console.log('Order age (minutes):', timeDifferenceInMinutes);
+      
       if (timeDifferenceInMinutes > 30) {
         console.log('Access denied: Unauthenticated request for old order');
         res.status(403).json({ message: 'Please log in to view this order' });
         return;
       }
+      
+      console.log('Unauthenticated access allowed for recent order');
     }
 
     console.log('Order found, returning details');
-    res.json(order);
+    
+    // Add an extra property to indicate this was fetched from the server
+    const orderWithMeta = {
+      ...order.toObject(),
+      _fetchedAt: new Date().toISOString(),
+    };
+    
+    res.json(orderWithMeta);
   } catch (error) {
     console.error('Error fetching order by ID:', error);
     next(error);
@@ -571,5 +716,8 @@ router.put('/:id/cancel', verifyToken, async (req: AuthRequest, res: Response, n
     next(error);
   }
 });
+
+// Add Khalti payment routes
+router.post('/khalti-payment', OrderController.initiateKhaltiPayment);
 
 export default router; 
