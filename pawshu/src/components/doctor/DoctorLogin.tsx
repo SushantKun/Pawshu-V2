@@ -37,7 +37,8 @@ const DoctorLogin = () => {
         firstName: doctorData.firstName || '',
         lastName: doctorData.lastName || '',
         email: doctorData.email || '',
-        specialization: doctorData.specialization || ''
+        specialization: doctorData.specialization || '',
+        isDoctor: true // Explicitly set to true for doctor dashboard access
       }));
 
       // Redirect to doctor dashboard

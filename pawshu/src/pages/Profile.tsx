@@ -114,12 +114,31 @@ const Profile = () => {
   const fetchAppointments = async () => {
     setAppointmentsLoading(true);
     try {
+      console.log('Fetching appointments...');
       const response = await api.get('/appointments/my-appointments');
-      setAppointments(response.data);
+      console.log('Appointments API response:', response.data);
+      
+      // The API returns { appointments: [...], userType: '...' }
+      // Extract the appointments array safely
+      let appointmentsData = [];
+      if (response.data && response.data.appointments) {
+        // API response has the expected structure
+        appointmentsData = response.data.appointments;
+      } else if (Array.isArray(response.data)) {
+        // API directly returns an array
+        appointmentsData = response.data;
+      }
+      
+      console.log('Setting appointments state with:', appointmentsData);
+      setAppointments(appointmentsData);
       setError('');
     } catch (err: any) {
       console.error('Error fetching appointments:', err);
+      console.error('Response data:', err.response?.data);
+      console.error('Response status:', err.response?.status);
       setError(err.response?.data?.message || 'Failed to fetch appointments');
+      // Ensure we set an empty array on error
+      setAppointments([]);
     } finally {
       setAppointmentsLoading(false);
     }
@@ -655,7 +674,7 @@ const Profile = () => {
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                   </div>
-                ) : appointments.length === 0 ? (
+                ) : !appointments || appointments.length === 0 ? (
                   <p className="text-gray-500 dark:text-gray-400">No appointments found.</p>
                 ) : (
                   <div className="space-y-4">

@@ -106,6 +106,23 @@ const formatMonthYear = (year: number, month: number) => {
   return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 };
 
+// Helper function to decode JWT token and check doctor role
+const decodeJWT = (token: string | null): { isDoctor?: boolean; role?: string; exp?: number } => {
+  if (!token) return {};
+  
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('Error decoding token:', error);
+    return {};
+  }
+};
+
 const DoctorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -123,6 +140,30 @@ const DoctorDashboard = () => {
       return;
     }
     
+    // Decode token to check if it has the required doctor privileges
+    const decodedToken = decodeJWT(token);
+    console.log('Decoded doctor token:', decodedToken);
+    
+    // Check if token contains isDoctor flag or role=doctor
+    if (!decodedToken.isDoctor && decodedToken.role !== 'doctor') {
+      console.error('Token does not have doctor privileges:', decodedToken);
+      toast.error('Your session does not have doctor privileges. Please log in again.');
+      localStorage.removeItem('doctorToken');
+      localStorage.removeItem('doctorInfo');
+      navigate('/doctor/login');
+      return;
+    }
+    
+    // Check if token is expired
+    if (decodedToken.exp && decodedToken.exp * 1000 < Date.now()) {
+      console.error('Token is expired');
+      toast.error('Your session has expired. Please log in again.');
+      localStorage.removeItem('doctorToken');
+      localStorage.removeItem('doctorInfo');
+      navigate('/doctor/login');
+      return;
+    }
+    
     setDoctorInfo(JSON.parse(storedDoctorInfo));
     
     // Fetch dashboard stats
@@ -133,9 +174,22 @@ const DoctorDashboard = () => {
     try {
       setLoading(true);
       
+      // Check if doctorToken exists before making the request
+      const doctorToken = localStorage.getItem('doctorToken');
+      if (!doctorToken) {
+        console.error('No doctor token found in localStorage');
+        setError('Authentication token missing. Please log in again.');
+        localStorage.removeItem('doctorInfo');
+        navigate('/doctor/login');
+        return;
+      }
+      
+      console.log('Fetching doctor dashboard stats with token:', 
+        doctorToken.substring(0, 10) + '...');
+      
       const response = await api.get('/doctors/dashboard-stats', {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('doctorToken')}`
+          Authorization: `Bearer ${doctorToken}`
         }
       });
       
@@ -145,16 +199,23 @@ const DoctorDashboard = () => {
       setError('');
     } catch (err: any) {
       console.error('Error fetching dashboard stats:', err);
+      console.error('Error details:', {
+        status: err.response?.status,
+        message: err.response?.data?.message || err.message,
+        url: '/doctors/dashboard-stats'
+      });
+      
       setError(err.response?.data?.message || 'Failed to fetch dashboard statistics');
       
-      if (err.response?.status === 401) {
-        toast.error('Your session has expired. Please log in again.');
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        toast.error('Your session has expired or you do not have permission. Please log in again.');
         // Unauthorized, redirect to login
         localStorage.removeItem('doctorToken');
         localStorage.removeItem('doctorInfo');
         navigate('/doctor/login');
       } else {
         // Generate sample data as fallback
+        toast.error('Could not connect to server. Showing sample data instead.');
         generateSampleStats();
       }
     } finally {

@@ -55,6 +55,7 @@ router.post('/login', (async (req: Request, res: Response) => {
         name: `${doctor.firstName} ${doctor.lastName}`,
         email: doctor.email,
         isAdmin: false,
+        isDoctor: true,
         role: 'doctor'
       },
       process.env.JWT_SECRET || 'defaultsecret',
@@ -68,6 +69,7 @@ router.post('/login', (async (req: Request, res: Response) => {
       lastName: doctor.lastName,
       email: doctor.email,
       specialization: doctor.specialization,
+      isDoctor: true,
       role: 'doctor'
     };
 

@@ -165,6 +165,8 @@ export const doctorAuth = async (
 ) => {
   try {
     console.log('Checking doctor authorization...');
+    console.log(`Doctor auth request path: ${req.path}`);
+    
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) {
       console.log('Doctor auth failed: No token provided');
@@ -173,11 +175,14 @@ export const doctorAuth = async (
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret') as UserPayload;
-      console.log('Token decoded:', { 
+      console.log('Token decoded for doctor auth:', { 
         userId: decoded._id, 
         email: decoded.email,
-        isDoctor: decoded.isDoctor
+        isDoctor: decoded.isDoctor,
+        role: (decoded as any).role // Check if role field exists
       });
+      
+      // Add the decoded user to the request
       (req as AuthRequest).user = decoded;
       
       const authReq = req as AuthRequest;
@@ -186,15 +191,33 @@ export const doctorAuth = async (
         return res.status(401).json({ message: 'Authorization denied' });
       }
       
-      if (!authReq.user.isDoctor) {
-        console.log('Doctor auth failed: User is not a doctor', { isDoctor: authReq.user.isDoctor });
+      // Check for doctor privileges - either isDoctor flag or role field
+      if (!authReq.user.isDoctor && (decoded as any).role !== 'doctor') {
+        console.log('Doctor auth failed: User is not a doctor', { 
+          isDoctor: authReq.user.isDoctor,
+          role: (decoded as any).role 
+        });
         return res.status(403).json({ message: 'Access denied. Doctor privileges required.' });
       }
       
-      console.log('Doctor authorization successful');
+      console.log('Doctor authorization successful for path:', req.path);
       next();
     } catch (tokenError) {
       console.error('Doctor auth token verification failed:', tokenError);
+      
+      // Try to decode the token for debugging, even if it's not valid
+      try {
+        const tokenParts = token.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+          console.log('Doctor auth - Token payload:', payload);
+          console.log('Doctor auth - Token expiration:', new Date((payload.exp || 0) * 1000));
+          console.log('Doctor auth - Current time:', new Date());
+        }
+      } catch (e) {
+        console.error('Could not decode token for debugging:', e);
+      }
+      
       return res.status(401).json({ message: 'Invalid token' });
     }
   } catch (error) {
