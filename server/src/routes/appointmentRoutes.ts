@@ -14,24 +14,105 @@ router.post('/', verifyToken, (async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    const { doctor, date, timeSlot, petName, petType, reason } = req.body;
+    const { 
+      doctor, 
+      date, 
+      timeSlot, 
+      petName, 
+      petType, 
+      reason, 
+      locationPreference,
+      address,
+      appointmentDuration 
+    } = req.body;
     
     // Validate input
-    if (!doctor || !date || !timeSlot || !petName || !petType || !reason) {
-      return res.status(400).json({ message: 'Please provide all required fields' });
+    if (!doctor || !date || !timeSlot || !petName || !petType || !reason || !locationPreference) {
+      return res.status(400).json({ 
+        message: 'Please provide all required fields',
+        requiredFields: ['doctor', 'date', 'timeSlot', 'petName', 'petType', 'reason', 'locationPreference']
+      });
     }
+    
+    // For home visits, address is required
+    if (locationPreference === 'home_visit' && !address) {
+      return res.status(400).json({ message: 'Address is required for home visits' });
+    }
+
+    // Check if the doctor exists and is active
+    const doctorObj = await mongoose.model('Doctor').findById(doctor);
+    if (!doctorObj) {
+      return res.status(400).json({ message: 'Doctor not found' });
+    }
+    
+    if (!doctorObj.isActive) {
+      return res.status(400).json({ message: 'This doctor is currently not available for booking' });
+    }
+    
+    // Check if doctor supports selected location preference
+    if (
+      (locationPreference === 'clinic' && doctorObj.locationPreference === 'home_visit') || 
+      (locationPreference === 'home_visit' && doctorObj.locationPreference === 'clinic')
+    ) {
+      return res.status(400).json({ 
+        message: `This doctor doesn't provide ${locationPreference} appointments. Available options: ${doctorObj.locationPreference}`
+      });
+    }
+    
+    // Check if the time slot is available
+    const appointmentDate = new Date(date);
+    appointmentDate.setHours(0, 0, 0, 0); // Set to start of day for comparison
+    
+    const nextDay = new Date(appointmentDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    
+    const existingAppointment = await Appointment.findOne({
+      doctor,
+      date: {
+        $gte: appointmentDate,
+        $lt: nextDay
+      },
+      timeSlot,
+      status: { $nin: ['cancelled'] } // Exclude cancelled appointments
+    });
+    
+    if (existingAppointment) {
+      return res.status(400).json({ 
+        message: 'This time slot is already booked. Please select another time slot.' 
+      });
+    }
+    
+    // Set booking fee based on the doctor's specialization or a default amount
+    // In a real app, you might have different fees for different doctors or specializations
+    const bookingFee = 500; // Default booking fee in NPR
     
     // Create new appointment
     const appointment = new Appointment({
-      ...req.body,
       user: req.user._id,
-      status: 'pending'
+      doctor,
+      date,
+      timeSlot,
+      petName,
+      petType,
+      reason,
+      status: 'pending',
+      locationPreference,
+      address: locationPreference === 'home_visit' ? address : undefined,
+      appointmentDuration: appointmentDuration || doctorObj.appointmentDuration || 30, // Use provided duration, doctor's setting, or default
+      payment: {
+        status: 'pending',
+        amount: bookingFee
+      }
     });
     
     await appointment.save();
     console.log('Appointment created successfully:', appointment._id);
     
-    res.status(201).json(appointment);
+    res.status(201).json({
+      appointment,
+      paymentRequired: true,
+      bookingFee
+    });
   } catch (error) {
     console.error('Error creating appointment:', error);
     res.status(500).json({ message: 'Server error' });
@@ -245,6 +326,80 @@ router.delete('/:id', verifyToken, (async (req: AuthRequest, res: Response) => {
     res.json({ message: 'Appointment deleted successfully' });
   } catch (error) {
     console.error('Error deleting appointment:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
+
+// @route   PUT /api/appointments/:id/payment
+// @desc    Update appointment payment status
+// @access  Private (User, Admin)
+router.put('/:id/payment', verifyToken, (async (req: AuthRequest, res: Response) => {
+  try {
+    console.log(`PUT /api/appointments/${req.params.id}/payment - Updating payment status`);
+    
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+
+    // Only allow the user who created the appointment or an admin to update payment
+    const isAdmin = req.user.isAdmin;
+    const isAppointmentOwner = appointment.user.toString() === req.user._id.toString();
+    
+    if (!isAdmin && !isAppointmentOwner) {
+      return res.status(403).json({ message: 'Not authorized to update payment for this appointment' });
+    }
+
+    const { status, method, transactionId } = req.body;
+    
+    // Validate input
+    if (!status || !method) {
+      return res.status(400).json({ 
+        message: 'Please provide payment status and method',
+        requiredFields: ['status', 'method']
+      });
+    }
+    
+    // Validate status
+    if (!['pending', 'paid', 'refunded'].includes(status)) {
+      return res.status(400).json({ 
+        message: 'Invalid payment status. Must be one of: pending, paid, refunded'
+      });
+    }
+    
+    // Validate method
+    if (!['cash', 'card', 'khalti', 'esewa'].includes(method)) {
+      return res.status(400).json({ 
+        message: 'Invalid payment method. Must be one of: cash, card, khalti, esewa'
+      });
+    }
+    
+    // Update payment information
+    appointment.payment.status = status;
+    appointment.payment.method = method;
+    
+    if (transactionId) {
+      appointment.payment.transactionId = transactionId;
+    }
+    
+    // If status is paid, set the paidAt date
+    if (status === 'paid') {
+      appointment.payment.paidAt = new Date();
+    }
+    
+    await appointment.save();
+    console.log(`Payment for appointment ${req.params.id} updated successfully`);
+
+    res.json({
+      message: 'Payment updated successfully',
+      appointment
+    });
+  } catch (error) {
+    console.error('Error updating payment status:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);

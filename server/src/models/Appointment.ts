@@ -10,6 +10,16 @@ export interface IAppointment extends Document {
   reason: string;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   notes?: string;
+  locationPreference: 'clinic' | 'home_visit';
+  address?: string;
+  appointmentDuration: number; // in minutes
+  payment: {
+    status: 'pending' | 'paid' | 'refunded';
+    amount: number;
+    transactionId?: string;
+    method?: 'cash' | 'card' | 'khalti' | 'esewa';
+    paidAt?: Date;
+  };
   createdAt: Date;
 }
 
@@ -55,6 +65,37 @@ const appointmentSchema = new Schema<IAppointment>({
   notes: {
     type: String,
     trim: true
+  },
+  locationPreference: {
+    type: String,
+    enum: ['clinic', 'home_visit'],
+    required: [true, 'Location preference is required']
+  },
+  address: {
+    type: String,
+    trim: true
+  },
+  appointmentDuration: {
+    type: Number,
+    default: 30, // Default to 30 minutes
+    required: [true, 'Appointment duration is required']
+  },
+  payment: {
+    status: {
+      type: String,
+      enum: ['pending', 'paid', 'refunded'],
+      default: 'pending'
+    },
+    amount: {
+      type: Number,
+      required: [true, 'Payment amount is required']
+    },
+    transactionId: String,
+    method: {
+      type: String,
+      enum: ['cash', 'card', 'khalti', 'esewa']
+    },
+    paidAt: Date
   },
   createdAt: {
     type: Date,

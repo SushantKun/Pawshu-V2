@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useNavigate } from 'react-router-dom';
 
 interface Doctor {
   _id: string;
@@ -29,6 +30,16 @@ interface DoctorFormData {
   profileImage?: string;
 }
 
+// Add TimeSlot interface
+interface TimeSlot {
+  day: string;
+  startTime: string;
+  endTime: string;
+  id: string;
+}
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 const AdminDoctors = () => {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +59,16 @@ const AdminDoctors = () => {
     profileImage: ''
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [customTimeSlots, setCustomTimeSlots] = useState<TimeSlot[]>([]);
+  const [newSlot, setNewSlot] = useState<{
+    day: string;
+    startTime: string;
+    endTime: string;
+  }>({
+    day: 'Monday',
+    startTime: '09:00',
+    endTime: '10:00'
+  });
 
   // Specialization options
   const specializationOptions = [
@@ -70,6 +91,33 @@ const AdminDoctors = () => {
     fetchDoctors();
   }, []);
 
+  // Add this effect to convert availability to custom time slots
+  useEffect(() => {
+    if (formData.availability && formData.availability.length > 0) {
+      const slots: TimeSlot[] = [];
+      formData.availability.forEach(availability => {
+        const parts = availability.split(' ');
+        if (parts.length >= 2) {
+          const day = parts[0];
+          const timeRange = parts[1];
+          const [timeStart, timeEnd] = timeRange.split('-');
+          
+          if (timeStart && timeEnd) {
+            slots.push({
+              day,
+              startTime: `${timeStart.padStart(2, '0')}:00`,
+              endTime: `${timeEnd.padStart(2, '0')}:00`,
+              id: `${day}-${timeStart}-${timeEnd}`
+            });
+          }
+        }
+      });
+      setCustomTimeSlots(slots);
+    } else {
+      setCustomTimeSlots([]);
+    }
+  }, [formData.availability]);
+
   const fetchDoctors = async () => {
     try {
       setLoading(true);
@@ -84,7 +132,7 @@ const AdminDoctors = () => {
       }
 
       console.log('Fetching doctors with token:', token ? 'Token present' : 'No token');
-      const response = await axios.get('http://localhost:5000/api/admin/doctors', {
+      const response = await axios.get(`${API_URL}/admin/doctors`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -218,68 +266,106 @@ const AdminDoctors = () => {
       availability: [],
       profileImage: ''
     });
+    setSelectedDoctor(null);
     setImagePreview(null);
+    setError('');
+    setCustomTimeSlots([]);
+    setNewSlot({
+      day: 'Monday',
+      startTime: '09:00',
+      endTime: '10:00'
+    });
   };
 
   const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || 
+        !formData.specialization || formData.experience <= 0 || !formData.bio) {
+      setError('Please fill in all required fields');
+      return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    
+    // Validate password length
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+    
+    // Ensure the doctor has at least one availability slot
+    if (!formData.availability.length) {
+      setError('Please select at least one availability time slot');
+      return;
+    }
+    
     try {
       setLoading(true);
       const token = localStorage.getItem('adminToken');
       
-      // Validate required fields
-      if (!formData.firstName || !formData.lastName || !formData.email || 
-          !formData.password || !formData.specialization) {
-        toast.error('Please fill in all required fields');
-        setLoading(false);
-        return;
-      }
+      // Debug check availability format
+      console.log('Current availability format before formatting:', formData.availability);
       
-      // Create a request body with the form data
-      const requestBody = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        password: formData.password,
-        specialization: formData.specialization,
-        experience: formData.experience,
-        bio: formData.bio,
-        availability: formData.availability,
-        // Send the base64 image data directly
-        profileImage: formData.profileImage
+      // Ensure time slots are in correct format (Day StartHour-EndHour)
+      const formattedAvailability = formData.availability.map(slot => {
+        const parts = slot.split(' ');
+        if (parts.length >= 2) {
+          const day = parts[0];
+          const timeRange = parts[1];
+          const [startTime, endTime] = timeRange.split('-');
+          
+          const startHour = parseInt(startTime);
+          const endHour = parseInt(endTime);
+          
+          if (!isNaN(startHour) && !isNaN(endHour)) {
+            // Return clean format without any minutes
+            return `${day} ${startHour}-${endHour}`;
+          }
+        }
+        return slot; // Return original if can't parse
+      });
+      
+      // Create submission data with formatted availability
+      const submissionData = {
+        ...formData,
+        availability: formattedAvailability
       };
-
-      console.log('Making POST request to add doctor...');
-      const response = await axios.post('http://localhost:5000/api/admin/doctors', requestBody, {
+      
+      console.log('Adding doctor with data:', {
+        ...submissionData,
+        profileImage: submissionData.profileImage ? 'Image data included' : 'No image',
+        availability: submissionData.availability
+      });
+      
+      const response = await axios.post(`${API_URL}/admin/doctors`, submissionData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
-        },
-        timeout: 30000 // 30 second timeout
+        }
       });
       
-      console.log('Doctor added successfully, server response:', response.data);
+      console.log('Add doctor response:', response.data);
       toast.success('Doctor added successfully!');
       setShowAddModal(false);
       resetForm();
       fetchDoctors();
     } catch (err: any) {
       console.error('Error adding doctor:', err);
+      const errorMessage = err.response?.data?.message || 'Failed to add doctor. Make sure your server is running.';
       
-      // Handle different error scenarios
-      if (err.code === 'ECONNABORTED') {
-        toast.error('Request timed out. The server took too long to respond.');
-      } else if (err.response) {
-        // The server responded with a status code outside the 2xx range
-        const errorMessage = err.response.data?.message || 'Failed to add doctor. Please try again.';
-        toast.error(errorMessage);
-        console.error('Error details:', err.response.data);
-      } else if (err.request) {
-        // The request was made but no response was received
-        toast.error('No response from server. Please check your connection.');
+      // Show more details for availability errors
+      if (errorMessage.includes('time range') || errorMessage.includes('availability')) {
+        console.error('Availability error details:', err.response?.data);
+        toast.error(`${errorMessage}. Check console for details.`);
       } else {
-        // Something happened in setting up the request
-        toast.error('Error setting up request. Please try again.');
+        toast.error(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -299,35 +385,139 @@ const AdminDoctors = () => {
       availability: doctor.availability,
       profileImage: doctor.profileImage?.url || ''
     });
+    
+    // Convert availability strings to custom time slots
+    if (doctor.availability && doctor.availability.length > 0) {
+      const slots: TimeSlot[] = [];
+      doctor.availability.forEach(availability => {
+        const parts = availability.split(' ');
+        if (parts.length >= 2) {
+          const day = parts[0];
+          const timeRange = parts[1];
+          const [timeStart, timeEnd] = timeRange.split('-');
+          
+          if (timeStart && timeEnd) {
+            slots.push({
+              day,
+              startTime: `${timeStart.padStart(2, '0')}:00`,
+              endTime: `${timeEnd.padStart(2, '0')}:00`,
+              id: `${day}-${timeStart}-${timeEnd}`
+            });
+          }
+        }
+      });
+      setCustomTimeSlots(slots);
+    } else {
+      setCustomTimeSlots([]);
+    }
+    
     setImagePreview(doctor.profileImage?.url || null);
     setShowEditModal(true);
   };
 
   const handleUpdateDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDoctor) return;
+    
+    if (!selectedDoctor) {
+      setError('No doctor selected for update');
+      return;
+    }
+    
+    // Validate required fields
+    if (!formData.firstName || !formData.lastName || !formData.email || 
+        !formData.specialization || formData.experience <= 0 || !formData.bio) {
+      setError('Please fill in all required fields');
+      return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    
+    // Ensure the doctor has at least one availability slot
+    if (!formData.availability.length) {
+      setError('Please select at least one availability time slot');
+      return;
+    }
 
     try {
       setLoading(true);
       const token = localStorage.getItem('adminToken');
-      const { password, ...updateData } = formData;
       
-      // Only include password if it's not empty
-      const dataToSend = password ? { ...updateData, password } : updateData;
-
-      await axios.put(`http://localhost:5000/api/admin/doctors/${selectedDoctor._id}`, dataToSend, {
+      // Debug check availability format
+      console.log('Current availability format:', formData.availability);
+      
+      // Ensure time slots are in correct format (Day StartHour-EndHour)
+      const formattedAvailability = formData.availability.map(slot => {
+        const parts = slot.split(' ');
+        if (parts.length >= 2) {
+          const day = parts[0];
+          const timeRange = parts[1];
+          const [startTime, endTime] = timeRange.split('-');
+          
+          const startHour = parseInt(startTime);
+          const endHour = parseInt(endTime);
+          
+          if (!isNaN(startHour) && !isNaN(endHour)) {
+            // Return clean format without any minutes
+            return `${day} ${startHour}-${endHour}`;
+          }
+        }
+        return slot; // Return original if can't parse
+      });
+      
+      // Prepare data for update - strip any unused fields for clarity
+      const updateData = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        specialization: formData.specialization,
+        experience: formData.experience,
+        bio: formData.bio,
+        availability: formattedAvailability
+      };
+      
+      // Only include password if it's provided
+      if (formData.password) {
+        Object.assign(updateData, { password: formData.password });
+      }
+      
+      // Only include profileImage if it's been updated
+      if (formData.profileImage && formData.profileImage.startsWith('data:')) {
+        Object.assign(updateData, { profileImage: formData.profileImage });
+      }
+      
+      console.log('Updating doctor with data:', {
+        ...updateData,
+        profileImage: formData.profileImage ? (formData.profileImage.startsWith('data:') ? 'New image data included' : 'Using existing image') : 'No image',
+        availability: updateData.availability // Log formatted availability
+      });
+      
+      await axios.put(`${API_URL}/admin/doctors/${selectedDoctor._id}`, updateData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
+      
       toast.success('Doctor updated successfully!');
       setShowEditModal(false);
       resetForm();
       fetchDoctors();
     } catch (err: any) {
       console.error('Error updating doctor:', err);
-      toast.error(err.response?.data?.message || 'Failed to update doctor. Please try again.');
+      const errorMessage = err.response?.data?.message || 'Failed to update doctor. Make sure your server is running.';
+      
+      // Show more details for availability errors if present
+      if (errorMessage.includes('time range') || errorMessage.includes('availability')) {
+        console.error('Availability error details:', err.response?.data);
+        toast.error(`${errorMessage}. Check console for details.`);
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -338,7 +528,7 @@ const AdminDoctors = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('adminToken');
-        await axios.delete(`http://localhost:5000/api/admin/doctors/${id}`, {
+        await axios.delete(`${API_URL}/admin/doctors/${id}`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -352,6 +542,87 @@ const AdminDoctors = () => {
         setLoading(false);
       }
     }
+  };
+
+  // Add new functions for time slot management
+  const handleTimeSlotAdd = () => {
+    const { day, startTime, endTime } = newSlot;
+    
+    // Format times for storage - extract only the hour part from HH:MM format
+    const startHour = parseInt(startTime.split(':')[0]);
+    const endHour = parseInt(endTime.split(':')[0]);
+    
+    // Validate time range
+    if (startHour >= endHour) {
+      setError('End time must be after start time');
+      return;
+    }
+    
+    // Create a slot ID
+    const slotId = `${day}-${startHour}-${endHour}`;
+    
+    // Check if this slot already exists
+    if (customTimeSlots.some(slot => slot.id === slotId)) {
+      setError('This time slot already exists');
+      return;
+    }
+    
+    // Add to custom slots - keep the original time with minutes for display
+    setCustomTimeSlots([
+      ...customTimeSlots,
+      {
+        day,
+        startTime,
+        endTime,
+        id: slotId
+      }
+    ]);
+    
+    // Add to availability in the required format - use clean hours WITHOUT any minutes
+    // Format should be "Day startHour-endHour" e.g. "Monday 9-17"
+    const availabilityValue = `${day} ${startHour}-${endHour}`;
+    console.log('Adding availability value:', availabilityValue);
+    
+    if (!formData.availability.includes(availabilityValue)) {
+      setFormData({
+        ...formData,
+        availability: [...formData.availability, availabilityValue]
+      });
+    }
+    
+    // Reset any error
+    setError('');
+  };
+
+  const handleTimeSlotDelete = (slotId: string) => {
+    // Remove from custom slots
+    const updatedSlots = customTimeSlots.filter(slot => slot.id !== slotId);
+    setCustomTimeSlots(updatedSlots);
+    
+    // Get the slot that's being deleted
+    const slotToDelete = customTimeSlots.find(slot => slot.id === slotId);
+    if (slotToDelete) {
+      // Extract the components to create the availability value
+      const startHour = parseInt(slotToDelete.startTime.split(':')[0]);
+      const endHour = parseInt(slotToDelete.endTime.split(':')[0]);
+      
+      // Format should be "Day startHour-endHour" e.g. "Monday 9-17"
+      const availabilityValue = `${slotToDelete.day} ${startHour}-${endHour}`;
+      console.log('Removing availability value:', availabilityValue);
+      
+      // Remove from availability
+      setFormData({
+        ...formData,
+        availability: formData.availability.filter(item => item !== availabilityValue)
+      });
+    }
+  };
+
+  const handleNewSlotChange = (field: 'day' | 'startTime' | 'endTime', value: string) => {
+    setNewSlot({
+      ...newSlot,
+      [field]: value
+    });
   };
 
   return (
@@ -558,32 +829,95 @@ const AdminDoctors = () => {
 
               <div className="mb-4">
                 <label className="block text-gray-700 dark:text-gray-300 mb-2">Availability</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {daysOfWeek.map((day) => (
-                    <div key={day} className="flex flex-col">
-                      <span className="text-sm text-gray-700 dark:text-gray-300 mb-1">{day}</span>
-                      <div className="flex space-x-2">
-                        {periods.map((period) => {
-                          const value = `${day} ${period}`;
-                          const isSelected = formData.availability.includes(value);
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() => handleAvailabilityChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>)}
-                              className={`px-2 py-1 text-xs rounded ${
-                                isSelected
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                              }`}
-                            >
-                              {period}
-                            </button>
-                          );
-                        })}
-                      </div>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div>
+                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                      Day
+                    </label>
+                    <select
+                      value={newSlot.day}
+                      onChange={(e) => handleNewSlotChange('day', e.target.value)}
+                      className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+                    >
+                      {daysOfWeek.map(day => (
+                        <option key={day} value={day}>{day}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                      Start Time
+                    </label>
+                    <input
+                      type="time"
+                      value={newSlot.startTime}
+                      onChange={(e) => handleNewSlotChange('startTime', e.target.value)}
+                      className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                      End Time
+                    </label>
+                    <input
+                      type="time"
+                      value={newSlot.endTime}
+                      onChange={(e) => handleNewSlotChange('endTime', e.target.value)}
+                      className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={handleTimeSlotAdd}
+                    className="flex items-center justify-center p-2 bg-green-500 text-white rounded-full hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
+                
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selected Time Slots</h3>
+                  
+                  {customTimeSlots.length === 0 ? (
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No time slots added yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {daysOfWeek.map(day => {
+                        const daySlots = customTimeSlots.filter(slot => slot.day === day);
+                        
+                        if (daySlots.length === 0) return null;
+                        
+                        return (
+                          <div key={day} className="border rounded-md p-3 dark:border-gray-700">
+                            <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">{day}</h4>
+                            <div className="space-y-2">
+                              {daySlots.map(slot => (
+                                <div key={slot.id} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded">
+                                  <span className="text-sm text-gray-800 dark:text-gray-200">
+                                    {slot.startTime} - {slot.endTime}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTimeSlotDelete(slot.id)}
+                                    className="text-red-500 hover:text-red-700 focus:outline-none"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -720,32 +1054,95 @@ const AdminDoctors = () => {
 
               <div className="mb-4">
                 <label className="block text-gray-700 dark:text-gray-300 mb-2">Availability</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {daysOfWeek.map((day) => (
-                    <div key={day} className="flex flex-col">
-                      <span className="text-sm text-gray-700 dark:text-gray-300 mb-1">{day}</span>
-                      <div className="flex space-x-2">
-                        {periods.map((period) => {
-                          const value = `${day} ${period}`;
-                          const isSelected = formData.availability.includes(value);
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() => handleAvailabilityChange({ target: { value } } as React.ChangeEvent<HTMLInputElement>)}
-                              className={`px-2 py-1 text-xs rounded ${
-                                isSelected
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
-                              }`}
-                            >
-                              {period}
-                            </button>
-                          );
-                        })}
-                      </div>
+                <div className="flex flex-wrap items-end gap-3 mb-4">
+                  <div>
+                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                      Day
+                    </label>
+                    <select
+                      value={newSlot.day}
+                      onChange={(e) => handleNewSlotChange('day', e.target.value)}
+                      className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+                    >
+                      {daysOfWeek.map(day => (
+                        <option key={day} value={day}>{day}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                      Start Time
+                    </label>
+                    <input
+                      type="time"
+                      value={newSlot.startTime}
+                      onChange={(e) => handleNewSlotChange('startTime', e.target.value)}
+                      className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+                      End Time
+                    </label>
+                    <input
+                      type="time"
+                      value={newSlot.endTime}
+                      onChange={(e) => handleNewSlotChange('endTime', e.target.value)}
+                      className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+                    />
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={handleTimeSlotAdd}
+                    className="flex items-center justify-center p-2 bg-green-500 text-white rounded-full hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
+                
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Selected Time Slots</h3>
+                  
+                  {customTimeSlots.length === 0 ? (
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">No time slots added yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {daysOfWeek.map(day => {
+                        const daySlots = customTimeSlots.filter(slot => slot.day === day);
+                        
+                        if (daySlots.length === 0) return null;
+                        
+                        return (
+                          <div key={day} className="border rounded-md p-3 dark:border-gray-700">
+                            <h4 className="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">{day}</h4>
+                            <div className="space-y-2">
+                              {daySlots.map(slot => (
+                                <div key={slot.id} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded">
+                                  <span className="text-sm text-gray-800 dark:text-gray-200">
+                                    {slot.startTime} - {slot.endTime}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleTimeSlotDelete(slot.id)}
+                                    className="text-red-500 hover:text-red-700 focus:outline-none"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 

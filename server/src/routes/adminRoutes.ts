@@ -1,5 +1,5 @@
 import express, { Request, Response, RequestHandler } from 'express';
-import Doctor from '../models/Doctor';
+import Doctor, { IDoctor } from '../models/Doctor';
 import { adminAuth, AuthRequest } from '../middleware/auth';
 import { uploadImage } from '../utils/cloudinary';
 import User from '../models/User';
@@ -20,11 +20,11 @@ router.post('/doctors', adminAuth as RequestHandler, (async (req: AuthRequest, r
   try {
     console.log('POST /api/admin/doctors - Creating new doctor');
     
-    // Validate request body
-    if (!req.body) {
-      return res.status(400).json({ message: 'Request body is empty' });
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
     }
     
+    // Extract doctor data from request body
     const { 
       firstName, 
       lastName, 
@@ -34,63 +34,129 @@ router.post('/doctors', adminAuth as RequestHandler, (async (req: AuthRequest, r
       experience, 
       bio, 
       availability,
+      locationPreference,
+      clinicAddress,
+      appointmentDuration,
       profileImage 
     } = req.body;
     
-    // Validate input
+    // Validate required fields
     if (!firstName || !lastName || !email || !password || !specialization) {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
     
-    try {
-      // Check if doctor with this email already exists
-      const existingDoctor = await Doctor.findOne({ email });
-      if (existingDoctor) {
-        return res.status(400).json({ message: 'Doctor with this email already exists' });
-      }
-      
-      // Create new doctor
-      const doctor = new Doctor({
-        firstName,
-        lastName,
-        email,
-        password,
-        specialization,
-        experience: experience || 0,
-        bio: bio || `${firstName} ${lastName} is a ${specialization} specialist.`,
-        availability: availability || []
-      });
-      
-      // Handle profile image upload if provided
-      if (profileImage && typeof profileImage === 'string') {
-        try {
-          const uploadResult = await uploadImage(profileImage);
-          const processedImageData = {
-            public_id: uploadResult.public_id,
-            url: uploadResult.secure_url
-          };
-          doctor.profileImage = processedImageData;
-        } catch (imageError) {
-          console.error('Error uploading profile image:', imageError);
-          // Continue with doctor creation even if image upload fails
+    // Check if doctor with email already exists
+    const existingDoctor = await Doctor.findOne({ email });
+    if (existingDoctor) {
+      return res.status(400).json({ message: 'A doctor with this email already exists' });
+    }
+    
+    // Validate availability format if provided
+    if (availability && Array.isArray(availability)) {
+      // Check each availability string follows the format "Day startHour-endHour"
+      for (const avail of availability) {
+        if (typeof avail !== 'string') {
+          return res.status(400).json({ 
+            message: 'Invalid availability format. Each entry must be a string.',
+            example: 'Monday 9-12'
+          });
+        }
+        
+        const parts = avail.split(' ');
+        if (parts.length < 2) {
+          return res.status(400).json({ 
+            message: 'Invalid availability format. Format should be "Day startHour-endHour"',
+            example: 'Monday 9-12'
+          });
+        }
+        
+        const day = parts[0];
+        const timeRange = parts[1];
+        
+        const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        if (!validDays.includes(day)) {
+          return res.status(400).json({ 
+            message: `Invalid day: ${day}. Must be one of: ${validDays.join(', ')}` 
+          });
+        }
+        
+        if (!timeRange.includes('-')) {
+          return res.status(400).json({ 
+            message: 'Invalid time range format. Format should be "startHour-endHour"',
+            example: '9-12'
+          });
+        }
+        
+        const [startHourStr, endHourStr] = timeRange.split('-');
+        const startHour = parseInt(startHourStr);
+        const endHour = parseInt(endHourStr);
+        
+        // Validate that the values are actually numbers
+        if (isNaN(startHour) || isNaN(endHour)) {
+          return res.status(400).json({ 
+            message: 'Invalid time range format. Hours must be numbers.',
+            example: '9-12',
+            received: timeRange
+          });
+        }
+        
+        if (startHour < 0 || startHour > 23 || endHour < 1 || endHour > 24) {
+          return res.status(400).json({ 
+            message: 'Invalid hours in time range. Hours must be between 0-23.',
+            example: '9-12'
+          });
+        }
+        
+        if (startHour >= endHour) {
+          return res.status(400).json({ 
+            message: 'Start hour must be before end hour',
+            example: '9-12'
+          });
         }
       }
-      
-      await doctor.save();
-      console.log('Doctor created successfully:', doctor._id);
-      
-      // Remove password from response
-      const doctorResponse = doctor.toObject();
-      const { password: _, ...doctorWithoutPassword } = doctorResponse;
-      
-      res.status(201).json(doctorWithoutPassword);
-    } catch (dbError) {
-      console.error('Database error:', dbError);
-      return res.status(500).json({ 
-        message: 'Database error', 
-        error: dbError instanceof Error ? dbError.message : 'Unknown database error' 
-      });
     }
+    
+    // Create new doctor with all the provided fields
+    const doctorData: Partial<IDoctor> = {
+      firstName,
+      lastName,
+      email,
+      password,
+      specialization,
+      experience: experience || 0,
+      bio: bio || '',
+      availability: availability || [],
+      locationPreference: locationPreference || 'clinic',
+      clinicAddress: clinicAddress || '',
+      appointmentDuration: appointmentDuration || 30,
+      isActive: true
+    };
+    
+    console.log(`Creating new doctor with email: ${email}`);
+    
+    // Handle profile image if provided
+    if (profileImage && typeof profileImage === 'string' && profileImage.startsWith('data:image/')) {
+      try {
+        const uploadResult = await uploadImage(profileImage);
+        doctorData.profileImage = {
+          public_id: uploadResult.public_id,
+          url: uploadResult.secure_url
+        };
+      } catch (imageError) {
+        console.error('Error uploading profile image:', imageError);
+        // Continue with doctor creation even if image upload fails
+      }
+    }
+    
+    const newDoctor = new Doctor(doctorData);
+    await newDoctor.save();
+    
+    // Remove password from response
+    const doctorResponse = newDoctor.toObject();
+    const { password: _, ...doctorWithoutPassword } = doctorResponse;
+    
+    console.log(`Doctor created successfully with ID: ${newDoctor._id}`);
+    res.status(201).json(doctorWithoutPassword);
   } catch (error) {
     console.error('Error creating doctor:', error);
     res.status(500).json({ 
@@ -140,71 +206,148 @@ router.get('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest
 }) as RequestHandler);
 
 // @route   PUT /api/admin/doctors/:id
-// @desc    Update doctor
+// @desc    Update a doctor by ID
 // @access  Private (Admin only)
 router.put('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
-    console.log(`PUT /api/admin/doctors/${req.params.id} - Updating doctor`);
-    const { 
-      firstName, 
-      lastName, 
-      email, 
-      specialization, 
-      experience, 
-      bio, 
-      availability,
-      profileImage,
-      password 
-    } = req.body;
+    console.log('PUT /api/admin/doctors/:id - Updating doctor');
+    
+    // Check if the request is authenticated as admin (this is redundant since adminAuth middleware already does this)
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+    
+    const doctorId = req.params.id;
+    const updateData = req.body;
+    
+    // Validate doctor ID
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ message: 'Invalid doctor ID format' });
+    }
     
     // Find doctor
-    const doctor = await Doctor.findById(req.params.id);
+    const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
-    
-    // Update fields
-    if (firstName) doctor.firstName = firstName;
-    if (lastName) doctor.lastName = lastName;
-    if (email) doctor.email = email;
-    if (specialization) doctor.specialization = specialization;
-    if (experience !== undefined) doctor.experience = experience;
-    if (bio) doctor.bio = bio;
-    if (availability) doctor.availability = availability;
-    
-    // Handle password update
-    if (password) {
-      console.log(`Updating password for doctor: ${doctor._id}`);
-      doctor.password = password; // This will be hashed by the pre-save middleware
+
+    // Update time slot validation logic in the PUT route
+    if (updateData.availability && Array.isArray(updateData.availability)) {
+      console.log('Validating availability:', updateData.availability);
+      // Check each availability string follows the format "Day startHour-endHour"
+      for (const avail of updateData.availability) {
+        if (typeof avail !== 'string') {
+          return res.status(400).json({ 
+            message: 'Invalid availability format. Each entry must be a string.',
+            example: 'Monday 9-12',
+            received: typeof avail
+          });
+        }
+        
+        const parts = avail.split(' ');
+        if (parts.length < 2) {
+          return res.status(400).json({ 
+            message: 'Invalid availability format. Format should be "Day startHour-endHour"',
+            example: 'Monday 9-12',
+            received: avail
+          });
+        }
+        
+        const day = parts[0];
+        const timeRange = parts[1];
+        
+        const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        if (!validDays.includes(day)) {
+          return res.status(400).json({ 
+            message: `Invalid day: ${day}. Must be one of: ${validDays.join(', ')}`,
+            received: avail
+          });
+        }
+        
+        if (!timeRange.includes('-')) {
+          return res.status(400).json({ 
+            message: 'Invalid time range format. Format should be "startHour-endHour"',
+            example: '9-12',
+            received: timeRange
+          });
+        }
+        
+        const [startHourStr, endHourStr] = timeRange.split('-');
+        
+        // Make sure both parts exist
+        if (!startHourStr || !endHourStr) {
+          return res.status(400).json({ 
+            message: 'Invalid time range format. Both start and end hour must be provided.',
+            example: '9-12',
+            received: timeRange
+          });
+        }
+        
+        const startHour = parseInt(startHourStr);
+        const endHour = parseInt(endHourStr);
+        
+        // Validate that the values are actually numbers
+        if (isNaN(startHour) || isNaN(endHour)) {
+          return res.status(400).json({ 
+            message: 'Invalid time range format. Hours must be numbers.',
+            example: '9-12',
+            received: timeRange
+          });
+        }
+        
+        if (startHour < 0 || startHour > 23 || endHour < 1 || endHour > 24) {
+          return res.status(400).json({ 
+            message: 'Invalid hours in time range. Hours must be between 0-23.',
+            example: '9-12',
+            received: timeRange
+          });
+        }
+        
+        if (startHour >= endHour) {
+          return res.status(400).json({ 
+            message: 'Start hour must be before end hour',
+            example: '9-12',
+            received: timeRange
+          });
+        }
+      }
+      
+      console.log('Availability validation passed successfully');
     }
     
-    // Handle profile image upload if provided
-    if (profileImage && typeof profileImage === 'string' && profileImage.startsWith('data:image/')) {
-      try {
-        const uploadResult = await uploadImage(profileImage);
-        const processedImageData = {
-          public_id: uploadResult.public_id,
-          url: uploadResult.secure_url
-        };
-        doctor.profileImage = processedImageData;
-      } catch (imageError) {
-        console.error('Error uploading profile image:', imageError);
-        // Continue with update even if image upload fails
+    // Update doctor with provided fields (except password which is handled separately)
+    const fieldsToUpdate = {...updateData};
+    delete fieldsToUpdate.password; // Remove password from the general update
+    
+    console.log(`Updating doctor ${doctorId} with data:`, {
+      ...fieldsToUpdate,
+      password: updateData.password ? '[PASSWORD FIELD PRESENT]' : '[NO PASSWORD]' 
+    });
+    
+    // Update fields
+    Object.keys(fieldsToUpdate).forEach(key => {
+      if (key !== '_id') { // Skip the _id field
+        (doctor as any)[key] = fieldsToUpdate[key];
       }
+    });
+    
+    // Handle password update if provided
+    if (updateData.password) {
+      // Password will be automatically hashed by the pre-save hook in the model
+      doctor.password = updateData.password;
     }
     
     await doctor.save();
-    console.log('Doctor updated successfully:', doctor._id);
     
-    // Remove password from response
-    const doctorResponse = doctor.toObject();
-    const { password: _, ...doctorWithoutPassword } = doctorResponse;
+    // Return updated doctor without password
+    const updatedDoctor = await Doctor.findById(doctorId).select('-password');
     
-    res.json(doctorWithoutPassword);
+    console.log(`Doctor ${doctorId} updated successfully`);
+    res.json(updatedDoctor);
   } catch (error) {
     console.error('Error updating doctor:', error);
     res.status(500).json({ 
-      message: 'Server error',
+      message: 'Server error', 
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }

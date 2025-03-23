@@ -201,7 +201,9 @@ router.get('/appointments', verifyToken as RequestHandler, doctorAuth as Request
   }
 }) as RequestHandler);
 
-// Get available time slots for a doctor on a specific date
+// @route   GET /api/doctors/available-slots/:doctorId/:date
+// @desc    Get available time slots for a doctor on a specific date
+// @access  Public
 router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Response) => {
   try {
     const { doctorId, date } = req.params;
@@ -215,34 +217,60 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
+    
+    // Check if doctor is active
+    if (!doctor.isActive) {
+      return res.status(400).json({ message: 'This doctor is currently not available for booking' });
+    }
 
     // Get day of week from date
     const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
     
-    // Filter doctor's availability for the given day
-    const availablePeriods = doctor.availability.filter(slot => 
-      slot.includes(dayOfWeek.split(',')[0])
-    );
-
-    // Define all possible time slots
-    const morningSlots = ['9:00 AM', '10:00 AM', '11:00 AM'];
-    const afternoonSlots = ['1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM'];
-    
-    // Determine available slots based on doctor's availability
+    // Calculate available slots based on the new availability format
     let availableSlots: string[] = [];
     
-    if (availablePeriods.includes(`${dayOfWeek} Morning`)) {
-      availableSlots = [...availableSlots, ...morningSlots];
-    }
+    // Filter availability for the current day
+    const daySlots = doctor.availability
+      .filter(slot => slot.startsWith(dayOfWeek))
+      .map(slot => {
+        const parts = slot.split(' ');
+        if (parts.length >= 2) {
+          const timeRange = parts[1];
+          const [startHour, endHour] = timeRange.split('-').map(t => parseInt(t));
+          return { startHour, endHour };
+        }
+        return null;
+      })
+      .filter(slot => slot !== null);
     
-    if (availablePeriods.includes(`${dayOfWeek} Afternoon`)) {
-      availableSlots = [...availableSlots, ...afternoonSlots];
-    }
+    // Generate hourly time slots from the availability ranges
+    daySlots.forEach(slot => {
+      if (slot) {
+        for (let hour = slot.startHour; hour < slot.endHour; hour++) {
+          const formattedHour = hour < 12 
+            ? `${hour}:00 AM` 
+            : hour === 12 
+              ? `12:00 PM` 
+              : `${hour - 12}:00 PM`;
+          availableSlots.push(formattedHour);
+        }
+      }
+    });
 
     // Find booked appointments for this doctor on this date
+    const targetDate = new Date(date);
+    // Set time to midnight for date comparison
+    targetDate.setHours(0, 0, 0, 0);
+    
+    const nextDay = new Date(targetDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    
     const bookedAppointments = await Appointment.find({
       doctor: doctorId,
-      date: new Date(date),
+      date: {
+        $gte: targetDate,
+        $lt: nextDay
+      },
       status: { $ne: 'cancelled' } // Exclude cancelled appointments
     });
 
@@ -250,7 +278,13 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
     const bookedSlots = bookedAppointments.map(appointment => appointment.timeSlot);
     const finalAvailableSlots = availableSlots.filter(slot => !bookedSlots.includes(slot));
 
-    res.json({ availableSlots: finalAvailableSlots });
+    // Return available slots and location information
+    res.json({ 
+      availableSlots: finalAvailableSlots,
+      locationPreference: doctor.locationPreference,
+      appointmentDuration: doctor.appointmentDuration || 30, // Default to 30 minutes if not specified
+      clinicAddress: doctor.locationPreference !== 'home_visit' ? doctor.clinicAddress : undefined
+    });
   } catch (error) {
     console.error('Get available slots error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -460,6 +494,79 @@ router.get('/:id', (async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching doctor:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
+
+// @route   PUT /api/doctors/active-status
+// @desc    Update the doctor's active status
+// @access  Private (Doctor)
+router.put('/active-status', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
+  try {
+    console.log('PUT /api/doctors/active-status - Updating active status');
+    
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    const doctor = await Doctor.findById(req.user._id);
+    if (!doctor) {
+      return res.status(404).json({ message: 'Doctor not found' });
+    }
+
+    // Toggle active status if not provided, or set to the provided value
+    const { isActive } = req.body;
+    doctor.isActive = isActive !== undefined ? isActive : !doctor.isActive;
+    
+    await doctor.save();
+    
+    console.log(`Doctor ${req.user._id} active status updated to: ${doctor.isActive}`);
+    
+    res.json({
+      message: `Active status ${doctor.isActive ? 'enabled' : 'disabled'} successfully`,
+      isActive: doctor.isActive
+    });
+  } catch (error) {
+    console.error('Error updating doctor active status:', error);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}) as RequestHandler);
+
+// @route   GET /api/doctors/default-time-slots
+// @desc    Get default time slots for doctors
+// @access  Private (Doctor)
+router.get('/default-time-slots', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
+  try {
+    console.log('GET /api/doctors/default-time-slots - Getting default time slots');
+    
+    // Create default time slots for each day of the week
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const defaultTimeSlots: string[] = [];
+    
+    // Add standard business hours by default
+    const timeRanges = [
+      { start: 9, end: 12 },   // Morning
+      { start: 13, end: 17 }   // Afternoon
+    ];
+    
+    days.forEach(day => {
+      timeRanges.forEach(range => {
+        defaultTimeSlots.push(`${day} ${range.start}-${range.end}`);
+      });
+    });
+    
+    res.json({
+      message: 'Default time slots retrieved successfully',
+      defaultTimeSlots
+    });
+  } catch (error) {
+    console.error('Error getting default time slots:', error);
+    res.status(500).json({ 
+      message: 'Server error', 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }) as RequestHandler);
 

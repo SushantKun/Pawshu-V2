@@ -9,7 +9,11 @@ export interface IDoctor extends Document {
   specialization: string;
   experience: number;
   bio: string;
-  availability: string[];
+  availability: string[]; // Format: "Day startHour-endHour", e.g., "Monday 9-12"
+  isActive: boolean;
+  locationPreference: 'clinic' | 'home_visit' | 'both';
+  clinicAddress?: string;
+  appointmentDuration: number; // in minutes
   profileImage?: {
     public_id: string;
     url: string;
@@ -61,7 +65,25 @@ const doctorSchema = new Schema<IDoctor>({
   availability: [{
     type: String,
     required: [true, 'Please provide availability']
+    // Format: "Day startHour-endHour", e.g., "Monday 9-12"
   }],
+  isActive: {
+    type: Boolean,
+    default: true
+  },
+  locationPreference: {
+    type: String,
+    enum: ['clinic', 'home_visit', 'both'],
+    default: 'clinic'
+  },
+  clinicAddress: {
+    type: String
+  },
+  appointmentDuration: {
+    type: Number,
+    default: 30, // Default to 30 minutes
+    min: [15, 'Appointment duration must be at least 15 minutes']
+  },
   profileImage: {
     public_id: String,
     url: String
