@@ -55,7 +55,7 @@ const AdminSidebar = () => {
           </li>
           <li>
             <NavLink
-              to="/admin/statistics"
+              to="/admin/stats"
               className={({ isActive }) =>
                 `flex items-center px-4 py-3 text-white hover:bg-blue-700 dark:hover:bg-gray-700 rounded-lg ${
                   isActive ? 'bg-blue-700 dark:bg-gray-700' : ''

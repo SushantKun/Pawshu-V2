@@ -15,6 +15,61 @@ const CheckoutSuccess = () => {
   
   // Use refs to track if we've already performed these operations
   const orderFetchedRef = useRef(false);
+  const paymentVerifiedRef = useRef(false);
+
+  // Function to verify the payment status
+  const verifyPayment = async (orderIdParam: string) => {
+    if (paymentVerifiedRef.current) return;
+    
+    try {
+      console.log('Verifying payment status for order:', orderIdParam);
+      paymentVerifiedRef.current = true;
+      
+      // Call the universal verification endpoint
+      const response = await axios.get(`http://localhost:5000/api/orders/verify-payment/${orderIdParam}`);
+      console.log('Payment verification response:', response.data);
+      
+      if (response.data.verified) {
+        console.log('Payment verified successfully');
+        // Refresh order details to get updated payment status
+        fetchOrderDetails(orderIdParam);
+      }
+    } catch (err) {
+      console.error('Error verifying payment:', err);
+      // Continue without failing - the payment might still be valid
+    }
+  };
+
+  // Function to fetch order details
+  const fetchOrderDetails = async (orderIdParam: string) => {
+    try {
+      console.log('Fetching order details for:', orderIdParam);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      
+      // Configure request with or without token
+      const config = token ? {
+        headers: { Authorization: `Bearer ${token}` }
+      } : {};
+      
+      // Use the base URL directly since we're running on port 5173
+      const response = await axios.get(`http://localhost:5000/api/orders/${orderIdParam}`, config);
+      console.log('Received order details:', response.data);
+      setOrderDetails(response.data);
+      
+      // Clear the cart after successful purchase if not already done
+      clearCart();
+      console.log('Cart cleared after successful purchase');
+      
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to fetch order details:', err);
+      setError(err?.response?.data?.message || 'Failed to load order details');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Parse the query parameters
@@ -25,41 +80,16 @@ const CheckoutSuccess = () => {
     
     setOrderId(orderIdParam);
     
-    // First fetch order details
-    const fetchOrderDetails = async () => {
-      // Mark that we've started fetching to prevent duplicate fetches
-      orderFetchedRef.current = true;
-      
-      try {
-        console.log('Fetching order details for:', orderIdParam);
-        
-        // Get token from localStorage
-        const token = localStorage.getItem('token');
-        
-        // Configure request with or without token
-        const config = token ? {
-          headers: { Authorization: `Bearer ${token}` }
-        } : {};
-        
-        // Use the base URL directly since we're running on port 5173
-        const response = await axios.get(`http://localhost:5000/api/orders/${orderIdParam}`, config);
-        console.log('Received order details:', response.data);
-        setOrderDetails(response.data);
-        
-        // Clear the cart after successful purchase
-        clearCart();
-        console.log('Cart cleared after successful purchase');
-        
-        setError(null);
-      } catch (err: any) {
-        console.error('Failed to fetch order details:', err);
-        setError(err?.response?.data?.message || 'Failed to load order details');
-      } finally {
-        setLoading(false);
-      }
+    // Mark that we've started fetching to prevent duplicate fetches
+    orderFetchedRef.current = true;
+    
+    // First verify the payment, then fetch order details
+    const initializeOrder = async () => {
+      await verifyPayment(orderIdParam);
+      await fetchOrderDetails(orderIdParam);
     };
-
-    fetchOrderDetails();
+    
+    initializeOrder();
   }, [location.search, clearCart]);
 
   // Fall back to just displaying order ID if we have no details

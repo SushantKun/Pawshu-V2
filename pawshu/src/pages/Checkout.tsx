@@ -216,7 +216,8 @@ const Checkout = () => {
       const orderData = {
         items,
         totalAmount: parseFloat(total.toFixed(2)),
-        shippingAddress: shippingDetails
+        shippingAddress: shippingDetails,
+        paymentMethod: paymentMethod
       };
       
       console.log('Submitting order with data:', JSON.stringify(orderData, null, 2));
@@ -231,6 +232,16 @@ const Checkout = () => {
       console.log('Created order ID:', orderId);
       
       if (paymentMethod === 'card') {
+        // For card payments, directly mark payment as completed via API
+        try {
+          // Mark the payment as completed
+          await axios.get(`http://localhost:5000/api/orders/verify-payment/${orderId}`);
+          console.log('Card payment marked as completed');
+        } catch (error) {
+          console.error('Error marking card payment as completed:', error);
+          // Continue anyway, as we'll show the success page
+        }
+        
         // Process card payment (existing flow)
         clearCart();
         

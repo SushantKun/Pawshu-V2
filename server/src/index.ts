@@ -75,10 +75,40 @@ const initializeCharities = async () => {
   }
 };
 
+// Create admin user if it doesn't exist
+const createAdminUser = async () => {
+  try {
+    // Check if admin user exists
+    const adminExists = await User.findOne({ email: 'admin@pawshu.com' });
+    if (!adminExists) {
+      console.log('Creating default admin user...');
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash('admin123', salt);
+      
+      const adminUser = new User({
+        firstName: 'Admin',
+        lastName: 'User',
+        email: 'admin@pawshu.com',
+        password: hashedPassword,
+        role: 'admin',
+        isAdmin: true,
+        isDoctor: false,
+        verified: true
+      });
+      
+      await adminUser.save();
+      console.log('Default admin user created successfully.');
+    }
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+  }
+};
+
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('Connected to MongoDB');
     initializeCharities();
+    createAdminUser(); // Create admin user if it doesn't exist
   })
   .catch((error) => {
     console.error('MongoDB connection error:', error);
@@ -214,6 +244,7 @@ const adminLoginHandler = async (req: Request, res: Response) => {
       _id: user._id,
       email: user.email,
       isAdmin: user.isAdmin,
+      role: user.role,
       firstName: user.firstName,
       lastName: user.lastName
     } : 'No');
@@ -232,9 +263,9 @@ const adminLoginHandler = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // Check if user is admin
-    console.log('User admin status:', user.isAdmin);
-    if (!user.isAdmin) {
+    // Check if user is admin - both by role and isAdmin flag
+    console.log('User admin status:', user.isAdmin, 'User role:', user.role);
+    if (!user.isAdmin && user.role !== 'admin') {
       console.log('User is not an admin:', email);
       return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
     }
@@ -487,6 +518,80 @@ app.use('/api/charities', charityRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/chat', chatRoutes);
+
+// Create admin endpoint - for development only
+app.get('/api/create-admin', async (req: Request, res: Response) => {
+  try {
+    // Only allow in development environment
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ message: 'This endpoint is not available in production' });
+    }
+    
+    // Check if admin user exists
+    const adminExists = await User.findOne({ email: 'admin@pawshu.com' });
+    if (adminExists) {
+      // Ensure the admin user has the correct flags
+      if (!adminExists.isAdmin || adminExists.role !== 'admin') {
+        adminExists.isAdmin = true;
+        adminExists.role = 'admin';
+        await adminExists.save();
+        
+        return res.json({ 
+          message: 'Admin user updated with correct privileges',
+          admin: {
+            email: adminExists.email,
+            firstName: adminExists.firstName,
+            lastName: adminExists.lastName,
+            isAdmin: adminExists.isAdmin,
+            role: adminExists.role
+          } 
+        });
+      }
+      
+      return res.json({ 
+        message: 'Admin user already exists',
+        admin: {
+          email: adminExists.email,
+          firstName: adminExists.firstName,
+          lastName: adminExists.lastName,
+          isAdmin: adminExists.isAdmin,
+          role: adminExists.role
+        } 
+      });
+    }
+    
+    // Create admin user
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash('admin123', salt);
+    
+    const adminUser = new User({
+      firstName: 'Admin',
+      lastName: 'User',
+      email: 'admin@pawshu.com',
+      password: hashedPassword,
+      role: 'admin',
+      isAdmin: true,
+      isDoctor: false,
+      verified: true
+    });
+    
+    await adminUser.save();
+    
+    res.status(201).json({ 
+      message: 'Admin user created successfully',
+      admin: {
+        email: adminUser.email,
+        firstName: adminUser.firstName,
+        lastName: adminUser.lastName,
+        isAdmin: adminUser.isAdmin,
+        role: adminUser.role
+      }
+    });
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // Upload endpoint
 app.post('/api/upload', async (req: Request, res: Response) => {
