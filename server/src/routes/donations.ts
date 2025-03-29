@@ -455,6 +455,8 @@ router.post('/khalti-verify', async (req: Request, res: Response, next: NextFunc
   try {
     const { pidx, donation_id } = req.body;
     
+    console.log('Khalti verification request received:', { pidx, donation_id });
+    
     if (!pidx) {
       res.status(400).json({ message: 'Missing payment identifier' });
       return;
@@ -467,6 +469,19 @@ router.post('/khalti-verify', async (req: Request, res: Response, next: NextFunc
       console.error('Khalti API key not configured');
       res.status(500).json({ message: 'Payment gateway not properly configured' });
       return;
+    }
+    
+    // Check if we've already processed this pidx
+    if (donation_id) {
+      const existingDonation = await Donation.findById(donation_id);
+      if (existingDonation?.khaltiReference?.verified) {
+        console.log(`Khalti payment ${pidx} for donation ${donation_id} was already verified. Skipping duplicate verification.`);
+        res.json({ 
+          status: 'Already Verified',
+          message: 'This payment has already been verified and processed' 
+        });
+        return;
+      }
     }
     
     // Make lookup request to Khalti API
@@ -491,26 +506,39 @@ router.post('/khalti-verify', async (req: Request, res: Response, next: NextFunc
       if (donation) {
         // Update donation status based on Khalti response
         if (khaltiResponse.data.status === 'Completed') {
-          donation.status = 'completed';
-          donation.khaltiReference = {
-            ...donation.khaltiReference,
-            verified: true,
-            transactionId: khaltiResponse.data.transaction_id
-          };
-          
-          // Update charity's raised amount
-          const charity = await Charity.findById(donation.charityId);
-          if (charity) {
-            charity.raised += donation.amount;
-            await charity.save();
-            console.log(`Updated charity ${charity.name} raised amount to ${charity.raised}`);
+          // Only update if the donation wasn't already completed
+          if (donation.status !== 'completed') {
+            console.log(`Updating donation ${donation_id} status to completed`);
+            donation.status = 'completed';
+            donation.khaltiReference = {
+              ...donation.khaltiReference,
+              verified: true,
+              transactionId: khaltiResponse.data.transaction_id
+            };
+            
+            // Update charity's raised amount
+            const charity = await Charity.findById(donation.charityId);
+            if (charity) {
+              console.log(`Updating charity ${charity.name} raised amount from ${charity.raised} to ${charity.raised + donation.amount}`);
+              charity.raised += donation.amount;
+              await charity.save();
+              console.log(`Updated charity ${charity.name} raised amount to ${charity.raised}`);
+            }
+          } else {
+            console.log(`Donation ${donation_id} was already marked as completed. Avoiding double-counting.`);
           }
         } else if (['Refunded', 'Expired', 'User canceled'].includes(khaltiResponse.data.status)) {
+          console.log(`Marking donation ${donation_id} as failed due to Khalti status: ${khaltiResponse.data.status}`);
           donation.status = 'failed';
         }
         
         await donation.save();
+        console.log(`Saved donation ${donation_id} with updated status: ${donation.status}`);
+      } else {
+        console.log(`Donation ${donation_id} not found for Khalti payment ${pidx}`);
       }
+    } else {
+      console.log(`No donation_id provided for Khalti payment ${pidx}`);
     }
     
     res.json(khaltiResponse.data);
@@ -553,6 +581,23 @@ router.get('/esewa-callback', async (req: Request, res: Response, next: NextFunc
   } catch (error) {
     console.error('Error processing eSewa callback:', error);
     res.redirect('/donate?status=failed&reason=server_error');
+  }
+});
+
+// Get donation by ID
+router.get('/:id', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const donation = await Donation.findById(req.params.id);
+    
+    if (!donation) {
+      res.status(404).json({ message: 'Donation not found' });
+      return;
+    }
+    
+    res.json(donation);
+  } catch (error) {
+    console.error('Error fetching donation:', error);
+    res.status(500).json({ message: 'Failed to fetch donation' });
   }
 });
 

@@ -6,6 +6,7 @@ import { showSuccessNotification, NOTIFICATIONS } from '../utils/notification';
 import { XMarkIcon, CreditCardIcon, ArrowLeftIcon } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import EsewaPayment from '../components/EsewaPayment';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const XMarkIconComponent = XMarkIcon as IconComponent;
@@ -39,10 +40,19 @@ const Donate = () => {
   const [donationDetails, setDonationDetails] = useState<any>(null);
   const [step, setStep] = useState<'select' | 'payment'>('select');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa' | 'khalti'>('esewa');
+  const [esewaFormData, setEsewaFormData] = useState<any>(null);
+  const [showEsewaPayment, setShowEsewaPayment] = useState(false);
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
 
   // Fetch charities data
   useEffect(() => {
     fetchCharities();
+    
+    // Clear expired pending donations
+    cleanupPendingDonations();
     
     // Check for donation success/failure status in URL
     const searchParams = new URLSearchParams(location.search);
@@ -66,6 +76,34 @@ const Donate = () => {
       navigate('/donate', { replace: true });
     }
   }, [location.search]);
+
+  // Function to clean up old pending donations
+  const cleanupPendingDonations = () => {
+    const pendingDonationStr = sessionStorage.getItem('pendingDonation');
+    if (pendingDonationStr) {
+      try {
+        const pendingDonation = JSON.parse(pendingDonationStr);
+        
+        // Check if the donation has a timestamp and is older than 30 minutes
+        if (pendingDonation.timestamp) {
+          const now = new Date().getTime();
+          const thirtyMinutesInMs = 30 * 60 * 1000;
+          
+          if (now - pendingDonation.timestamp > thirtyMinutesInMs) {
+            console.log('Clearing expired pending donation');
+            sessionStorage.removeItem('pendingDonation');
+          }
+        } else {
+          // If no timestamp, it's from the old format, we should remove it
+          console.log('Clearing old-format pending donation');
+          sessionStorage.removeItem('pendingDonation');
+        }
+      } catch (e) {
+        console.error('Error parsing pending donation during cleanup:', e);
+        sessionStorage.removeItem('pendingDonation');
+      }
+    }
+  };
 
   const fetchCharities = async () => {
     try {
@@ -120,9 +158,72 @@ const Donate = () => {
 
   const initiateDirectEsewaPayment = async (charityId: string, amount: number) => {
     try {
-      // We're going directly to the eSewa sandbox environment
-      window.location.href = `https://esewa.com.np/#/`;
+      setIsProcessing(true);
       
+      // Check if there's already a pending donation in storage
+      const existingDonation = sessionStorage.getItem('pendingDonation');
+      let donationId: string | null = null;
+      
+      if (existingDonation) {
+        try {
+          const pendingDonation = JSON.parse(existingDonation);
+          // If we have a donation that matches the current request, reuse it
+          if (pendingDonation.charityId === charityId && 
+              pendingDonation.amount === amount &&
+              pendingDonation.donationId &&
+              pendingDonation.paymentMethod === 'esewa') {
+            donationId = pendingDonation.donationId;
+            console.log('Reusing existing pending eSewa donation:', donationId);
+          }
+        } catch (e) {
+          console.error('Error parsing existing donation:', e);
+        }
+      }
+      
+      // If no existing donation found, create a new one
+      if (!donationId) {
+        // First create a pending donation
+        const donationResponse = await api.post('/donations', {
+          charityId: charityId,
+          charityName: selectedCharity?.name,
+          amount,
+          status: 'pending',
+          paymentMethod: 'esewa'
+        });
+        
+        if (!donationResponse.data || !donationResponse.data._id) {
+          toast.error('Failed to initialize donation. Please try again.');
+          setIsProcessing(false);
+          return;
+        }
+        
+        donationId = donationResponse.data._id;
+      }
+      
+      // Then get eSewa payment data from server
+      const esewaResponse = await api.post('/donations/esewa-payment', {
+        donationId: donationId,
+        amount
+      });
+      
+      if (esewaResponse.data && esewaResponse.data.formData) {
+        // Store the donation info for completion after redirect
+        sessionStorage.setItem('pendingDonation', JSON.stringify({
+          donationId: donationId,
+          charityId,
+          charityName: selectedCharity?.name,
+          amount,
+          paymentMethod: 'esewa',
+          timestamp: new Date().getTime() // Add timestamp to track when created
+        }));
+        
+        // Set state to trigger eSewa payment component render
+        setEsewaFormData(esewaResponse.data.formData);
+        setShowEsewaPayment(true);
+      } else {
+        toast.error('Failed to initialize eSewa payment. Please try again.');
+        setIsProcessing(false);
+      }
     } catch (error) {
       console.error('Error initiating eSewa payment:', error);
       toast.error('Failed to initialize payment. Please try again.');
@@ -134,24 +235,48 @@ const Donate = () => {
     try {
       setIsProcessing(true);
       
-      // First create a pending donation
-      const donationResponse = await api.post('/donations', {
-        charityId: charityId,
-        charityName: selectedCharity?.name,
-        amount,
-        status: 'pending',
-        paymentMethod: 'khalti'
-      });
+      // Check if there's already a pending donation in storage
+      const existingDonation = sessionStorage.getItem('pendingDonation');
+      let donationId: string | null = null;
       
-      if (!donationResponse.data || !donationResponse.data._id) {
-        toast.error('Failed to initialize donation. Please try again.');
-        setIsProcessing(false);
-        return;
+      if (existingDonation) {
+        try {
+          const pendingDonation = JSON.parse(existingDonation);
+          // If we have a donation that matches the current request, reuse it
+          if (pendingDonation.charityId === charityId && 
+              pendingDonation.amount === amount &&
+              pendingDonation.donationId) {
+            donationId = pendingDonation.donationId;
+            console.log('Reusing existing pending donation:', donationId);
+          }
+        } catch (e) {
+          console.error('Error parsing existing donation:', e);
+        }
+      }
+      
+      // If no existing donation found, create a new one
+      if (!donationId) {
+        // First create a pending donation
+        const donationResponse = await api.post('/donations', {
+          charityId: charityId,
+          charityName: selectedCharity?.name,
+          amount,
+          status: 'pending',
+          paymentMethod: 'khalti'
+        });
+        
+        if (!donationResponse.data || !donationResponse.data._id) {
+          toast.error('Failed to initialize donation. Please try again.');
+          setIsProcessing(false);
+          return;
+        }
+        
+        donationId = donationResponse.data._id;
       }
       
       // Then initiate Khalti payment with the donation ID
       const khaltiResponse = await api.post('/donations/khalti-payment', {
-        donationId: donationResponse.data._id,
+        donationId: donationId,
         amount,
         charityId
       });
@@ -160,10 +285,12 @@ const Donate = () => {
       if (khaltiResponse.data && khaltiResponse.data.paymentUrl) {
         // Store donation info in sessionStorage
         sessionStorage.setItem('pendingDonation', JSON.stringify({
-          donationId: donationResponse.data._id,
+          donationId: donationId,
           charityId,
           charityName: selectedCharity?.name,
-          amount
+          amount,
+          paymentMethod: 'khalti',
+          timestamp: new Date().getTime() // Add timestamp to know when this was created
         }));
         
         // Redirect to Khalti payment page
@@ -197,25 +324,9 @@ const Donate = () => {
       setIsProcessing(true);
       
       if (paymentMethod === 'card') {
-        // For card payment, create and complete the donation directly
-        const response = await api.post('/donations', {
-          charityId: selectedCharity._id,
-          charityName: selectedCharity.name,
-          amount,
-          status: 'completed',
-          paymentMethod: 'card'
-        });
-        
-        setDonationDetails(response.data);
-        setDonationComplete(true);
-        
-        showSuccessNotification(
-          NOTIFICATIONS.DONATION.title,
-          `Thank you for your donation of NPR ${amount.toLocaleString()} to ${selectedCharity.name}!`
-        );
-        
-        // Refresh charities to show updated progress
-        fetchCharities();
+        // Show card form instead of automatically completing
+        setShowCardForm(true);
+        setIsProcessing(false);
       } else if (paymentMethod === 'esewa') {
         // Store donation info in sessionStorage so we can create it after successful payment
         sessionStorage.setItem('pendingDonation', JSON.stringify({
@@ -237,6 +348,57 @@ const Donate = () => {
     }
   };
 
+  const handleCardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedCharity) {
+      toast.error('Please select a charity');
+      return;
+    }
+    
+    // Validate card details
+    if (!cardNumber || !cardExpiry || !cardCvv) {
+      toast.error('Please fill in all card details');
+      return;
+    }
+    
+    // Simple validation for demo purposes
+    if (cardNumber.length < 16 || cardExpiry.length < 4 || cardCvv.length < 3) {
+      toast.error('Please enter valid card details');
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      // For card payment, create and complete the donation
+      const response = await api.post('/donations', {
+        charityId: selectedCharity._id,
+        charityName: selectedCharity.name,
+        amount: selectedAmount || parseInt(customAmount),
+        status: 'completed',
+        paymentMethod: 'card'
+      });
+      
+      setDonationDetails(response.data);
+      setDonationComplete(true);
+      setShowCardForm(false);
+      
+      showSuccessNotification(
+        NOTIFICATIONS.DONATION.title,
+        `Thank you for your donation of NPR ${(selectedAmount || parseInt(customAmount)).toLocaleString()} to ${selectedCharity.name}!`
+      );
+      
+      // Refresh charities to show updated progress
+      fetchCharities();
+    } catch (error) {
+      console.error('Error processing card payment:', error);
+      toast.error('There was a problem processing your payment. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   useEffect(() => {
     // Check for pending donation in sessionStorage and success status in URL
     const searchParams = new URLSearchParams(location.search);
@@ -251,18 +413,63 @@ const Donate = () => {
       
       const createOrCompleteDonation = async () => {
         try {
+          setIsProcessing(true);
           let donation;
           
-          // If we have a donation ID, it means it's a Khalti payment that already created the donation
-          if (donationId && donationId.startsWith('donation_')) {
-            // For an existing donation (Khalti), complete it
+          // If we have a donation ID that includes 'donation_', it's from Khalti
+          if (donationId && donationId.includes('donation_')) {
+            console.log('Processing Khalti payment success for:', donationId);
             const existingDonationId = donationId.replace('donation_', '');
-            const response = await api.put(`/donations/${existingDonationId}/complete`, {
-              paymentMethod: 'khalti'
-            });
-            donation = response.data.donation;
-          } else if (pendingDonation) {
-            // For eSewa or creating a new donation
+            
+            // First check if the donation exists and its status
+            let existingDonation;
+            try {
+              const checkResponse = await api.get(`/donations/${existingDonationId}`);
+              existingDonation = checkResponse.data;
+            } catch (err) {
+              console.error('Error checking donation status:', err);
+            }
+            
+            // Only complete the donation if it's still pending
+            if (!existingDonation || existingDonation.status !== 'completed') {
+              const response = await api.put(`/donations/${existingDonationId}/complete`, {
+                paymentMethod: 'khalti'
+              });
+              donation = response.data;
+            } else {
+              donation = existingDonation;
+              console.log('Donation was already completed:', existingDonationId);
+            }
+          } 
+          // For eSewa payments that created a donation before redirect
+          else if (pendingDonation && pendingDonation.donationId) {
+            console.log('Processing eSewa payment success for existing donation:', pendingDonation.donationId);
+            
+            // Check if donation exists and its status
+            let existingDonation;
+            try {
+              const checkResponse = await api.get(`/donations/${pendingDonation.donationId}`);
+              existingDonation = checkResponse.data;
+            } catch (err) {
+              console.error('Error checking eSewa donation status:', err);
+            }
+            
+            // Only complete if it's still pending
+            if (!existingDonation || existingDonation.status !== 'completed') {
+              const response = await api.put(`/donations/${pendingDonation.donationId}/complete`, {
+                paymentMethod: pendingDonation.paymentMethod || 'esewa'
+              });
+              donation = response.data;
+            } else {
+              donation = existingDonation;
+              console.log('eSewa donation was already completed:', pendingDonation.donationId);
+            }
+          } 
+          // Fallback for older implementations or if no donation was created yet
+          else if (pendingDonation) {
+            console.log('Creating new donation for payment success with data:', pendingDonation);
+            
+            // For creating a new donation
             const response = await api.post('/donations', {
               charityId: pendingDonation.charityId,
               charityName: pendingDonation.charityName,
@@ -294,12 +501,126 @@ const Donate = () => {
         } catch (error) {
           console.error('Error completing donation after payment:', error);
           toast.error('There was a problem finalizing your donation. Please contact support.');
+        } finally {
+          setIsProcessing(false);
         }
       };
       
       createOrCompleteDonation();
     }
   }, [location.search]);
+
+  // Return the eSewa payment form if we're in eSewa payment mode
+  if (showEsewaPayment && esewaFormData) {
+    return <EsewaPayment formData={esewaFormData} />;
+  }
+
+  // Card payment form
+  if (showCardForm && selectedCharity) {
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 pt-24">
+        <div className="max-w-md mx-auto bg-gray-100 dark:bg-gray-800 rounded-lg shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center">
+              <button
+                onClick={() => setShowCardForm(false)}
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mr-2"
+              >
+                <ArrowLeftIconComponent className="h-5 w-5" />
+              </button>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Card Payment</h2>
+            </div>
+          </div>
+          
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              {selectedCharity.name}
+            </h3>
+            <p className="text-md font-medium text-gray-800 dark:text-gray-200">
+              Donation Amount: NPR {(selectedAmount || parseInt(customAmount)).toLocaleString()}
+            </p>
+          </div>
+          
+          <form onSubmit={handleCardSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Card Number
+              </label>
+              <input
+                type="text"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                placeholder="1234 5678 9012 3456"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring focus:ring-blue-300 dark:focus:ring-blue-700 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                maxLength={16}
+                required
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Expiry Date
+                </label>
+                <input
+                  type="text"
+                  value={cardExpiry}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setCardExpiry(value);
+                  }}
+                  placeholder="MM/YY"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring focus:ring-blue-300 dark:focus:ring-blue-700 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  maxLength={5}
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  CVV
+                </label>
+                <input
+                  type="text"
+                  value={cardCvv}
+                  onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                  placeholder="123"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring focus:ring-blue-300 dark:focus:ring-blue-700 focus:outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  maxLength={3}
+                  required
+                />
+              </div>
+            </div>
+            
+            <button
+              type="submit"
+              disabled={isProcessing}
+              className={`w-full py-3 px-4 rounded-lg font-semibold ${
+                isProcessing
+                  ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-500'
+              }`}
+            >
+              {isProcessing ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span className="ml-2">Processing...</span>
+                </div>
+              ) : (
+                'Complete Payment'
+              )}
+            </button>
+            
+            <div className="text-center mt-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                This is a demo payment. No actual charges will be made.
+              </p>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 pt-24">
