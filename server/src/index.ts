@@ -107,6 +107,7 @@ const registerHandler = async (req: Request, res: Response) => {
       lastName,
       email,
       password: hashedPassword,
+      role: 'user',
       isAdmin: false,
       isDoctor: false
     });
@@ -120,6 +121,7 @@ const registerHandler = async (req: Request, res: Response) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        role: user.role,
         isAdmin: user.isAdmin,
         isDoctor: user.isDoctor
       },
@@ -134,6 +136,7 @@ const registerHandler = async (req: Request, res: Response) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        role: user.role,
         isAdmin: user.isAdmin,
         isDoctor: user.isDoctor
       }
@@ -169,6 +172,7 @@ const loginHandler = async (req: Request, res: Response) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        role: user.role,
         isAdmin: user.isAdmin,
         isDoctor: user.isDoctor,
         phone: user.phone
@@ -184,6 +188,7 @@ const loginHandler = async (req: Request, res: Response) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        role: user.role,
         isAdmin: user.isAdmin,
         isDoctor: user.isDoctor,
         phone: user.phone
@@ -241,6 +246,7 @@ const adminLoginHandler = async (req: Request, res: Response) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        role: 'admin',
         isAdmin: true,
         isDoctor: user.isDoctor
       },
@@ -256,6 +262,7 @@ const adminLoginHandler = async (req: Request, res: Response) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
+        role: 'admin',
         isAdmin: true,
         isDoctor: user.isDoctor
       }
@@ -294,7 +301,7 @@ const updateProfileHandler = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Not authorized' });
     }
     
-    const { firstName, lastName, email, phone, address, avatar } = req.body;
+    const { name, email, phone, address, avatar } = req.body;
     
     const user = await User.findById(req.user._id);
     if (!user) {
@@ -302,8 +309,17 @@ const updateProfileHandler = async (req: AuthRequest, res: Response) => {
     }
     
     // Update fields
-    if (firstName) user.firstName = firstName;
-    if (lastName) user.lastName = lastName;
+    if (name) {
+      // Split the name into firstName and lastName
+      const nameParts = name.split(' ');
+      if (nameParts.length > 1) {
+        user.firstName = nameParts[0];
+        user.lastName = nameParts.slice(1).join(' ');
+      } else {
+        user.firstName = name;
+        user.lastName = '';
+      }
+    }
     if (email) user.email = email;
     if (phone) user.phone = phone;
     if (address) user.address = address;

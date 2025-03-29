@@ -3,8 +3,14 @@ import axios from 'axios';
 
 interface User {
   _id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
+  role: string;
+  avatar?: {
+    public_id?: string;
+    url?: string;
+  };
 }
 
 interface AuthContextType {

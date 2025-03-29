@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
-import { useChat } from '../context/ChatContext';  // New context
 import ProfileDropdown from './ProfileDropdown';
 import CartSlideOver from './CartSlideOver';
 import { useState, useEffect } from 'react';
@@ -14,7 +13,6 @@ import {
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import type { ComponentType, SVGProps } from 'react';
-import ChatWindow from './chat/ChatWindow';  // New component
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -28,10 +26,8 @@ const Navbar = () => {
   const { user, loading } = useAuth();
   const { cartItems, isCartOpen, openCart, closeCart, updateQuantity, removeFromCart, wishlist } = useCart();
   const { darkMode, toggleDarkMode } = useTheme();
-  const { unreadChats, setUnreadChats, setIsChatOpen, isChatOpen } = useChat();  // Use setUnreadChats
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [selectedChatId, setSelectedChatId] = useState<string | undefined>(undefined);
 
   const cartItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const wishlistCount = wishlist.length;
@@ -52,29 +48,6 @@ const Navbar = () => {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
-
-  const toggleChatWindow = () => {
-    if (isChatOpen) {
-      // Reset selected chat ID when closing
-      setSelectedChatId(undefined);
-    } else {
-      // Reset unread count when opening chat window
-      setUnreadChats(0);
-    }
-    setIsChatOpen(!isChatOpen);
-  };
-
-  const openChatWithId = (chatId: string) => {
-    console.log('Opening chat with ID in Navbar:', chatId);
-    // First make sure we reset any previous selection
-    setSelectedChatId(undefined);
-    
-    // Use setTimeout to ensure state updates properly
-    setTimeout(() => {
-      setSelectedChatId(chatId);
-      setIsChatOpen(true);
-    }, 10);
-  };
 
   return (
     <header className="fixed top-2 left-0 right-0 z-50">
@@ -148,20 +121,6 @@ const Navbar = () => {
                       {cartItemsCount > 0 && (
                         <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-sm rounded-full h-5 w-5 flex items-center justify-center">
                           {cartItemsCount}
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      onClick={toggleChatWindow}
-                      className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
-                      aria-label="Chat"
-                    >
-                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                      {unreadChats > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-sm rounded-full h-5 w-5 flex items-center justify-center">
-                          {unreadChats}
                         </span>
                       )}
                     </button>
@@ -250,74 +209,18 @@ const Navbar = () => {
                 </Link>
               </div>
             )}
-            {user && (
-              <div className="flex justify-between items-center px-4 py-2 border-t border-white/20 dark:border-gray-700/20 mt-2">
-                <Link
-                  to="/wishlist"
-                  className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
-                >
-                  {wishlistCount > 0 ? (
-                    <HeartSolidIcon className="h-6 w-6 text-red-500" />
-                  ) : (
-                    <HeartIcon className="h-6 w-6" />
-                  )}
-                  {wishlistCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {wishlistCount}
-                    </span>
-                  )}
-                </Link>
-                <button
-                  onClick={openCart}
-                  className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
-                >
-                  <ShoppingCartIcon className="h-6 w-6" />
-                  {cartItemsCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {cartItemsCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={toggleChatWindow}
-                  className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
-                >
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                  {unreadChats > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {unreadChats}
-                    </span>
-                  )}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {/* Cart Slide Over */}
       <CartSlideOver 
-        isOpen={isCartOpen} 
-        setIsOpen={closeCart} 
-        cartItems={cartItems} 
-        updateQuantity={updateQuantity} 
+        isOpen={isCartOpen}
+        setIsOpen={closeCart}
+        cartItems={cartItems}
+        updateQuantity={updateQuantity}
         removeItem={removeFromCart}
       />
-      
-      {/* Chat Window */}
-      {isChatOpen && (
-        <div className="fixed right-0 top-16 z-50 mr-4">
-          <div className="relative w-96 h-[500px] rounded-lg overflow-hidden shadow-2xl border border-gray-700">
-            <ChatWindow 
-              key={`chat-window-${selectedChatId || 'default'}`}
-              onClose={() => setIsChatOpen(false)} 
-              selectedChatId={selectedChatId}
-            />
-          </div>
-        </div>
-      )}
     </header>
   );
 };

@@ -10,6 +10,7 @@ export interface UserPayload {
   firstName: string;
   lastName: string;
   phone?: string;
+  role: string;
   isAdmin: boolean;
   isDoctor: boolean;
 }
@@ -75,6 +76,7 @@ export const verifyToken = async (
         console.log(`[Auth Debug] User object set on request: ${JSON.stringify({
           _id: req.user._id.toString(),
           email: req.user.email,
+          role: req.user.role,
           isAdmin: req.user.isAdmin, 
           isDoctor: req.user.isDoctor
         })}`);
@@ -124,6 +126,7 @@ export const adminAuth = async (
       console.log('Token decoded:', { 
         userId: decoded._id, 
         email: decoded.email,
+        role: decoded.role,
         isAdmin: decoded.isAdmin 
       });
       (req as AuthRequest).user = decoded;
@@ -134,10 +137,11 @@ export const adminAuth = async (
         return res.status(401).json({ message: 'Authorization denied' });
       }
       
-      // Allow access if isAdmin flag is true
-      if (!authReq.user.isAdmin) {
+      // Allow access if isAdmin flag is true or role is 'admin'
+      if (!authReq.user.isAdmin && authReq.user.role !== 'admin') {
         console.log('Admin auth failed: User is not admin', { 
-          isAdmin: authReq.user.isAdmin
+          isAdmin: authReq.user.isAdmin,
+          role: authReq.user.role
         });
         return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
       }
@@ -178,8 +182,8 @@ export const doctorAuth = async (
       console.log('Token decoded for doctor auth:', { 
         userId: decoded._id, 
         email: decoded.email,
-        isDoctor: decoded.isDoctor,
-        role: (decoded as any).role // Check if role field exists
+        role: decoded.role,
+        isDoctor: decoded.isDoctor
       });
       
       // Add the decoded user to the request
@@ -192,10 +196,10 @@ export const doctorAuth = async (
       }
       
       // Check for doctor privileges - either isDoctor flag or role field
-      if (!authReq.user.isDoctor && (decoded as any).role !== 'doctor') {
+      if (!authReq.user.isDoctor && authReq.user.role !== 'doctor') {
         console.log('Doctor auth failed: User is not a doctor', { 
           isDoctor: authReq.user.isDoctor,
-          role: (decoded as any).role 
+          role: authReq.user.role
         });
         return res.status(403).json({ message: 'Access denied. Doctor privileges required.' });
       }
@@ -230,7 +234,7 @@ export const doctorAuth = async (
 };
 
 export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  if (!req.user || !req.user.isAdmin) {
+  if (!req.user || (!req.user.isAdmin && req.user.role !== 'admin')) {
     res.status(403).json({ message: 'Access denied' });
     return;
   }
@@ -238,7 +242,7 @@ export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction): vo
 };
 
 export const isDoctor = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  if (!req.user || !req.user.isDoctor) {
+  if (!req.user || (!req.user.isDoctor && req.user.role !== 'doctor')) {
     res.status(403).json({ message: 'Access denied' });
     return;
   }

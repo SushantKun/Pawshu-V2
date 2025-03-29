@@ -26,6 +26,20 @@ const ProfileDropdown = () => {
 
   if (!user) return null;
 
+  // Get the first letter of the user's first name or use a fallback
+  const userInitial = user.firstName ? user.firstName.charAt(0) : 
+                     (user.email ? user.email.charAt(0) : 'U');
+
+  // Get display name
+  const displayName = user.firstName ? 
+                     (user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName) : 
+                     user.email;
+
+  // Format role for display (capitalize first letter)
+  const roleDisplay = user.role ? 
+                     user.role.charAt(0).toUpperCase() + user.role.slice(1) : 
+                     'User';
+
   return (
     <div className="relative z-50" ref={dropdownRef}>
       <button
@@ -36,12 +50,12 @@ const ProfileDropdown = () => {
           {user.avatar?.url ? (
             <img
               src={user.avatar.url}
-              alt={user.name}
+              alt={displayName}
               className="w-full h-full object-cover"
             />
           ) : (
             <div className="w-full h-full bg-blue-500 flex items-center justify-center text-white">
-              {user.name.charAt(0).toUpperCase()}
+              {userInitial.toUpperCase()}
             </div>
           )}
         </div>
@@ -50,8 +64,11 @@ const ProfileDropdown = () => {
       {isOpen && (
         <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50">
           <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200 border-b dark:border-gray-700">
-            <div className="font-medium">{user.name}</div>
+            <div className="font-medium">{displayName}</div>
             <div className="text-gray-500 dark:text-gray-400">{user.email}</div>
+            <div className="text-xs mt-1 inline-block bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100 rounded px-2 py-0.5">
+              {roleDisplay}
+            </div>
           </div>
           
           <button

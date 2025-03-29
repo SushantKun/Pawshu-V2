@@ -50,7 +50,9 @@ interface Order {
 
 interface UserProfile {
   _id: string;
-  name: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone: string;
   address: string;
@@ -87,6 +89,21 @@ const Profile = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'success' | 'error' | ''>('');
   const [showNotification, setShowNotification] = useState(false);
+
+  // Helper function to get display name regardless of how it's stored
+  const getDisplayName = (profile: UserProfile | null): string => {
+    if (!profile) return '';
+    
+    if (profile.name) {
+      return profile.name;
+    } else if (profile.firstName && profile.lastName) {
+      return `${profile.firstName} ${profile.lastName}`;
+    } else if (profile.firstName) {
+      return profile.firstName;
+    } else {
+      return profile.email;
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -363,7 +380,7 @@ const Profile = () => {
               <div className="relative">
                 <img
                   src={imagePreview || profile?.avatar?.url || 'https://placehold.co/150x150'}
-                  alt={profile?.name}
+                  alt={getDisplayName(profile)}
                   className="w-32 h-32 rounded-full object-cover border-4 border-white dark:border-gray-700 shadow-sm"
                 />
                 <button 
@@ -433,7 +450,7 @@ const Profile = () => {
               </div>
 
               <div className="flex-1">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{profile?.name}</h1>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">{getDisplayName(profile)}</h1>
                 <p className="text-gray-500 dark:text-gray-400 mb-4">{profile?.email}</p>
 
                 <div className="space-y-4">
@@ -533,7 +550,7 @@ const Profile = () => {
                           type="text"
                           name="name"
                           id="name"
-                          value={editedProfile?.name || ''}
+                          value={editedProfile?.name || getDisplayName(editedProfile)}
                           onChange={handleInputChange}
                           className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
                         />
@@ -647,7 +664,7 @@ const Profile = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Name</h3>
-                        <p className="mt-1 text-gray-900 dark:text-white">{profile?.name}</p>
+                        <p className="mt-1 text-gray-900 dark:text-white">{getDisplayName(profile)}</p>
                       </div>
                       <div>
                         <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</h3>

@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
-import { ChatProvider } from './context/ChatContext';
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -35,9 +34,7 @@ import DoctorProfile from './components/doctor/DoctorProfile';
 import DoctorAppointments from './components/doctor/DoctorAppointments';
 import DoctorSidebar from './components/doctor/DoctorSidebar';
 import Doctors from './pages/Doctors';
-import Chat from './pages/Chat';
 import AdminSidebar from './components/admin/AdminSidebar';
-import ChatWindow from './components/chat/ChatWindow';
 import RetryPayment from './pages/RetryPayment';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -225,147 +222,204 @@ function App() {
     <AuthProvider>
       <ThemeProvider>
         <CartProvider>
-          <ChatProvider>
-            <Router>
-              <Routes>
-                {/* Admin Routes */}
-                <Route path="/admin/login" element={
-                  <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-                    <AdminLogin />
-                  </div>
-                } />
-                
-                {/* Protected Admin Routes */}
-                <Route path="/admin" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <AdminDashboard />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
-                <Route path="/admin/dashboard" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <AdminDashboard />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
-                <Route path="/admin/products" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <ProductManagement />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
-                <Route path="/admin/statistics" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <AdminStats />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
-                <Route path="/admin/users" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <AdminUsers />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
-                <Route path="/admin/doctors" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <AdminDoctors />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
-                <Route path="/admin/orders" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <AdminOrders />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
-                <Route path="/admin/settings" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <AdminSettings />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
-                <Route path="/admin/charities" element={
-                  <ProtectedAdminRoute>
-                    <AdminLayout>
-                      <CharityManagement />
-                    </AdminLayout>
-                  </ProtectedAdminRoute>
-                } />
+          <Router>
+            <Routes>
+              {/* Admin Routes */}
+              <Route path="/admin/login" element={
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                  <AdminLogin />
+                </div>
+              } />
+              
+              {/* Protected Admin Routes */}
+              <Route path="/admin" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminDashboard />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/dashboard" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminDashboard />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/products" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <ProductManagement />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/orders" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminOrders />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/users" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminUsers />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/doctors" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminDoctors />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/charities" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <CharityManagement />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/stats" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminStats />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
+              <Route path="/admin/settings" element={
+                <ProtectedAdminRoute>
+                  <AdminLayout>
+                    <AdminSettings />
+                  </AdminLayout>
+                </ProtectedAdminRoute>
+              } />
 
-                {/* Doctor Routes */}
-                <Route path="/doctor/login" element={
-                  <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-                    <DoctorLogin />
-                  </div>
-                } />
-                <Route path="/doctor" element={
-                  <ProtectedDoctorRoute>
-                    <DoctorLayout>
-                      <DoctorDashboard />
-                    </DoctorLayout>
-                  </ProtectedDoctorRoute>
-                } />
-                <Route path="/doctor/dashboard" element={
-                  <ProtectedDoctorRoute>
-                    <DoctorLayout>
-                      <DoctorDashboard />
-                    </DoctorLayout>
-                  </ProtectedDoctorRoute>
-                } />
-                <Route path="/doctor/appointments" element={
-                  <ProtectedDoctorRoute>
-                    <DoctorLayout>
-                      <DoctorAppointments />
-                    </DoctorLayout>
-                  </ProtectedDoctorRoute>
-                } />
-                <Route path="/doctor/profile" element={
-                  <ProtectedDoctorRoute>
-                    <DoctorLayout>
-                      <DoctorProfile />
-                    </DoctorLayout>
-                  </ProtectedDoctorRoute>
-                } />
-                
-                {/* User Routes */}
-                <Route path="/" element={<UserLayout><Home /></UserLayout>} />
-                <Route path="/login" element={<UserLayout><Login /></UserLayout>} />
-                <Route path="/register" element={<UserLayout><Register /></UserLayout>} />
-                <Route path="/profile" element={<UserLayout><Profile /></UserLayout>} />
-                <Route path="/products" element={<UserLayout><Products /></UserLayout>} />
-                <Route path="/cart" element={<UserLayout><Cart /></UserLayout>} />
-                <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-                <Route path="/checkout/success" element={<ProtectedRoute><CheckoutSuccess /></ProtectedRoute>} />
-                <Route path="/checkout/retry-payment/:id" element={<ProtectedRoute><RetryPayment /></ProtectedRoute>} />
-                <Route path="/checkout/failure" element={<Navigate to="/checkout" />} />
-                <Route path="/booking" element={<UserLayout><Booking /></UserLayout>} />
-                <Route path="/lost-found" element={<UserLayout><LostFound /></UserLayout>} />
-                <Route path="/donate" element={<UserLayout><Donate /></UserLayout>} />
-                <Route path="/doctors" element={<UserLayout><Doctors /></UserLayout>} />
-                <Route path="/wishlist" element={<UserLayout><Wishlist /></UserLayout>} />
-                <Route path="/chat" element={
-                  <ProtectedRoute>
-                    <ChatWindow />
-                  </ProtectedRoute>
-                } />
-                <Route path="/chat/:chatId" element={
-                  <ProtectedRoute>
-                    <ChatWindow />
-                  </ProtectedRoute>
-                } />
-                <Route path="/order/:id" element={<UserLayout><OrderDetail /></UserLayout>} />
-                <Route path="/esewa-success" element={<EsewaRedirect />} />
-              </Routes>
-            </Router>
-          </ChatProvider>
+              {/* Doctor Routes */}
+              <Route path="/doctor/login" element={
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                  <DoctorLogin />
+                </div>
+              } />
+              
+              {/* Protected Doctor Routes */}
+              <Route path="/doctor" element={
+                <ProtectedDoctorRoute>
+                  <DoctorLayout>
+                    <DoctorDashboard />
+                  </DoctorLayout>
+                </ProtectedDoctorRoute>
+              } />
+              <Route path="/doctor/dashboard" element={
+                <ProtectedDoctorRoute>
+                  <DoctorLayout>
+                    <DoctorDashboard />
+                  </DoctorLayout>
+                </ProtectedDoctorRoute>
+              } />
+              <Route path="/doctor/profile" element={
+                <ProtectedDoctorRoute>
+                  <DoctorLayout>
+                    <DoctorProfile />
+                  </DoctorLayout>
+                </ProtectedDoctorRoute>
+              } />
+              <Route path="/doctor/appointments" element={
+                <ProtectedDoctorRoute>
+                  <DoctorLayout>
+                    <DoctorAppointments />
+                  </DoctorLayout>
+                </ProtectedDoctorRoute>
+              } />
+
+              {/* User Routes */}
+              <Route path="/" element={
+                <UserLayout>
+                  <Home />
+                </UserLayout>
+              } />
+              <Route path="/products" element={
+                <UserLayout>
+                  <Products />
+                </UserLayout>
+              } />
+              <Route path="/booking" element={
+                <UserLayout>
+                  <Booking />
+                </UserLayout>
+              } />
+              <Route path="/doctors" element={
+                <UserLayout>
+                  <Doctors />
+                </UserLayout>
+              } />
+              <Route path="/lost-found" element={
+                <UserLayout>
+                  <LostFound />
+                </UserLayout>
+              } />
+              <Route path="/donate" element={
+                <UserLayout>
+                  <Donate />
+                </UserLayout>
+              } />
+              <Route path="/login" element={
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                  <Login />
+                </div>
+              } />
+              <Route path="/register" element={
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                  <Register />
+                </div>
+              } />
+              <Route path="/cart" element={
+                <ProtectedRoute>
+                  <UserLayout>
+                    <Cart />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/wishlist" element={
+                <ProtectedRoute>
+                  <UserLayout>
+                    <Wishlist />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <UserLayout>
+                    <Profile />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/checkout" element={
+                <ProtectedRoute>
+                  <UserLayout showFooter={false}>
+                    <Checkout />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/checkout/success" element={
+                <ProtectedRoute>
+                  <UserLayout>
+                    <CheckoutSuccess />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/retry-payment/:orderId" element={
+                <ProtectedRoute>
+                  <UserLayout showFooter={false}>
+                    <RetryPayment />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/esewa-success" element={<EsewaRedirect />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Router>
         </CartProvider>
       </ThemeProvider>
     </AuthProvider>

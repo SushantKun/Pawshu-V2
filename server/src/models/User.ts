@@ -12,6 +12,7 @@ export interface IUser extends Document {
     public_id?: string;
     url?: string;
   };
+  role: string;
   isAdmin: boolean;
   isDoctor: boolean;
   verified: boolean;
@@ -19,6 +20,7 @@ export interface IUser extends Document {
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
+  name: string; // Virtual property
 }
 
 const UserSchema: Schema = new Schema(
@@ -50,6 +52,11 @@ const UserSchema: Schema = new Schema(
       public_id: String,
       url: String
     },
+    role: {
+      type: String,
+      enum: ['user', 'admin', 'doctor'],
+      default: 'user'
+    },
     isAdmin: {
       type: Boolean,
       default: false
@@ -66,8 +73,17 @@ const UserSchema: Schema = new Schema(
     resetPasswordToken: String,
     resetPasswordExpires: Date
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
+
+// Virtual for full name
+UserSchema.virtual('name').get(function(this: IUser) {
+  return `${this.firstName} ${this.lastName}`.trim();
+});
 
 // Pre-save middleware to hash password
 UserSchema.pre<IUser>('save', async function(next) {
@@ -80,6 +96,31 @@ UserSchema.pre<IUser>('save', async function(next) {
   } catch (error: any) {
     next(error);
   }
+});
+
+// Pre-save middleware to synchronize role with isAdmin and isDoctor
+UserSchema.pre<IUser>('save', function(next) {
+  if (this.isModified('role')) {
+    if (this.role === 'admin') {
+      this.isAdmin = true;
+      this.isDoctor = false;
+    } else if (this.role === 'doctor') {
+      this.isAdmin = false;
+      this.isDoctor = true;
+    } else {
+      this.isAdmin = false;
+      this.isDoctor = false;
+    }
+  } else if (this.isModified('isAdmin') || this.isModified('isDoctor')) {
+    if (this.isAdmin) {
+      this.role = 'admin';
+    } else if (this.isDoctor) {
+      this.role = 'doctor';
+    } else {
+      this.role = 'user';
+    }
+  }
+  next();
 });
 
 // Method to compare password
