@@ -49,7 +49,10 @@ const Register = () => {
         throw new Error(data.message || 'Registration failed');
       }
 
-      await login(data.token);
+      // Log the response structure for debugging
+      console.log('Register API response:', data);
+
+      await login(data.token, data.user);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');

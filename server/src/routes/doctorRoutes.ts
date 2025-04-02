@@ -3,11 +3,29 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Doctor, { IDoctor } from '../models/Doctor';
 import Appointment from '../models/Appointment';
-import { verifyToken, doctorAuth, AuthRequest } from '../middleware/auth';
+import { verifyToken, doctorAuth } from '../middleware/auth';
+import { AuthRequest } from '../types/auth';
 import { uploadImage } from '../utils/cloudinary';
 import mongoose from 'mongoose';
 
 const router = express.Router();
+
+// Helper function to validate date format (YYYY-MM-DD)
+const isValidDate = (dateString: string): boolean => {
+  // Check if it's a valid string and matches YYYY-MM-DD format
+  if (typeof dateString !== 'string') return false;
+
+  // Check if matches YYYY-MM-DD format
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateString)) return false;
+
+  // Check if it's a valid date
+  const date = new Date(dateString);
+  const timestamp = date.getTime();
+  if (isNaN(timestamp)) return false;
+
+  return true;
+};
 
 // @route   POST /api/doctors/login
 // @desc    Login doctor
@@ -16,7 +34,7 @@ router.post('/login', (async (req: Request, res: Response) => {
   try {
     console.log('POST /api/doctors/login - Doctor login attempt');
     const { email, password } = req.body;
-    
+
     console.log('Login attempt for email:', email);
 
     // Validate input
@@ -28,7 +46,7 @@ router.post('/login', (async (req: Request, res: Response) => {
     // Find doctor by email
     const doctor = await Doctor.findOne({ email }).select('+password');
     console.log('Doctor found:', doctor ? `ID: ${doctor._id}, Email: ${doctor.email}` : 'No doctor found');
-    
+
     if (!doctor) {
       console.log('No doctor found with email:', email);
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -38,7 +56,7 @@ router.post('/login', (async (req: Request, res: Response) => {
     try {
       const isMatch = await doctor.comparePassword(password);
       console.log('Password match:', isMatch);
-      
+
       if (!isMatch) {
         console.log('Invalid password for doctor:', email);
         return res.status(401).json({ message: 'Invalid credentials' });
@@ -50,7 +68,7 @@ router.post('/login', (async (req: Request, res: Response) => {
 
     // Create token
     const token = jwt.sign(
-      { 
+      {
         _id: doctor._id,
         name: `${doctor.firstName} ${doctor.lastName}`,
         email: doctor.email,
@@ -77,8 +95,8 @@ router.post('/login', (async (req: Request, res: Response) => {
     res.json({ token, doctor: doctorInfo });
   } catch (error) {
     console.error('Doctor login error:', error);
-    res.status(500).json({ 
-      message: 'Server error', 
+    res.status(500).json({
+      message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -192,7 +210,7 @@ router.get('/appointments', verifyToken as RequestHandler, doctorAuth as Request
     const appointments = await Appointment.find({ doctor: req.user._id })
       .populate('user', 'name email')
       .sort({ date: 1 });
-    
+
     console.log('Found appointments:', appointments.length);
     res.json(appointments);
   } catch (error) {
@@ -212,12 +230,20 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
       return res.status(400).json({ message: 'Doctor ID and date are required' });
     }
 
+    // Validate date format and handle potential [object Object]
+    if (date === '[object Object]' || !isValidDate(date)) {
+      return res.status(400).json({
+        message: 'Invalid date format. Please provide a valid date (YYYY-MM-DD)',
+        receivedDate: date
+      });
+    }
+
     // Find doctor to get their availability
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
-    
+
     // Check if doctor is active
     if (!doctor.isActive) {
       return res.status(400).json({ message: 'This doctor is currently not available for booking' });
@@ -225,10 +251,10 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
 
     // Get day of week from date
     const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'long' });
-    
+
     // Calculate available slots based on the new availability format
     let availableSlots: string[] = [];
-    
+
     // Filter availability for the current day
     const daySlots = doctor.availability
       .filter(slot => slot.startsWith(dayOfWeek))
@@ -242,15 +268,15 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
         return null;
       })
       .filter(slot => slot !== null);
-    
+
     // Generate hourly time slots from the availability ranges
     daySlots.forEach(slot => {
       if (slot) {
         for (let hour = slot.startHour; hour < slot.endHour; hour++) {
-          const formattedHour = hour < 12 
-            ? `${hour}:00 AM` 
-            : hour === 12 
-              ? `12:00 PM` 
+          const formattedHour = hour < 12
+            ? `${hour}:00 AM`
+            : hour === 12
+              ? `12:00 PM`
               : `${hour - 12}:00 PM`;
           availableSlots.push(formattedHour);
         }
@@ -261,10 +287,10 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
     const targetDate = new Date(date);
     // Set time to midnight for date comparison
     targetDate.setHours(0, 0, 0, 0);
-    
+
     const nextDay = new Date(targetDate);
     nextDay.setDate(nextDay.getDate() + 1);
-    
+
     const bookedAppointments = await Appointment.find({
       doctor: doctorId,
       date: {
@@ -279,7 +305,7 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
     const finalAvailableSlots = availableSlots.filter(slot => !bookedSlots.includes(slot));
 
     // Return available slots and location information
-    res.json({ 
+    res.json({
       availableSlots: finalAvailableSlots,
       locationPreference: doctor.locationPreference,
       appointmentDuration: doctor.appointmentDuration || 30, // Default to 30 minutes if not specified
@@ -297,29 +323,29 @@ router.get('/available-slots/:doctorId/:date', (async (req: Request, res: Respon
 router.get('/dashboard-stats', doctorAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/doctors/dashboard-stats - Fetching doctor dashboard statistics');
-    
+
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
-    
+
     // Check MongoDB connection
     if (mongoose.connection.readyState !== 1) {
       console.error('MongoDB connection is not ready. State:', mongoose.connection.readyState);
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: 'Database connection is not available',
         mongodbUri: process.env.MONGODB_URI ? 'URI defined' : 'URI not defined'
       });
     }
-    
+
     const doctorId = req.user._id;
     console.log(`Fetching stats for doctor: ${doctorId}`);
-    
+
     // Get doctor details
     const doctor = await Doctor.findById(doctorId).select('-password');
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
-    
+
     // Get appointment counts by status
     const appointmentCounts = await Appointment.aggregate([
       {
@@ -332,13 +358,13 @@ router.get('/dashboard-stats', doctorAuth as RequestHandler, (async (req: AuthRe
         }
       }
     ]);
-    
+
     // Helper function to get count by status
     function getCountByStatus(counts: any[], status: string): number {
       const statusItem = counts.find(item => item._id === status);
       return statusItem ? statusItem.count : 0;
     }
-    
+
     // Calculate appointment statistics
     const appointmentStats = {
       total: await Appointment.countDocuments({ doctor: doctorId }),
@@ -347,35 +373,35 @@ router.get('/dashboard-stats', doctorAuth as RequestHandler, (async (req: AuthRe
       completed: getCountByStatus(appointmentCounts, 'completed'),
       cancelled: getCountByStatus(appointmentCounts, 'cancelled')
     };
-    
+
     // Get recent appointments
     const recentAppointments = await Appointment.find({ doctor: doctorId })
       .populate('user', 'name email')
       .sort({ date: -1 }) // Sort by date descending to get most recent first
       .limit(5);
-    
+
     // Ensure all user references are valid
     const safeRecentAppointments = recentAppointments.map(appt => {
       // Create a safe version of the appointment
       const appointment = appt.toObject();
-      
+
       // Ensure user object exists
       if (!appointment.user) {
         // Use type assertion to specify the user shape
-        appointment.user = { 
+        appointment.user = {
           _id: new mongoose.Types.ObjectId(),
-          name: 'Unknown Patient', 
-          email: 'No email' 
+          name: 'Unknown Patient',
+          email: 'No email'
         } as any; // Use type assertion to bypass TypeScript checking
       }
-      
+
       return appointment;
     });
-    
+
     // Get monthly appointment trends (last 6 months)
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-    
+
     const appointmentTrends = await Appointment.aggregate([
       {
         $match: {
@@ -395,29 +421,29 @@ router.get('/dashboard-stats', doctorAuth as RequestHandler, (async (req: AuthRe
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } }
     ]);
-    
+
     // Get appointment completion rate data
     const completionRateData = await Appointment.aggregate([
       {
-        $match: { 
+        $match: {
           doctor: new mongoose.Types.ObjectId(doctorId),
           status: { $in: ['completed', 'cancelled'] }
         }
       },
       {
         $group: {
-          _id: { 
+          _id: {
             year: { $year: '$createdAt' },
             month: { $month: '$createdAt' }
           },
           completed: {
-            $sum: { 
-              $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] 
+            $sum: {
+              $cond: [{ $eq: ['$status', 'completed'] }, 1, 0]
             }
           },
           cancelled: {
-            $sum: { 
-              $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] 
+            $sum: {
+              $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0]
             }
           },
           total: { $sum: 1 }
@@ -439,7 +465,7 @@ router.get('/dashboard-stats', doctorAuth as RequestHandler, (async (req: AuthRe
       },
       { $sort: { '_id.year': 1, '_id.month': 1 } }
     ]);
-    
+
     // Format the data for response
     const dashboardData = {
       doctorInfo: {
@@ -456,19 +482,19 @@ router.get('/dashboard-stats', doctorAuth as RequestHandler, (async (req: AuthRe
       appointmentTrends,
       completionRateData,
       performanceMetrics: {
-        completionRate: appointmentStats.total > 0 
-          ? (appointmentStats.completed / appointmentStats.total * 100).toFixed(1) 
+        completionRate: appointmentStats.total > 0
+          ? (appointmentStats.completed / appointmentStats.total * 100).toFixed(1)
           : 0,
         cancellationRate: appointmentStats.total > 0
           ? (appointmentStats.cancelled / appointmentStats.total * 100).toFixed(1)
           : 0
       }
     };
-    
+
     res.json(dashboardData);
   } catch (error) {
     console.error('Error fetching doctor dashboard stats:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -479,13 +505,13 @@ router.get('/dashboard-stats', doctorAuth as RequestHandler, (async (req: AuthRe
 router.get('/:id', (async (req: Request, res: Response) => {
   try {
     console.log(`GET /api/doctors/${req.params.id} - Fetching doctor by ID`);
-    
+
     // Check if the parameter could be a valid MongoDB ObjectId
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       console.error(`Invalid doctor ID format: ${req.params.id}`);
       return res.status(400).json({ message: 'Invalid doctor ID format' });
     }
-    
+
     const doctor = await Doctor.findById(req.params.id).select('-password');
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
@@ -503,7 +529,7 @@ router.get('/:id', (async (req: Request, res: Response) => {
 router.put('/active-status', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('PUT /api/doctors/active-status - Updating active status');
-    
+
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
@@ -516,18 +542,18 @@ router.put('/active-status', verifyToken, doctorAuth, (async (req: AuthRequest, 
     // Toggle active status if not provided, or set to the provided value
     const { isActive } = req.body;
     doctor.isActive = isActive !== undefined ? isActive : !doctor.isActive;
-    
+
     await doctor.save();
-    
+
     console.log(`Doctor ${req.user._id} active status updated to: ${doctor.isActive}`);
-    
+
     res.json({
       message: `Active status ${doctor.isActive ? 'enabled' : 'disabled'} successfully`,
       isActive: doctor.isActive
     });
   } catch (error) {
     console.error('Error updating doctor active status:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -540,31 +566,31 @@ router.put('/active-status', verifyToken, doctorAuth, (async (req: AuthRequest, 
 router.get('/default-time-slots', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/doctors/default-time-slots - Getting default time slots');
-    
+
     // Create default time slots for each day of the week
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     const defaultTimeSlots: string[] = [];
-    
+
     // Add standard business hours by default
     const timeRanges = [
       { start: 9, end: 12 },   // Morning
       { start: 13, end: 17 }   // Afternoon
     ];
-    
+
     days.forEach(day => {
       timeRanges.forEach(range => {
         defaultTimeSlots.push(`${day} ${range.start}-${range.end}`);
       });
     });
-    
+
     res.json({
       message: 'Default time slots retrieved successfully',
       defaultTimeSlots
     });
   } catch (error) {
     console.error('Error getting default time slots:', error);
-    res.status(500).json({ 
-      message: 'Server error', 
+    res.status(500).json({
+      message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }

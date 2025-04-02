@@ -20,14 +20,22 @@ const MoonIconComponent = MoonIcon as IconComponent;
 // Import User interface from AuthContext
 interface User {
   _id: string;
-  name: string;
   email: string;
   role: string;
   createdAt: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 interface UserWithAvatar extends User {
-  avatar?: string;
+  avatar?: {
+    public_id?: string;
+    url?: string;
+    firstName?: string;
+    lastName?: string;
+    status?: string;
+  };
 }
 
 const Navbar = () => {
@@ -41,6 +49,12 @@ const Navbar = () => {
 
   const cartItemsCount = cartItems.reduce((total, item) => total + item.quantity, 0);
   const typedUser = user as UserWithAvatar | null;
+  
+  // Add debug logging
+  useEffect(() => {
+    console.log('Navbar user data:', user);
+    console.log('Navbar avatar data:', typedUser?.avatar);
+  }, [user, typedUser]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -189,7 +203,7 @@ const Navbar = () => {
                 >
                   {typedUser?.avatar ? (
                     <img 
-                      src={typedUser.avatar} 
+                      src={typedUser.avatar.url} 
                       alt="User avatar" 
                       className="h-5 w-5 rounded-full object-cover"
                     />
@@ -202,7 +216,14 @@ const Navbar = () => {
                 {dropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 py-2 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 animate-fadeIn">
                     <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                      <p className="text-sm font-semibold text-gray-800 dark:text-white">{user.name}</p>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-white">
+                        {typedUser?.name || 
+                         (typedUser?.firstName && typedUser?.lastName 
+                           ? `${typedUser.firstName} ${typedUser.lastName}` 
+                           : (typedUser?.avatar?.firstName && typedUser?.avatar?.lastName 
+                               ? `${typedUser.avatar.firstName} ${typedUser.avatar.lastName}` 
+                               : user.email))}
+                      </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
                     </div>
                     <Link 

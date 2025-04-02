@@ -210,7 +210,7 @@ const OrderDetail: React.FC = () => {
               <span className="font-bold text-gray-900 dark:text-white">NPR {order.totalAmount.toFixed(2)}</span>
             </div>
             <div className="pt-2 text-xs text-gray-500 dark:text-gray-400">
-              Payment ID: {order._id}
+              Payment ID: {order._id.length > 12 ? `${order._id.substring(0, 12)}...` : order._id}
             </div>
           </div>
         </div>

@@ -2,37 +2,38 @@ import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser extends Document {
-  firstName: string;
-  lastName: string;
   email: string;
   password: string;
-  phone?: string;
-  address?: string;
+  role: string;
+  createdAt: Date;
+  __v: number;
   avatar?: {
     public_id?: string;
     url?: string;
+    status?: string;
+    address?: string;
+    phone?: string;
+    firstName?: string;
+    lastName?: string;
+    isAdmin?: boolean;
+    isDoctor?: boolean;
+    verified?: boolean;
   };
-  role: string;
-  isAdmin: boolean;
-  isDoctor: boolean;
-  verified: boolean;
-  verificationToken?: string;
-  resetPasswordToken?: string;
-  resetPasswordExpires?: Date;
+  // Top-level properties (same as in avatar)
+  status?: string;
+  address?: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  isAdmin?: boolean;
+  isDoctor?: boolean;
+  verified?: boolean;
   comparePassword(candidatePassword: string): Promise<boolean>;
   name: string; // Virtual property
 }
 
 const UserSchema: Schema = new Schema(
   {
-    firstName: {
-      type: String,
-      required: true
-    },
-    lastName: {
-      type: String,
-      required: true
-    },
     email: {
       type: String,
       required: true,
@@ -42,21 +43,61 @@ const UserSchema: Schema = new Schema(
       type: String,
       required: true
     },
-    phone: {
-      type: String
-    },
-    address: {
-      type: String
-    },
-    avatar: {
-      public_id: String,
-      url: String
-    },
     role: {
       type: String,
       enum: ['user', 'admin', 'doctor'],
       default: 'user'
     },
+    __v: {
+      type: Number,
+      default: 0
+    },
+    // Nested avatar object
+    avatar: {
+      public_id: String,
+      url: String,
+      status: {
+        type: String,
+        default: 'active'
+      },
+      address: {
+        type: String,
+        default: ''
+      },
+      phone: {
+        type: String,
+        default: ''
+      },
+      firstName: String,
+      lastName: String,
+      isAdmin: {
+        type: Boolean,
+        default: false
+      },
+      isDoctor: {
+        type: Boolean,
+        default: false
+      },
+      verified: {
+        type: Boolean,
+        default: false
+      }
+    },
+    // Top-level properties (same as in avatar)
+    status: {
+      type: String,
+      default: 'active'
+    },
+    address: {
+      type: String,
+      default: ''
+    },
+    phone: {
+      type: String,
+      default: ''
+    },
+    firstName: String,
+    lastName: String,
     isAdmin: {
       type: Boolean,
       default: false
@@ -68,21 +109,22 @@ const UserSchema: Schema = new Schema(
     verified: {
       type: Boolean,
       default: false
-    },
-    verificationToken: String,
-    resetPasswordToken: String,
-    resetPasswordExpires: Date
+    }
   },
   { 
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
+    // Skip validation to allow for flexibility
+    strict: false
   }
 );
 
-// Virtual for full name
+// Virtual for full name - use top-level fields if available, fallback to avatar fields
 UserSchema.virtual('name').get(function(this: IUser) {
-  return `${this.firstName} ${this.lastName}`.trim();
+  const firstName = this.firstName || this.avatar?.firstName || '';
+  const lastName = this.lastName || this.avatar?.lastName || '';
+  return `${firstName} ${lastName}`.trim();
 });
 
 // Pre-save middleware to hash password
@@ -96,31 +138,6 @@ UserSchema.pre<IUser>('save', async function(next) {
   } catch (error: any) {
     next(error);
   }
-});
-
-// Pre-save middleware to synchronize role with isAdmin and isDoctor
-UserSchema.pre<IUser>('save', function(next) {
-  if (this.isModified('role')) {
-    if (this.role === 'admin') {
-      this.isAdmin = true;
-      this.isDoctor = false;
-    } else if (this.role === 'doctor') {
-      this.isAdmin = false;
-      this.isDoctor = true;
-    } else {
-      this.isAdmin = false;
-      this.isDoctor = false;
-    }
-  } else if (this.isModified('isAdmin') || this.isModified('isDoctor')) {
-    if (this.isAdmin) {
-      this.role = 'admin';
-    } else if (this.isDoctor) {
-      this.role = 'doctor';
-    } else {
-      this.role = 'user';
-    }
-  }
-  next();
 });
 
 // Method to compare password

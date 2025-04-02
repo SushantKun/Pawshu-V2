@@ -29,6 +29,24 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  // Debug log for user authentication state
+  useEffect(() => {
+    console.log('Auth State:', { 
+      user: user ? { 
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName || user.avatar?.firstName,
+        lastName: user.lastName || user.avatar?.lastName,
+        isAdmin: user.isAdmin || user.avatar?.isAdmin,
+        isDoctor: user.isDoctor || user.avatar?.isDoctor,
+        status: user.status || user.avatar?.status
+      } : null, 
+      loading, 
+      isAuthenticated: !!user 
+    });
+  }, [user, loading]);
+
   const cartItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const wishlistCount = wishlist.length;
 

@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { verifyToken, AuthRequest } from '../middleware/auth';
+import { verifyToken } from '../middleware/auth';
+import { AuthRequest } from '../types/auth';
 import Chat, { IMessage, IChat } from '../models/Chat';
 import User from '../models/User';
 import mongoose, { Document } from 'mongoose';

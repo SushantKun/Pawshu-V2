@@ -34,7 +34,11 @@ const Login = () => {
         throw new Error(data.message || 'Login failed');
       }
 
-      await login(data.token);
+      // Log the response structure for debugging
+      console.log('Login API response:', data);
+
+      // Pass both token and user data to login function
+      await login(data.token, data.user);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');

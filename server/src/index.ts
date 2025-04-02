@@ -8,7 +8,8 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import fileUpload, { UploadedFile, FileArray } from 'express-fileupload';
-import { verifyToken, adminAuth, AuthRequest } from './middleware/auth';
+import { verifyToken, adminAuth } from './middleware/auth';
+import { AuthRequest } from './types/auth';
 import http from 'http';
 import productRoutes from './routes/productRoutes';
 import doctorRoutes from './routes/doctorRoutes';
@@ -23,15 +24,25 @@ import { Charity, initialCharities } from './models/Charity';
 import lostFoundRoutes from './routes/lostFoundRoutes';
 import chatRoutes from './routes/chatRoutes';
 import setupSocketIO from './services/ChatService';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import uploadRoutes from './routes/uploadRoutes';
 
 // Load environment variables
 dotenv.config();
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dlxqvj9jp',
+  api_key: process.env.CLOUDINARY_API_KEY || '941742512285696',
+  api_secret: process.env.CLOUDINARY_API_SECRET || 'cPfxg3Y49IqtyJFao0ZSF5aLC_U'
+});
+
+console.log('Cloudinary configuration:', {
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dlxqvj9jp',
+  api_key: process.env.CLOUDINARY_API_KEY ? 'PRESENT' : 'NOT SET',
+  api_secret: process.env.CLOUDINARY_API_SECRET ? 'PRESENT' : 'NOT SET'
 });
 
 const app = express();
@@ -86,14 +97,21 @@ const createAdminUser = async () => {
       const hashedPassword = await bcrypt.hash('admin123', salt);
       
       const adminUser = new User({
-        firstName: 'Admin',
-        lastName: 'User',
         email: 'admin@pawshu.com',
         password: hashedPassword,
         role: 'admin',
-        isAdmin: true,
-        isDoctor: false,
-        verified: true
+        createdAt: new Date(),
+        _v: 0,
+        avatar: {
+          status: 'active',
+          firstName: 'Admin',
+          lastName: 'User',
+          address: '',
+          phone: '',
+          isAdmin: true,
+          isDoctor: false,
+          verified: true
+        }
       });
       
       await adminUser.save();
@@ -104,18 +122,46 @@ const createAdminUser = async () => {
   }
 };
 
-mongoose.connect(MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
-    initializeCharities();
-    createAdminUser(); // Create admin user if it doesn't exist
-  })
-  .catch((error) => {
-    console.error('MongoDB connection error:', error);
-  });
+// Create test user if it doesn't exist
+const createTestUser = async () => {
+  try {
+    // Check if test user exists
+    const testExists = await User.findOne({ email: 'test@gmail.com' });
+    if (!testExists) {
+      console.log('Creating default test user...');
+      
+      // Create new user with exact structure from the JSON
+      const testUser = new User({
+        _id: new mongoose.Types.ObjectId('67d49fb37ca732eddeca28eb'),
+        email: 'test@gmail.com',
+        password: '$2b$10$Rw4dYYNMAwQvlJ9RgIJ1MelRj3SkK3m9yY1sNXVCY8OoaU5NiNFWC',
+        role: 'user',
+        createdAt: new Date('2025-03-14T21:29:23.155Z'),
+        __v: 0,
+        avatar: {
+          public_id: 'pawshu/users/tmp-2-1742587157014',
+          url: 'https://res.cloudinary.com/duaa2t6lc/image/upload/v1742587183/pawshu/users/tmp-2-1742587157014.gif'
+        },
+        status: 'active',
+        address: 'adf',
+        phone: '1234567890',
+        firstName: 'Test',
+        lastName: 'Subject',
+        isAdmin: false,
+        isDoctor: false,
+        verified: false
+      });
+      
+      // Force the document to be saved as is, bypassing schema validation if needed
+      const result = await mongoose.connection.collection('users').insertOne(testUser);
+      console.log('Default test user created successfully.');
+    }
+  } catch (error) {
+    console.error('Error creating test user:', error);
+  }
+};
 
-// Routes
-// Register
+// Register handler
 const registerHandler = async (req: Request, res: Response) => {
   try {
     console.log('POST /api/auth/register - Registering new user');
@@ -131,45 +177,51 @@ const registerHandler = async (req: Request, res: Response) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create new user
-    const user = new User({
-      firstName,
-      lastName,
+    // Create new user with properties at top level (NOT in avatar object)
+    const userData = {
       email,
       password: hashedPassword,
       role: 'user',
+      createdAt: new Date(),
+      __v: 0,
+      avatar: {
+        public_id: '',
+        url: ''
+      },
+      status: 'active',
+      address: '',
+      phone: '',
+      firstName,
+      lastName,
       isAdmin: false,
-      isDoctor: false
-    });
-
-    await user.save();
+      isDoctor: false,
+      verified: false
+    };
+    
+    // Force the document to be saved as is, bypassing schema validation if needed
+    const result = await mongoose.connection.collection('users').insertOne(userData);
+    
+    // Get the created user
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(500).json({ message: 'Failed to create user' });
+    }
 
     // Create JWT token
     const token = jwt.sign(
       { 
         _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
         email: user.email,
-        role: user.role,
-        isAdmin: user.isAdmin,
-        isDoctor: user.isDoctor
+        role: user.role
       },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
     );
 
+    // Return the complete user object with top-level properties
     res.status(201).json({
       token,
-      user: {
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        isAdmin: user.isAdmin,
-        isDoctor: user.isDoctor
-      }
+      user
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -177,7 +229,7 @@ const registerHandler = async (req: Request, res: Response) => {
   }
 };
 
-// Login
+// Login handler
 const loginHandler = async (req: Request, res: Response) => {
   try {
     console.log('POST /api/auth/login - User login attempt');
@@ -199,30 +251,20 @@ const loginHandler = async (req: Request, res: Response) => {
     const token = jwt.sign(
       { 
         _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
         email: user.email,
-        role: user.role,
-        isAdmin: user.isAdmin,
-        isDoctor: user.isDoctor,
-        phone: user.phone
+        role: user.role
       },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
     );
 
+    // Log the user object for debugging
+    console.log('Login successful for user:', user);
+
+    // Return the user as is with all properties
     res.json({
       token,
-      user: {
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        isAdmin: user.isAdmin,
-        isDoctor: user.isDoctor,
-        phone: user.phone
-      }
+      user
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -240,14 +282,7 @@ const adminLoginHandler = async (req: Request, res: Response) => {
 
     // Check if user exists
     const user = await User.findOne({ email });
-    console.log('User found:', user ? {
-      _id: user._id,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      role: user.role,
-      firstName: user.firstName,
-      lastName: user.lastName
-    } : 'No');
+    console.log('User found:', user ? user : 'No');
     
     if (!user) {
       console.log('User not found with email:', email);
@@ -270,33 +305,26 @@ const adminLoginHandler = async (req: Request, res: Response) => {
       return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
     }
 
-    // Create JWT token with explicit admin information
+    // Create JWT token with basic information
     const token = jwt.sign(
       { 
         _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
         email: user.email,
-        role: 'admin',
-        isAdmin: true,
-        isDoctor: user.isDoctor
+        role: 'admin'
       },
       process.env.JWT_SECRET || 'defaultsecret',
       { expiresIn: '1d' }
     );
 
     console.log('Admin login successful for:', email);
+    
+    // Set the admin role explicitly
+    user.role = 'admin';
+    user.isAdmin = true;
+    
     res.json({
       token,
-      user: {
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: 'admin',
-        isAdmin: true,
-        isDoctor: user.isDoctor
-      }
+      user
     });
   } catch (error) {
     console.error('Admin login error:', error);
@@ -304,209 +332,146 @@ const adminLoginHandler = async (req: Request, res: Response) => {
   }
 };
 
-// Profile
-const profileHandler = async (req: AuthRequest, res: Response) => {
-  try {
-    console.log('GET /api/auth/profile - Fetching user profile');
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
-    }
-    
-    const user = await User.findById(req.user._id).select('-password');
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    
-    res.json(user);
-  } catch (error) {
-    console.error('Profile fetch error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
+// MongoDB connection
+mongoose.connect(MONGODB_URI)
+  .then(() => {
+    console.log('Connected to MongoDB');
+    initializeCharities();
+    createAdminUser(); // Create admin user if it doesn't exist
+    createTestUser(); // Create test user if it doesn't exist
+  })
+  .catch((error) => {
+    console.error('MongoDB connection error:', error);
+  });
 
-// Update Profile
-const updateProfileHandler = async (req: AuthRequest, res: Response) => {
+// Routes
+app.post('/api/auth/register', registerHandler as RequestHandler);
+app.post('/api/auth/login', loginHandler as RequestHandler);
+app.post('/api/auth/admin/login', adminLoginHandler as RequestHandler);
+
+// User profile endpoint
+app.get('/api/auth/profile', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
-    console.log('PUT /api/auth/profile - Updating user profile');
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
-    
-    const { name, email, phone, address, avatar } = req.body;
-    
+
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    // Return the user object without the password
+    const userObj = user.toObject();
+    const { password, ...userWithoutPassword } = userObj;
     
-    // Update fields
-    if (name) {
-      // Split the name into firstName and lastName
-      const nameParts = name.split(' ');
-      if (nameParts.length > 1) {
-        user.firstName = nameParts[0];
-        user.lastName = nameParts.slice(1).join(' ');
-      } else {
-        user.firstName = name;
-        user.lastName = '';
-      }
-    }
-    if (email) user.email = email;
-    if (phone) user.phone = phone;
-    if (address) user.address = address;
-    if (avatar) user.avatar = avatar;
-    
-    await user.save();
-    
-    // Return updated user without password
-    const updatedUser = await User.findById(req.user._id).select('-password');
-    res.json(updatedUser);
+    res.json(userWithoutPassword);
   } catch (error) {
-    console.error('Profile update error:', error);
+    console.error('Error fetching user profile:', error);
     res.status(500).json({ message: 'Server error' });
   }
-};
+}) as RequestHandler);
 
-// Update User Password
-const updatePasswordHandler = async (req: AuthRequest, res: Response) => {
+// User profile update endpoint
+app.put('/api/auth/profile', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
-    console.log('PUT /api/auth/profile/password - Updating user password');
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Update fields - only allow certain fields to be updated
+    const allowedFields = ['firstName', 'lastName', 'phone', 'address', 'avatar'];
+    
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        // Handle top level fields directly
+        (user as any)[field] = req.body[field];
+      }
+    });
+
+    await user.save();
+    
+    // Return the updated user object without the password
+    const userObj = user.toObject();
+    const { password, ...userWithoutPassword } = userObj;
+    
+    res.json(userWithoutPassword);
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+}) as RequestHandler);
+
+// Password update endpoint
+app.put('/api/auth/profile/password', verifyToken, (async (req: AuthRequest, res: Response) => {
+  try {
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
     const { currentPassword, newPassword } = req.body;
-
-    // Validate input
+    
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Please provide current and new password' });
+      return res.status(400).json({ message: 'Current password and new password are required' });
     }
 
-    // Find user with password field
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
     // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
       return res.status(400).json({ message: 'Current password is incorrect' });
     }
 
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    // Update password
+    user.password = newPassword;
     await user.save();
-
+    
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
-    console.error('Error updating user password:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// Get All Users
-const getAllUsersHandler = async (req: AuthRequest, res: Response) => {
-  try {
-    console.log('GET /api/auth/users - Fetching all users');
-    if (!req.user || !req.user.isAdmin) {
-      return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
-    }
-    
-    const users = await User.find().select('-password');
-    res.json(users);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// Delete User
-const deleteUserHandler = async (req: AuthRequest, res: Response) => {
-  try {
-    console.log(`DELETE /api/auth/users/${req.params.id} - Deleting user`);
-    if (!req.user || !req.user.isAdmin) {
-      return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
-    }
-
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    await User.deleteOne({ _id: req.params.id });
-    console.log('User deleted successfully:', req.params.id);
-    
-    res.json({ message: 'User deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-// Debug route to check user details
-app.get('/api/auth/debug-user/:email', (async (req: Request, res: Response) => {
-  try {
-    const { email } = req.params;
-    const user = await User.findOne({ email });
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    
-    // Return user details without password
-    const { password, ...userDetails } = user.toObject();
-    res.json(userDetails);
-  } catch (error) {
-    console.error('Debug user error:', error);
+    console.error('Error updating password:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
 
-// Update User
-const updateUserHandler = async (req: AuthRequest, res: Response) => {
-  try {
-    console.log(`PUT /api/auth/users/${req.params.id} - Updating user`);
-    if (!req.user || !req.user.isAdmin) {
-      return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
-    }
-
-    const { firstName, lastName, email, isAdmin, isDoctor } = req.body;
-    
-    const user = await User.findById(req.params.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    
-    // Update fields
-    if (firstName) user.firstName = firstName;
-    if (lastName) user.lastName = lastName;
-    if (email) user.email = email;
-    if (isAdmin !== undefined) user.isAdmin = isAdmin;
-    if (isDoctor !== undefined) user.isDoctor = isDoctor;
-    
-    await user.save();
-    
-    // Return updated user without password
-    const updatedUser = await User.findById(req.params.id).select('-password');
-    res.json(updatedUser);
-  } catch (error) {
-    console.error('Error updating user:', error);
-    res.status(500).json({ message: 'Server error' });
+// Setup multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
   }
-};
+});
 
-// Auth routes
-app.post('/api/auth/register', registerHandler as RequestHandler);
-app.post('/api/auth/login', loginHandler as RequestHandler);
-app.post('/api/auth/admin/login', adminLoginHandler as RequestHandler);
-app.get('/api/auth/profile', verifyToken as RequestHandler, profileHandler as RequestHandler);
-app.put('/api/auth/profile', verifyToken as RequestHandler, updateProfileHandler as RequestHandler);
-app.put('/api/auth/profile/password', verifyToken as RequestHandler, updatePasswordHandler as RequestHandler);
-app.get('/api/auth/users', adminAuth as RequestHandler, getAllUsersHandler as RequestHandler);
-app.put('/api/auth/users/:id', adminAuth as RequestHandler, updateUserHandler as RequestHandler);
-app.delete('/api/auth/users/:id', adminAuth as RequestHandler, deleteUserHandler as RequestHandler);
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png|gif/;
+    const mimetype = filetypes.test(file.mimetype);
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    
+    cb(new Error('Only image files are allowed!'));
+  }
+});
+
+// Ensure uploads directory exists
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
 
 // API routes
 app.use('/api/products', productRoutes);
@@ -515,112 +480,10 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/donations', donationRoutes);
 app.use('/api/charities', charityRoutes);
-app.use('/api/lost-found', lostFoundRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/lost-found', lostFoundRoutes);
 app.use('/api/chat', chatRoutes);
-
-// Create admin endpoint - for development only
-app.get('/api/create-admin', async (req: Request, res: Response) => {
-  try {
-    // Only allow in development environment
-    if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({ message: 'This endpoint is not available in production' });
-    }
-    
-    // Check if admin user exists
-    const adminExists = await User.findOne({ email: 'admin@pawshu.com' });
-    if (adminExists) {
-      // Ensure the admin user has the correct flags
-      if (!adminExists.isAdmin || adminExists.role !== 'admin') {
-        adminExists.isAdmin = true;
-        adminExists.role = 'admin';
-        await adminExists.save();
-        
-        return res.json({ 
-          message: 'Admin user updated with correct privileges',
-          admin: {
-            email: adminExists.email,
-            firstName: adminExists.firstName,
-            lastName: adminExists.lastName,
-            isAdmin: adminExists.isAdmin,
-            role: adminExists.role
-          } 
-        });
-      }
-      
-      return res.json({ 
-        message: 'Admin user already exists',
-        admin: {
-          email: adminExists.email,
-          firstName: adminExists.firstName,
-          lastName: adminExists.lastName,
-          isAdmin: adminExists.isAdmin,
-          role: adminExists.role
-        } 
-      });
-    }
-    
-    // Create admin user
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('admin123', salt);
-    
-    const adminUser = new User({
-      firstName: 'Admin',
-      lastName: 'User',
-      email: 'admin@pawshu.com',
-      password: hashedPassword,
-      role: 'admin',
-      isAdmin: true,
-      isDoctor: false,
-      verified: true
-    });
-    
-    await adminUser.save();
-    
-    res.status(201).json({ 
-      message: 'Admin user created successfully',
-      admin: {
-        email: adminUser.email,
-        firstName: adminUser.firstName,
-        lastName: adminUser.lastName,
-        isAdmin: adminUser.isAdmin,
-        role: adminUser.role
-      }
-    });
-  } catch (error) {
-    console.error('Error creating admin user:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Upload endpoint
-app.post('/api/upload', async (req: Request, res: Response) => {
-  try {
-    const files = req.files as FileArray | null | undefined;
-    if (!files) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
-
-    const uploadedFile = files.file as UploadedFile | UploadedFile[];
-    if (!uploadedFile || Array.isArray(uploadedFile)) {
-      return res.status(400).json({ message: 'Invalid file upload' });
-    }
-
-    const result = await cloudinary.uploader.upload(uploadedFile.tempFilePath, {
-      folder: 'pawshu/users',
-      use_filename: true,
-      unique_filename: false,
-    });
-
-    res.json({
-      public_id: result.public_id,
-      url: result.secure_url
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ message: 'Error uploading file' });
-  }
-});
+app.use('/api/upload', verifyToken, uploadRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -635,4 +498,4 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-}); 
+});

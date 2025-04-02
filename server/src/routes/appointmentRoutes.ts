@@ -1,6 +1,7 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import Appointment, { IAppointment } from '../models/Appointment';
-import { verifyToken, adminAuth, doctorAuth, AuthRequest } from '../middleware/auth';
+import { verifyToken, adminAuth, doctorAuth } from '../middleware/auth';
+import { AuthRequest } from '../types/auth';
 import mongoose from 'mongoose';
 
 const router = express.Router();

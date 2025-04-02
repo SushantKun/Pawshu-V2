@@ -3,23 +3,7 @@ import jwt from 'jsonwebtoken';
 import { Types } from 'mongoose';
 import { FileArray, UploadedFile } from 'express-fileupload';
 import User from '../models/User';
-
-export interface UserPayload {
-  _id: Types.ObjectId;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  role: string;
-  isAdmin: boolean;
-  isDoctor: boolean;
-}
-
-// Extend the Express Request type
-export interface AuthRequest extends Request {
-  user?: UserPayload;
-  // files is already declared in express-fileupload.d.ts
-}
+import { AuthUser, AuthRequest } from '../types/auth';
 
 // Type guard for file upload
 export function hasFiles(req: Request): req is Request & { files: FileArray } {
@@ -64,12 +48,12 @@ export const verifyToken = async (
     }
 
     try {
-      const decoded = jwt.verify(token, jwtSecret) as any;
+      const decoded = jwt.verify(token, jwtSecret) as AuthUser;
       console.log(`[Auth Debug] Token verified successfully for user: ${decoded._id}`);
       
       req.user = {
         ...decoded,
-        _id: new Types.ObjectId(decoded._id) // Convert string _id to ObjectId
+        _id: new Types.ObjectId(decoded._id.toString()) // Convert string _id to ObjectId if needed
       };
       
       if (req.user) {
@@ -122,12 +106,12 @@ export const adminAuth = async (
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret') as UserPayload;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret') as AuthUser;
       console.log('Token decoded:', { 
         userId: decoded._id, 
         email: decoded.email,
         role: decoded.role,
-        isAdmin: decoded.isAdmin 
+        isAdmin: decoded.isAdmin || decoded.avatar?.isAdmin 
       });
       (req as AuthRequest).user = decoded;
       
@@ -138,9 +122,10 @@ export const adminAuth = async (
       }
       
       // Allow access if isAdmin flag is true or role is 'admin'
-      if (!authReq.user.isAdmin && authReq.user.role !== 'admin') {
+      const isUserAdmin = authReq.user.isAdmin || authReq.user.avatar?.isAdmin || false;
+      if (!isUserAdmin && authReq.user.role !== 'admin') {
         console.log('Admin auth failed: User is not admin', { 
-          isAdmin: authReq.user.isAdmin,
+          isAdmin: isUserAdmin,
           role: authReq.user.role
         });
         return res.status(403).json({ message: 'Access denied. Admin privileges required.' });
@@ -178,12 +163,12 @@ export const doctorAuth = async (
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret') as UserPayload;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'defaultsecret') as AuthUser;
       console.log('Token decoded for doctor auth:', { 
         userId: decoded._id, 
         email: decoded.email,
         role: decoded.role,
-        isDoctor: decoded.isDoctor
+        isDoctor: decoded.isDoctor || decoded.avatar?.isDoctor
       });
       
       // Add the decoded user to the request
@@ -196,9 +181,10 @@ export const doctorAuth = async (
       }
       
       // Check for doctor privileges - either isDoctor flag or role field
-      if (!authReq.user.isDoctor && authReq.user.role !== 'doctor') {
+      const isUserDoctor = authReq.user.isDoctor || authReq.user.avatar?.isDoctor || false;
+      if (!isUserDoctor && authReq.user.role !== 'doctor') {
         console.log('Doctor auth failed: User is not a doctor', { 
-          isDoctor: authReq.user.isDoctor,
+          isDoctor: isUserDoctor,
           role: authReq.user.role
         });
         return res.status(403).json({ message: 'Access denied. Doctor privileges required.' });
@@ -234,7 +220,13 @@ export const doctorAuth = async (
 };
 
 export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  if (!req.user || (!req.user.isAdmin && req.user.role !== 'admin')) {
+  if (!req.user) {
+    res.status(403).json({ message: 'Access denied' });
+    return;
+  }
+  
+  const isUserAdmin = req.user.isAdmin || req.user.avatar?.isAdmin || false;
+  if (!isUserAdmin && req.user.role !== 'admin') {
     res.status(403).json({ message: 'Access denied' });
     return;
   }
@@ -242,7 +234,13 @@ export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction): vo
 };
 
 export const isDoctor = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  if (!req.user || (!req.user.isDoctor && req.user.role !== 'doctor')) {
+  if (!req.user) {
+    res.status(403).json({ message: 'Access denied' });
+    return;
+  }
+  
+  const isUserDoctor = req.user.isDoctor || req.user.avatar?.isDoctor || false;
+  if (!isUserDoctor && req.user.role !== 'doctor') {
     res.status(403).json({ message: 'Access denied' });
     return;
   }

@@ -94,11 +94,16 @@ const CheckoutSuccess = () => {
 
   // Fall back to just displaying order ID if we have no details
   const renderOrderConfirmation = () => {
+    // Truncate orderId if it's too long to prevent overflow
+    const displayOrderId = orderId && orderId.length > 12 
+      ? `${orderId.substring(0, 12)}...` 
+      : orderId;
+      
     return (
       <div className="mb-8 text-center">
         <div className="border-t border-b border-gray-200 dark:border-gray-700 py-4 mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Order Confirmation</h2>
-          <p className="text-gray-600 dark:text-gray-300">Order ID: {orderId}</p>
+          <p className="text-gray-600 dark:text-gray-300">Order ID: {displayOrderId}</p>
           <p className="text-gray-600 dark:text-gray-300">
             Date: {new Date().toLocaleDateString()}
           </p>
@@ -157,7 +162,9 @@ const CheckoutSuccess = () => {
                 <div className="mb-8 text-left">
                   <div className="border-t border-b border-gray-200 dark:border-gray-700 py-4 mb-4">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Order Summary</h2>
-                    <p className="text-gray-600 dark:text-gray-300">Order ID: {orderId}</p>
+                    <p className="text-gray-600 dark:text-gray-300">
+                      Order ID: {orderId && orderId.length > 12 ? `${orderId.substring(0, 12)}...` : orderId}
+                    </p>
                     <p className="text-gray-600 dark:text-gray-300">
                       Date: {orderDetails.createdAt ? new Date(orderDetails.createdAt).toLocaleDateString() : 'N/A'}
                     </p>

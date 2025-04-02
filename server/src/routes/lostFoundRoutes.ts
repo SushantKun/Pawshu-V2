@@ -107,7 +107,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // Create a new report
-router.post('/', verifyToken, async (req: AuthRequest, res: Response) => {
+router.post('/', verifyToken as any, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
@@ -145,7 +145,7 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response) => {
 });
 
 // Update a report
-router.put('/:id', verifyToken, async (req: AuthRequest, res: Response) => {
+router.put('/:id', verifyToken as any, async (req: AuthRequest, res: Response) => {
   try {
     const report = await LostFound.findById(req.params.id);
     
@@ -189,7 +189,7 @@ router.put('/:id', verifyToken, async (req: AuthRequest, res: Response) => {
 });
 
 // Delete a report
-router.delete('/:id', verifyToken, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', verifyToken as any, async (req: AuthRequest, res: Response) => {
   try {
     const report = await LostFound.findById(req.params.id);
     
@@ -222,7 +222,7 @@ router.delete('/:id', verifyToken, async (req: AuthRequest, res: Response) => {
 });
 
 // Update match status
-router.put('/:id/matches/:matchId', verifyToken, async (req: AuthRequest, res: Response) => {
+router.put('/:id/matches/:matchId', verifyToken as any, async (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.body;
     const report = await LostFound.findById(req.params.id);
@@ -274,7 +274,7 @@ router.put('/:id/matches/:matchId', verifyToken, async (req: AuthRequest, res: R
 });
 
 // Update report status
-router.patch('/:id/status', verifyToken, async (req: AuthRequest, res: Response) => {
+router.patch('/:id/status', verifyToken as any, async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });

@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { checkSession, USER_ROLES } from '../../utils/auth';
 
 // Icon components
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
@@ -106,23 +107,6 @@ const formatMonthYear = (year: number, month: number) => {
   return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 };
 
-// Helper function to decode JWT token and check doctor role
-const decodeJWT = (token: string | null): { isDoctor?: boolean; role?: string; exp?: number } => {
-  if (!token) return {};
-  
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch (error) {
-    console.error('Error decoding token:', error);
-    return {};
-  }
-};
-
 const DoctorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -131,35 +115,15 @@ const DoctorDashboard = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if doctor is logged in
-    const token = localStorage.getItem('doctorToken');
-    const storedDoctorInfo = localStorage.getItem('doctorInfo');
-    
-    if (!token || !storedDoctorInfo) {
-      navigate('/doctor/login');
-      return;
-    }
-    
-    // Decode token to check if it has the required doctor privileges
-    const decodedToken = decodeJWT(token);
-    console.log('Decoded doctor token:', decodedToken);
-    
-    // Check if token contains isDoctor flag or role=doctor
-    if (!decodedToken.isDoctor && decodedToken.role !== 'doctor') {
-      console.error('Token does not have doctor privileges:', decodedToken);
-      toast.error('Your session does not have doctor privileges. Please log in again.');
-      localStorage.removeItem('doctorToken');
-      localStorage.removeItem('doctorInfo');
-      navigate('/doctor/login');
-      return;
-    }
-    
-    // Check if token is expired
-    if (decodedToken.exp && decodedToken.exp * 1000 < Date.now()) {
-      console.error('Token is expired');
+    // Check if doctor is logged in using our utility function
+    if (!checkSession(USER_ROLES.DOCTOR)) {
       toast.error('Your session has expired. Please log in again.');
-      localStorage.removeItem('doctorToken');
-      localStorage.removeItem('doctorInfo');
+      navigate('/doctor/login');
+      return;
+    }
+    
+    const storedDoctorInfo = localStorage.getItem('doctorInfo');
+    if (!storedDoctorInfo) {
       navigate('/doctor/login');
       return;
     }
@@ -461,10 +425,10 @@ const DoctorDashboard = () => {
                         <tr key={appointment._id}>
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {appointment.user?.name || 'Unknown Patient'}
+                              {appointment.user && appointment.user.name ? appointment.user.name : 'Unknown Patient'}
                             </div>
                             <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {appointment.user?.email || 'No email provided'}
+                              {appointment.user && appointment.user.email ? appointment.user.email : 'No email provided'}
                             </div>
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap">

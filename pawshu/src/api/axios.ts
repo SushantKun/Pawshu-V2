@@ -1,110 +1,80 @@
 import axios from 'axios';
+import { isTokenExpired, clearAuthData, USER_ROLES, TOKEN_STORAGE_KEYS } from '../utils/auth';
 
+// Create axios instance with base URL
 const api = axios.create({
   baseURL: 'http://localhost:5000/api',
   headers: {
-    'Content-Type': 'application/json',
-  },
+    'Content-Type': 'application/json'
+  }
 });
 
-// Add a request interceptor to add the auth token
-api.interceptors.request.use(
-  (config) => {
-    // Use the token provided in the headers first (if available)
-    if (config.headers.Authorization) {
-      console.log(`Authorization header already set for ${config.url}`);
-      return config;
+// Add a request interceptor to include auth token
+api.interceptors.request.use((config) => {
+  // Check which token to use based on the endpoint
+  let token = null;
+  const url = config.url || '';
+  
+  if (url.startsWith('/admin')) {
+    token = localStorage.getItem(TOKEN_STORAGE_KEYS.ADMIN);
+    // Check if token is expired and clear it
+    if (token && isTokenExpired(token)) {
+      clearAuthData(USER_ROLES.ADMIN);
+      token = null;
     }
-    
-    // Otherwise, try to determine the right token based on URL
-    let token;
-    let tokenSource = '';
-    
-    // Specific check for doctor dashboard endpoint
-    if (config.url === '/doctors/dashboard-stats') {
-      console.log('🔍 Detected doctor dashboard stats request');
-      token = localStorage.getItem('doctorToken');
-      const doctorInfo = localStorage.getItem('doctorInfo');
-      
-      console.log('📋 Doctor info in localStorage:', doctorInfo ? JSON.parse(doctorInfo) : 'None');
-      
-      if (token) {
-        console.log('✅ Found doctorToken for dashboard');
-      } else {
-        console.log('❌ No doctorToken found for dashboard!');
-      }
+  } else if (url.startsWith('/doctors')) {
+    token = localStorage.getItem(TOKEN_STORAGE_KEYS.DOCTOR);
+    // Check if token is expired and clear it
+    if (token && isTokenExpired(token)) {
+      clearAuthData(USER_ROLES.DOCTOR);
+      token = null;
     }
-    // For doctor-related routes, always use the doctor token if available
-    else if (config.url?.includes('/doctors') || config.url?.includes('/appointments/doctor')) {
-      token = localStorage.getItem('doctorToken');
-      tokenSource = 'doctorToken';
-      console.log('Using doctorToken for request to:', config.url);
-    } else if (config.url?.includes('/admin')) {
-      token = localStorage.getItem('adminToken');
-      tokenSource = 'adminToken';
-      console.log('Using adminToken for request to:', config.url);
-    } else {
-      token = localStorage.getItem('token');
-      tokenSource = 'regularToken';
-      console.log('Using regular token for request to:', config.url);
+  } else {
+    token = localStorage.getItem(TOKEN_STORAGE_KEYS.USER);
+    // Check if token is expired and clear it
+    if (token && isTokenExpired(token)) {
+      clearAuthData(USER_ROLES.USER);
+      token = null;
     }
-    
-    // If URL doesn't match specific patterns but tokens exist, prioritize
-    if (!token) {
-      if (localStorage.getItem('doctorToken')) {
-        token = localStorage.getItem('doctorToken');
-        tokenSource = 'fallback doctorToken';
-        console.log('Falling back to doctorToken');
-      } else if (localStorage.getItem('adminToken')) {
-        token = localStorage.getItem('adminToken');
-        tokenSource = 'fallback adminToken';
-        console.log('Falling back to adminToken');
-      } else if (localStorage.getItem('token')) {
-        token = localStorage.getItem('token');
-        tokenSource = 'fallback regularToken';
-        console.log('Falling back to regular token');
-      }
-    }
-    
-    if (token) {
-      console.log(`Setting Authorization header with ${tokenSource} for ${config.url}`);
-      config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      console.log(`⚠️ No token available for ${config.url}`);
-    }
-    
-    return config;
-  },
-  (error) => {
-    console.error('Request interceptor error:', error);
-    return Promise.reject(error);
   }
-);
+  
+  // If token exists, add it to headers
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
 
-// Add a response interceptor to log forbidden errors
+// Add a response interceptor to handle errors
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
-    if (error.response && error.response.status === 403) {
-      console.error('🚫 403 Forbidden Error:', {
-        url: error.config.url,
-        method: error.config.method,
-        hasAuthHeader: !!error.config.headers.Authorization,
-        response: error.response.data
-      });
-      
-      // Log the token that was used (first 10 chars only for security)
-      if (error.config.headers.Authorization) {
-        const token = error.config.headers.Authorization.replace('Bearer ', '');
-        console.log(`Token used (first 10 chars): ${token.substring(0, 10)}...`);
-        
-        // If this is a doctor route, check if doctor info exists
-        if (error.config.url?.includes('/doctors')) {
-          const doctorInfo = localStorage.getItem('doctorInfo');
-          console.log('📋 Doctor info during error:', doctorInfo ? JSON.parse(doctorInfo) : 'None');
-        }
+    if (error.response) {
+      // Handle specific error cases
+      switch (error.response.status) {
+        case 401:
+          // Unauthorized - determine which auth to clear based on URL
+          if (error.config.url?.startsWith('/admin')) {
+            clearAuthData(USER_ROLES.ADMIN);
+            window.location.href = '/admin/login';
+          } else if (error.config.url?.startsWith('/doctors')) {
+            clearAuthData(USER_ROLES.DOCTOR);
+            window.location.href = '/doctor/login';
+          } else {
+            clearAuthData(USER_ROLES.USER);
+            window.location.href = '/login';
+          }
+          break;
+        case 403:
+          // Forbidden - user doesn't have necessary permissions
+          console.error('Access forbidden');
+          break;
+        default:
+          // Handle other error cases
+          console.error('API Error:', error.response.data);
       }
     }
     return Promise.reject(error);

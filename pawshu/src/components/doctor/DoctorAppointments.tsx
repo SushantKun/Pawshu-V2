@@ -529,7 +529,7 @@ const DoctorAppointments = () => {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="block w-full md:w-48 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            className="block w-full md:w-48 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
           >
             <option value="all">All Appointments</option>
             <option value="pending">Pending</option>
@@ -548,7 +548,7 @@ const DoctorAppointments = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by patient name or pet name"
-            className="block w-full md:w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            className="block w-full md:w-64 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
           />
         </div>
       </div>
@@ -573,8 +573,13 @@ const DoctorAppointments = () => {
                     <div className="flex flex-wrap justify-between items-start">
                       <div className="mb-4 md:mb-0">
                         <h3 className="text-lg font-medium">
-                          {appointment.user.firstName} {appointment.user.lastName}
+                          {appointment.user && appointment.user.firstName && appointment.user.lastName 
+                            ? `${appointment.user.firstName} ${appointment.user.lastName}`
+                            : 'Unknown Patient'}
                         </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {appointment.user && appointment.user.email ? appointment.user.email : ''}
+                        </p>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {appointment.timeSlot} - Pet: {appointment.petName} ({appointment.petType})
                         </p>

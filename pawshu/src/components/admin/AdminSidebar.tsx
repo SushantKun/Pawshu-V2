@@ -1,8 +1,10 @@
-import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { SunIcon as SunIconOutline, MoonIcon as MoonIconOutline } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
+import { toast } from 'react-toastify';
+import { checkSession, USER_ROLES, clearAuthData } from '../../utils/auth';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const SunIcon = SunIconOutline as IconComponent;
@@ -11,12 +13,31 @@ const MoonIcon = MoonIconOutline as IconComponent;
 const AdminSidebar = () => {
   const { darkMode, toggleDarkMode } = useTheme();
   const navigate = useNavigate();
+  const location = useLocation();
   
+  // Check session validity periodically
+  useEffect(() => {
+    // Initial check
+    if (!checkSession(USER_ROLES.ADMIN)) {
+      toast.error('Your session has expired. Please log in again.');
+      navigate('/admin/login');
+      return;
+    }
+
+    // Set up session check interval
+    const sessionInterval = setInterval(() => {
+      if (!checkSession(USER_ROLES.ADMIN)) {
+        toast.error('Your session has expired. Please log in again.');
+        clearInterval(sessionInterval);
+        navigate('/admin/login');
+      }
+    }, 300000); // Check every 5 minutes
+
+    return () => clearInterval(sessionInterval);
+  }, [navigate]);
+
   const handleLogout = () => {
-    // Clear admin token from localStorage
-    localStorage.removeItem('adminToken');
-    
-    // Redirect to login page
+    clearAuthData(USER_ROLES.ADMIN);
     navigate('/admin/login');
   };
   

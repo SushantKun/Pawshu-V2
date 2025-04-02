@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../../context/ThemeContext';
 import { SunIcon as SunIconOutline, MoonIcon as MoonIconOutline } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
+import { toast } from 'react-toastify';
+import { checkSession, USER_ROLES, clearAuthData } from '../../utils/auth';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const SunIcon = SunIconOutline as IconComponent;
@@ -35,16 +37,33 @@ const DoctorSidebar = () => {
     }
   }, []);
 
+  // Check session validity periodically
+  useEffect(() => {
+    // Initial check
+    if (!checkSession(USER_ROLES.DOCTOR)) {
+      toast.error('Your session has expired. Please log in again.');
+      navigate('/doctor/login');
+      return;
+    }
+
+    // Set up session check interval
+    const sessionInterval = setInterval(() => {
+      if (!checkSession(USER_ROLES.DOCTOR)) {
+        toast.error('Your session has expired. Please log in again.');
+        clearInterval(sessionInterval);
+        navigate('/doctor/login');
+      }
+    }, 300000); // Check every 5 minutes
+
+    return () => clearInterval(sessionInterval);
+  }, [navigate]);
+
   const isActive = (path: string) => {
     return location.pathname.includes(path) ? 'bg-blue-700 dark:bg-blue-800' : '';
   };
 
   const handleLogout = () => {
-    // Clear doctor data from localStorage
-    localStorage.removeItem('doctorToken');
-    localStorage.removeItem('doctorInfo');
-    
-    // Redirect to login page
+    clearAuthData(USER_ROLES.DOCTOR);
     navigate('/doctor/login');
   };
 

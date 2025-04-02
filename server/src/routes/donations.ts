@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { AuthRequest, verifyToken } from '../middleware/auth';
+import { verifyToken } from '../middleware/auth';
+import { AuthRequest } from '../types/auth';
 import Donation from '../models/Donation';
 import { Charity } from '../models/Charity';
 import crypto from 'crypto';
@@ -598,6 +599,69 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction): Prom
   } catch (error) {
     console.error('Error fetching donation:', error);
     res.status(500).json({ message: 'Failed to fetch donation' });
+  }
+});
+
+// Direct card payment endpoint for donations
+router.post('/card-payment', async (req: Request, res: Response) => {
+  try {
+    console.log('Card payment request received:', JSON.stringify(req.body, null, 2));
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    
+    const { userId, charityId, amount, cardDetails } = req.body;
+    
+    // Validate required fields
+    if (!charityId || !amount) {
+      console.log('Missing required fields in card payment');
+      return res.status(400).json({ message: 'Please provide all required fields: charityId, amount, cardDetails' });
+    }
+    
+    // Log card details length for debugging (never log actual card data)
+    console.log('Card number length:', cardDetails?.cardNumber?.length || 'N/A');
+    console.log('Card expiry length:', cardDetails?.cardExpiry?.length || 'N/A');
+    console.log('Card CVV length:', cardDetails?.cardCvv?.length || 'N/A');
+    
+    // Verify charity exists
+    const charity = await Charity.findById(charityId);
+    if (!charity) {
+      console.log('Charity not found:', charityId);
+      return res.status(404).json({ message: 'Charity not found' });
+    }
+
+    console.log('Charity found:', charity.name);
+    
+    // Create donation record
+    const donation = new Donation({
+      userId: userId || 'anonymous',
+      charityId,
+      charityName: charity.name,
+      amount,
+      status: 'completed', // Auto-complete card payments for now
+      paymentMethod: 'card',
+      date: new Date()
+    });
+
+    console.log('Saving card donation:', donation);
+    await donation.save();
+    console.log('Card donation saved successfully:', donation._id);
+
+    // Update charity raised amount
+    charity.raised += parseFloat(amount.toString());
+    await charity.save();
+    console.log('Charity raised amount updated');
+
+    res.status(201).json({
+      success: true,
+      message: 'Donation successful',
+      donation
+    });
+  } catch (error) {
+    console.error('Error processing card payment:', error);
+    if (error instanceof Error) {
+      res.status(500).json({ success: false, message: 'Failed to process card payment', error: error.message });
+    } else {
+      res.status(500).json({ success: false, message: 'Failed to process card payment', error: 'Unknown error' });
+    }
   }
 });
 

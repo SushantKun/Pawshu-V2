@@ -25,7 +25,7 @@ interface Doctor {
 const BookAppointment = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  
+
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ const BookAppointment = () => {
   const [bookingStep, setBookingStep] = useState(1);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [bookingError, setBookingError] = useState('');
-  
+
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [specializationFilter, setSpecializationFilter] = useState('');
@@ -48,7 +48,7 @@ const BookAppointment = () => {
   const [specializations, setSpecializations] = useState<string[]>([]);
   const [locationPreference, setLocationPreference] = useState<'clinic' | 'home_visit'>('clinic');
   const [address, setAddress] = useState('');
-  
+
   // New fields for appointment settings
   const [appointmentInfo, setAppointmentInfo] = useState({
     locationPreference: 'clinic' as 'clinic' | 'home_visit',
@@ -61,47 +61,47 @@ const BookAppointment = () => {
       navigate('/login', { state: { from: '/booking' } });
       return;
     }
-    
+
     // Fetch doctors
     if (!authLoading && user) {
       fetchDoctors();
     }
   }, [user, authLoading, navigate]);
-  
+
   // Effect to filter doctors based on search and filters
   useEffect(() => {
     if (!doctors.length) return;
-    
+
     let filtered = [...doctors];
-    
+
     // Filter only active doctors
     filtered = filtered.filter(doctor => doctor.isActive);
-    
+
     // Apply search filter
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(doctor => 
+      filtered = filtered.filter(doctor =>
         `${doctor.firstName} ${doctor.lastName}`.toLowerCase().includes(search) ||
         doctor.specialization.toLowerCase().includes(search) ||
         doctor.bio.toLowerCase().includes(search)
       );
     }
-    
+
     // Apply specialization filter
     if (specializationFilter) {
-      filtered = filtered.filter(doctor => 
+      filtered = filtered.filter(doctor =>
         doctor.specialization === specializationFilter
       );
     }
-    
+
     // Apply location preference filter
     if (locationFilter) {
-      filtered = filtered.filter(doctor => 
-        doctor.locationPreference === locationFilter || 
+      filtered = filtered.filter(doctor =>
+        doctor.locationPreference === locationFilter ||
         doctor.locationPreference === 'both'
       );
     }
-    
+
     setFilteredDoctors(filtered);
   }, [doctors, searchTerm, specializationFilter, locationFilter]);
 
@@ -110,16 +110,16 @@ const BookAppointment = () => {
       setLoading(true);
       const response = await api.get('/doctors');
       const doctorsData = response.data;
-      
+
       setDoctors(doctorsData);
       setFilteredDoctors(doctorsData.filter((doc: Doctor) => doc.isActive));
-      
+
       // Extract unique specializations
       const uniqueSpecializations = Array.from(
         new Set(doctorsData.map((doc: Doctor) => doc.specialization))
       );
       setSpecializations(uniqueSpecializations);
-      
+
       setError('');
     } catch (err: any) {
       console.error('Error fetching doctors:', err);
@@ -132,24 +132,43 @@ const BookAppointment = () => {
   const fetchAvailableSlots = async (doctorId: string, date: string) => {
     try {
       setLoading(true);
+      console.log(`Fetching available slots for doctorId: ${doctorId}, date: ${date}, type: ${typeof date}`);
+
+      // Validate date format before sending request
+      if (!date || typeof date !== 'string' || !date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        console.error(`Invalid date format: ${date}`);
+        setError('Invalid date format. Please select a valid date.');
+        setAvailableSlots([]);
+        setLoading(false);
+        return;
+      }
+
       const response = await api.get(`/doctors/available-slots/${doctorId}/${date}`);
-      
+
+      console.log('Available slots response:', response.data);
+
       // Get slots and location preference
       setAvailableSlots(response.data.availableSlots);
-      
+
       // Set the doctor's location options
       setAppointmentInfo({
         locationPreference: response.data.locationPreference === 'home_visit' ? 'home_visit' : 'clinic',
-        doctorLocationOptions: 
-          response.data.locationPreference === 'both' 
+        doctorLocationOptions:
+          response.data.locationPreference === 'both'
             ? ['clinic', 'home_visit']
             : [response.data.locationPreference]
       });
-      
+
       setError('');
     } catch (err: any) {
       console.error('Error fetching available slots:', err);
-      setError(err.response?.data?.message || 'Failed to fetch available slots');
+      const errorMsg = err.response?.data?.message || 'Failed to fetch available slots';
+      console.error('Error details:', {
+        status: err.response?.status,
+        message: errorMsg,
+        receivedDate: err.response?.data?.receivedDate
+      });
+      setError(errorMsg);
       setAvailableSlots([]);
     } finally {
       setLoading(false);
@@ -164,7 +183,8 @@ const BookAppointment = () => {
     setBookingStep(2);
   };
 
-  const handleDateSelect = (date: string) => {
+  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const date = e.target.value;
     setSelectedDate(date);
     if (selectedDoctor) {
       fetchAvailableSlots(selectedDoctor._id, date);
@@ -179,15 +199,15 @@ const BookAppointment = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedDoctor || !selectedDate || !selectedSlot || !petName || !petType || !reason) {
       setBookingError('Please fill in all required fields');
       return;
     }
-    
+
     try {
       setLoading(true);
-      
+
       const appointmentData = {
         doctor: selectedDoctor._id,
         date: selectedDate,
@@ -198,19 +218,19 @@ const BookAppointment = () => {
         locationPreference: appointmentInfo.locationPreference,
         address: appointmentInfo.locationPreference === 'home_visit' ? address : undefined
       };
-      
+
       const response = await api.post('/appointments', appointmentData);
-      
+
       // Check if payment is required
       if (response.data.paymentRequired) {
         // Here you would typically redirect to payment page
         // For now we just show a success message
         toast.success(`Booking fee: Rs. ${response.data.bookingFee}. Payment feature will be implemented soon.`);
       }
-      
+
       setBookingSuccess(true);
       setBookingError('');
-      
+
       // Reset form
       setPetName('');
       setPetType('');
@@ -253,11 +273,11 @@ const BookAppointment = () => {
 
   // Format date for display
   const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
@@ -267,7 +287,7 @@ const BookAppointment = () => {
     return (
       <div className="mb-8 bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
         <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Find a Doctor</h2>
-        
+
         {/* Search bar */}
         <div className="relative mb-4">
           <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -275,15 +295,15 @@ const BookAppointment = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
             </svg>
           </div>
-          <input 
-            type="text" 
+          <input
+            type="text"
             className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5"
-            placeholder="Search by doctor name or specialization" 
+            placeholder="Search by doctor name or specialization"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        
+
         {/* Filters */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Specialization filter */}
@@ -303,7 +323,7 @@ const BookAppointment = () => {
               ))}
             </select>
           </div>
-          
+
           {/* Location filter */}
           <div>
             <label htmlFor="location" className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -322,13 +342,13 @@ const BookAppointment = () => {
             </select>
           </div>
         </div>
-        
+
         {/* Display filter info */}
         {(searchTerm || specializationFilter || locationFilter) && (
           <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
             Showing {filteredDoctors.length} doctors based on your search criteria.
             {filteredDoctors.length === 0 && (
-              <button 
+              <button
                 onClick={() => {
                   setSearchTerm('');
                   setSpecializationFilter('');
@@ -347,7 +367,7 @@ const BookAppointment = () => {
 
   const renderLocationPreferenceOptions = () => {
     if (!selectedDoctor || appointmentInfo.doctorLocationOptions.length === 0) return null;
-    
+
     return (
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -373,7 +393,7 @@ const BookAppointment = () => {
               </label>
             </div>
           )}
-          
+
           {appointmentInfo.doctorLocationOptions.includes('home_visit') && (
             <div className="flex items-center">
               <input
@@ -394,7 +414,7 @@ const BookAppointment = () => {
             </div>
           )}
         </div>
-        
+
         {appointmentInfo.locationPreference === 'home_visit' && (
           <div className="mt-4">
             <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -425,13 +445,13 @@ const BookAppointment = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Book an Appointment</h1>
-      
+
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4" role="alert">
           <p>{error}</p>
         </div>
       )}
-      
+
       {bookingSuccess ? (
         <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4" role="alert">
           <p className="font-bold">Appointment Booked Successfully!</p>
@@ -448,39 +468,36 @@ const BookAppointment = () => {
           {/* Booking Steps */}
           <div className="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <button
-              className={`flex-1 text-center py-4 px-6 ${
-                bookingStep === 1 ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-              }`}
+              className={`flex-1 text-center py-4 px-6 ${bookingStep === 1 ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                }`}
               disabled={bookingStep !== 1}
             >
               1. Select Doctor
             </button>
             <button
-              className={`flex-1 text-center py-4 px-6 ${
-                bookingStep === 2 ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-              }`}
+              className={`flex-1 text-center py-4 px-6 ${bookingStep === 2 ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                }`}
               disabled={bookingStep !== 2}
             >
               2. Choose Date & Time
             </button>
             <button
-              className={`flex-1 text-center py-4 px-6 ${
-                bookingStep === 3 ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-              }`}
+              className={`flex-1 text-center py-4 px-6 ${bookingStep === 3 ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                }`}
               disabled={bookingStep !== 3}
             >
               3. Appointment Details
             </button>
           </div>
-          
+
           <div className="p-6">
             {bookingStep === 1 && (
               <div>
                 <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Select a Doctor</h2>
-                
+
                 {/* Add search and filters section */}
                 {renderSearchAndFilters()}
-                
+
                 {loading ? (
                   <div className="flex justify-center items-center h-64">
                     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -490,11 +507,10 @@ const BookAppointment = () => {
                     {filteredDoctors.map((doctor) => (
                       <div
                         key={doctor._id}
-                        className={`bg-white dark:bg-gray-800 border rounded-lg shadow-sm overflow-hidden cursor-pointer transition-all duration-200 ${
-                          selectedDoctor?._id === doctor._id
+                        className={`bg-white dark:bg-gray-800 border rounded-lg shadow-sm overflow-hidden cursor-pointer transition-all duration-200 ${selectedDoctor?._id === doctor._id
                             ? 'border-blue-500 ring-2 ring-blue-500'
                             : 'border-gray-200 dark:border-gray-700 hover:shadow-md'
-                        }`}
+                          }`}
                         onClick={() => handleDoctorSelect(doctor)}
                       >
                         <div className="p-4">
@@ -522,10 +538,10 @@ const BookAppointment = () => {
                           <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                             <p>{doctor.experience} years of experience</p>
                             <p>
-                              Location: {doctor.locationPreference === 'clinic' 
-                                ? 'Clinic Only' 
-                                : doctor.locationPreference === 'home_visit' 
-                                  ? 'Home Visit Only' 
+                              Location: {doctor.locationPreference === 'clinic'
+                                ? 'Clinic Only'
+                                : doctor.locationPreference === 'home_visit'
+                                  ? 'Home Visit Only'
                                   : 'Clinic & Home Visit'}
                             </p>
                           </div>
@@ -537,35 +553,34 @@ const BookAppointment = () => {
                     ))}
                   </div>
                 )}
-                
+
                 {filteredDoctors.length === 0 && !loading && (
                   <div className="text-center py-8">
                     <p className="text-gray-600 dark:text-gray-400">No doctors found matching your search criteria.</p>
                   </div>
                 )}
-                
+
                 <div className="mt-8 flex justify-end">
                   <button
                     onClick={() => setBookingStep(2)}
                     disabled={!selectedDoctor || loading}
-                    className={`px-6 py-2 rounded-md ${
-                      !selectedDoctor || loading
+                    className={`px-6 py-2 rounded-md ${!selectedDoctor || loading
                         ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                         : 'bg-blue-500 hover:bg-blue-600 text-white'
-                    }`}
+                      }`}
                   >
                     Continue
                   </button>
                 </div>
               </div>
             )}
-            
+
             {bookingStep === 2 && (
               <div>
                 <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
                   Choose Date & Time
                 </h2>
-                
+
                 <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-medium mb-3 text-gray-900 dark:text-white">
                     Selected Doctor:
@@ -603,7 +618,7 @@ const BookAppointment = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="mb-6">
                   <h3 className="text-lg font-medium mb-3 text-gray-900 dark:text-white">Select Date:</h3>
                   <input
@@ -614,8 +629,13 @@ const BookAppointment = () => {
                     onChange={handleDateSelect}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
+                  {error && (
+                    <div className="mt-2 text-red-500 dark:text-red-400 text-sm">
+                      {error}
+                    </div>
+                  )}
                 </div>
-                
+
                 {selectedDate && (
                   <div className="mb-6">
                     <h3 className="text-lg font-medium mb-3 text-gray-900 dark:text-white">Select Time Slot:</h3>
@@ -628,11 +648,10 @@ const BookAppointment = () => {
                         {availableSlots.map((slot) => (
                           <button
                             key={slot}
-                            className={`py-2 px-4 rounded-md text-center ${
-                              selectedSlot === slot
+                            className={`py-2 px-4 rounded-md text-center ${selectedSlot === slot
                                 ? 'bg-blue-500 text-white'
                                 : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600'
-                            }`}
+                              }`}
                             onClick={() => handleSlotSelect(slot)}
                           >
                             {slot}
@@ -646,7 +665,7 @@ const BookAppointment = () => {
                     )}
                   </div>
                 )}
-                
+
                 <div className="mt-8 flex justify-between">
                   <button
                     onClick={() => setBookingStep(1)}
@@ -657,24 +676,23 @@ const BookAppointment = () => {
                   <button
                     onClick={() => setBookingStep(3)}
                     disabled={!selectedSlot || loading}
-                    className={`px-6 py-2 rounded-md ${
-                      !selectedSlot || loading
+                    className={`px-6 py-2 rounded-md ${!selectedSlot || loading
                         ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                         : 'bg-blue-500 hover:bg-blue-600 text-white'
-                    }`}
+                      }`}
                   >
                     Continue
                   </button>
                 </div>
               </div>
             )}
-            
+
             {bookingStep === 3 && (
               <div>
                 <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
                   Appointment Details
                 </h2>
-                
+
                 <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-medium mb-3 text-gray-900 dark:text-white">
                     Appointment Summary:
@@ -719,11 +737,11 @@ const BookAppointment = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <form onSubmit={handleSubmit}>
                   {/* Location preference options */}
                   {renderLocationPreferenceOptions()}
-                  
+
                   <div className="mb-4">
                     <label htmlFor="petName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Pet Name
@@ -763,11 +781,11 @@ const BookAppointment = () => {
                       required
                     ></textarea>
                   </div>
-                  
+
                   {bookingError && (
                     <div className="mb-4 text-red-500">{bookingError}</div>
                   )}
-                  
+
                   <div className="mt-8 flex justify-between">
                     <button
                       type="button"
@@ -779,11 +797,10 @@ const BookAppointment = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className={`px-6 py-2 rounded-md ${
-                        loading
+                      className={`px-6 py-2 rounded-md ${loading
                           ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                           : 'bg-blue-500 hover:bg-blue-600 text-white'
-                      }`}
+                        }`}
                     >
                       {loading ? 'Booking...' : 'Book Appointment'}
                     </button>

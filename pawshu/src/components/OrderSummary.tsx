@@ -29,7 +29,9 @@ const OrderSummary: React.FC<OrderProps> = ({ order }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400">Order ID:</p>
-          <p className="text-gray-900 dark:text-white">{order._id}</p>
+          <p className="text-gray-900 dark:text-white">
+            {order._id.length > 12 ? `${order._id.substring(0, 12)}...` : order._id}
+          </p>
         </div>
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400">Date:</p>

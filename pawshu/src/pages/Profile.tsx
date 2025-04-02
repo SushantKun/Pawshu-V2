@@ -65,7 +65,7 @@ interface UserProfile {
 }
 
 const Profile = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, updateUser } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [donations, setDonations] = useState<Donation[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -117,6 +117,7 @@ const Profile = () => {
   const fetchProfile = async () => {
     try {
       const response = await api.get('/auth/profile');
+      console.log('Profile data response:', response.data);
       setProfile(response.data);
       setEditedProfile(response.data);
       if (response.data.avatar?.url) {
@@ -219,42 +220,54 @@ const Profile = () => {
     }, 5000);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveProfile = async () => {
     if (!editedProfile) return;
-
+    
+    setSaving(true);
     try {
-      setSaving(true);
-      let avatarData = editedProfile.avatar;
-
-      if (imageFile) {
-        const formData = new FormData();
-        formData.append('file', imageFile);
-
-        // Upload image through our server
-        const uploadResponse = await api.post('/upload', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        });
-
-        avatarData = {
-          public_id: uploadResponse.data.public_id,
-          url: uploadResponse.data.url
-        };
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
       }
 
-      const response = await api.put('/auth/profile', {
-        ...editedProfile,
-        avatar: avatarData
-      });
+      const formData = new FormData();
+      if (imageFile) {
+        formData.append('avatar', imageFile);
+      }
       
-      setProfile(response.data);
+      // Append other profile fields
+      Object.entries(editedProfile).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && key !== 'avatar') {
+          formData.append(key, value.toString());
+        }
+      });
+
+      const response = await fetch('http://localhost:5000/api/auth/profile', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update profile');
+      }
+
+      const updatedUser = await response.json();
+      setProfile(updatedUser);
+      updateUser(updatedUser);  // Update the user in AuthContext
       setIsEditing(false);
-      showCustomNotification('Profile information updated successfully!', 'success');
-    } catch (err: any) {
-      console.error('Error updating profile:', err);
-      showCustomNotification(err.response?.data?.message || 'Failed to update profile', 'error');
+      setImageFile(null);
+      setImagePreview(null);
+      setNotificationMessage('Profile updated successfully');
+      setNotificationType('success');
+      setShowNotification(true);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setNotificationMessage(error instanceof Error ? error.message : 'Failed to update profile');
+      setNotificationType('error');
+      setShowNotification(true);
     } finally {
       setSaving(false);
     }
@@ -289,6 +302,11 @@ const Profile = () => {
     
     try {
       setSaving(true);
+      console.log('Updating password with data:', {
+        currentPassword: '******', // Masked for security
+        newPassword: '******' // Masked for security
+      });
+      
       await api.put('/auth/profile/password', {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword
@@ -415,6 +433,7 @@ const Profile = () => {
                         formData.append('file', file);
                         
                         // Upload image through server
+                        console.log('Uploading profile image...');
                         const uploadResponse = await api.post('/upload', formData, {
                           headers: {
                             'Content-Type': 'multipart/form-data'
@@ -427,12 +446,15 @@ const Profile = () => {
                         };
                         
                         // Update just the avatar
+                        console.log('Updating profile with new avatar:', avatarData);
                         const response = await api.put('/auth/profile', {
                           ...profile,
                           avatar: avatarData
                         });
                         
                         setProfile(response.data);
+                        // Update the AuthContext with the new user data
+                        updateUser(response.data);
                         showCustomNotification('Profile picture updated successfully!', 'success');
                       } catch (err: any) {
                         console.error('Error updating profile picture:', err);
@@ -541,7 +563,7 @@ const Profile = () => {
 
                 {isEditing ? (
                   <div className="space-y-6">
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSaveProfile} className="space-y-4">
                       <div>
                         <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           Name

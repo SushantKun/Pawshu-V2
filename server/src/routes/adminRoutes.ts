@@ -1,6 +1,7 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import Doctor, { IDoctor } from '../models/Doctor';
-import { adminAuth, AuthRequest } from '../middleware/auth';
+import { adminAuth } from '../middleware/auth';
+import { AuthRequest } from '../types/auth';
 import { uploadImage } from '../utils/cloudinary';
 import User from '../models/User';
 import Appointment from '../models/Appointment';

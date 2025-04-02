@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   ShoppingBagIcon,
   UserIcon, 
@@ -10,7 +11,9 @@ import {
 } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
 import api from '../../api/axios';
+import { toast } from 'react-toastify';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area, ResponsiveContainer } from 'recharts';
+import { checkSession, USER_ROLES } from '../../utils/auth';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const UserIconComponent = UserIcon as IconComponent;
@@ -163,6 +166,7 @@ const generateUserGrowthData = (months: number) => {
 };
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
     counts: {
@@ -208,6 +212,28 @@ const AdminDashboard = () => {
     userGrowthData: []
   });
   const [error, setError] = useState<string | null>(null);
+
+  // Check session validity on mount and on interval
+  useEffect(() => {
+    // Check if admin session is valid
+    if (!checkSession(USER_ROLES.ADMIN)) {
+      toast.error('Your session has expired. Please log in again.');
+      navigate('/admin/login');
+      return;
+    }
+
+    // Set up periodic session checks
+    const sessionCheckInterval = setInterval(() => {
+      if (!checkSession(USER_ROLES.ADMIN)) {
+        toast.error('Your session has expired. Please log in again.');
+        clearInterval(sessionCheckInterval);
+        navigate('/admin/login');
+      }
+    }, 60000); // Check every minute
+
+    // Clean up interval on unmount
+    return () => clearInterval(sessionCheckInterval);
+  }, [navigate]);
 
   const testServerConnection = async () => {
     try {
@@ -548,7 +574,9 @@ const AdminDashboard = () => {
                 {stats?.recent?.orders?.map((order: any) => (
                   <div key={order._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{order.userId?.name || 'Unknown User'}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {order.userId && order.userId.name ? order.userId.name : 'Unknown User'}
+                      </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Order #{order._id?.slice(-6) || 'N/A'}</p>
                     </div>
                     <div className="text-right">
@@ -567,7 +595,9 @@ const AdminDashboard = () => {
                 {stats?.recent?.appointments?.map((appointment: any) => (
                   <div key={appointment._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{appointment.user?.name || 'Unknown User'}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {appointment.user && appointment.user.name ? appointment.user.name : 'Unknown User'}
+                      </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         Dr. {appointment.doctor?.firstName || ''} {appointment.doctor?.lastName || ''}
                       </p>

@@ -1,7 +1,9 @@
 import express, { Request, Response, NextFunction } from 'express';
 import Product, { IProduct, ProductImage } from '../models/Product';
 import { uploadImage, deleteImage } from '../utils/cloudinary';
-import { verifyToken, adminAuth, AuthRequest } from '../middleware/auth';
+import { verifyToken, adminAuth } from '../middleware/auth';
+import { AuthRequest } from '../types/auth';
+import { v2 as cloudinary } from 'cloudinary';
 
 const router = express.Router();
 

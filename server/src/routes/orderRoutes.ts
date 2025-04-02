@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { AuthRequest, verifyToken } from '../middleware/auth';
+import { verifyToken } from '../middleware/auth';
+import { AuthRequest } from '../types/auth';
 import Order from '../models/Order';
 import Product from '../models/Product';
 import crypto from 'crypto';

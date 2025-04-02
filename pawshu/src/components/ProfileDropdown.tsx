@@ -8,6 +8,13 @@ const ProfileDropdown = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  // Debug logging for profile dropdown
+  useEffect(() => {
+    if (user) {
+      console.log('ProfileDropdown user:', user);
+    }
+  }, [user]);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -26,13 +33,17 @@ const ProfileDropdown = () => {
 
   if (!user) return null;
 
+  // Get properties from top level or avatar object, with priority to top level
+  const firstName = user.firstName || user.avatar?.firstName || '';
+  const lastName = user.lastName || user.avatar?.lastName || '';
+  const avatarUrl = user.avatar?.url;
+
   // Get the first letter of the user's first name or use a fallback
-  const userInitial = user.firstName ? user.firstName.charAt(0) : 
-                     (user.email ? user.email.charAt(0) : 'U');
+  const userInitial = firstName.charAt(0) || (user.email ? user.email.charAt(0) : 'U');
 
   // Get display name
-  const displayName = user.firstName ? 
-                     (user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName) : 
+  const displayName = firstName ? 
+                     (lastName ? `${firstName} ${lastName}` : firstName) : 
                      user.email;
 
   // Format role for display (capitalize first letter)
@@ -47,9 +58,9 @@ const ProfileDropdown = () => {
         className="flex items-center space-x-2 focus:outline-none"
       >
         <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-white dark:border-gray-700">
-          {user.avatar?.url ? (
+          {avatarUrl ? (
             <img
-              src={user.avatar.url}
+              src={avatarUrl}
               alt={displayName}
               className="w-full h-full object-cover"
             />
