@@ -472,13 +472,13 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
     
     // Get recent orders
     const recentOrders = await Order.find()
-      .populate('userId', 'name')
+      .populate('userId', 'firstName lastName name email')
       .sort({ createdAt: -1 })
       .limit(5);
     
     // Get recent appointments
     const recentAppointments = await Appointment.find()
-      .populate('user', 'name')
+      .populate('user', 'firstName lastName name email')
       .populate('doctor', 'firstName lastName specialization')
       .sort({ createdAt: -1 })
       .limit(5);
@@ -1221,6 +1221,23 @@ router.delete('/charities/:id', adminAuth as RequestHandler, (async (req: AuthRe
   }
 }) as RequestHandler);
 
+// @route   GET /api/admin/users
+// @desc    Get all users
+// @access  Private (Admin only)
+router.get('/users', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
+  try {
+    console.log('GET /api/admin/users - Fetching all users');
+    const users = await User.find().select('-password');
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+}) as RequestHandler);
+
 // Create new user (Admin only)
 router.post('/users', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
@@ -1350,7 +1367,7 @@ router.get('/orders', adminAuth as RequestHandler, async (req: AuthRequest, res:
     }
     
     const orders = await Order.find()
-      .populate('userId', 'name email')
+      .populate('userId', 'firstName lastName name email')
       .sort({ createdAt: -1 });
     
     console.log(`Fetched ${orders.length} orders for admin`);

@@ -33,12 +33,14 @@ const DoctorLogin = () => {
       // Store doctor info (fixing potential property access issues)
       const doctorData = response.data.doctor || {};
       localStorage.setItem('doctorInfo', JSON.stringify({
+        _id: doctorData._id || doctorData.id || '',
         id: doctorData._id || doctorData.id || '',
         firstName: doctorData.firstName || '',
         lastName: doctorData.lastName || '',
         email: doctorData.email || '',
         specialization: doctorData.specialization || '',
-        isDoctor: true // Explicitly set to true for doctor dashboard access
+        isDoctor: true,
+        role: 'doctor'
       }));
 
       // Redirect to doctor dashboard

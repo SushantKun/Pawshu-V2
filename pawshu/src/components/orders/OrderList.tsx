@@ -18,6 +18,31 @@ interface Order {
   createdAt: string;
 }
 
+// Helper function to get user's full name from various data formats
+const getUserFullName = (user: any): string => {
+  if (!user) return 'Unknown User';
+  
+  // If user is a string, it's likely just an ID reference
+  if (typeof user === 'string') return 'Unknown User';
+  
+  // If name is available as a virtual property
+  if (user.name && typeof user.name === 'string' && user.name.trim() !== '') {
+    return user.name;
+  }
+  
+  // If firstName and lastName are available
+  if (user.firstName || user.lastName) {
+    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  }
+  
+  // Fall back to email if available
+  if (user.email) {
+    return user.email.split('@')[0]; // Use the part before @ as a fallback name
+  }
+  
+  return 'Unknown User';
+};
+
 const OrderList: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);

@@ -22,7 +22,7 @@ api.interceptors.request.use((config) => {
       clearAuthData(USER_ROLES.ADMIN);
       token = null;
     }
-  } else if (url.startsWith('/doctors')) {
+  } else if (url.startsWith('/doctors') || url.includes('/doctor')) {
     token = localStorage.getItem(TOKEN_STORAGE_KEYS.DOCTOR);
     // Check if token is expired and clear it
     if (token && isTokenExpired(token)) {
@@ -60,7 +60,7 @@ api.interceptors.response.use(
           if (error.config.url?.startsWith('/admin')) {
             clearAuthData(USER_ROLES.ADMIN);
             window.location.href = '/admin/login';
-          } else if (error.config.url?.startsWith('/doctors')) {
+          } else if (error.config.url?.startsWith('/doctors') || error.config.url?.includes('/doctor')) {
             clearAuthData(USER_ROLES.DOCTOR);
             window.location.href = '/doctor/login';
           } else {

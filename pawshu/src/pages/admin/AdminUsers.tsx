@@ -63,7 +63,7 @@ const AdminUsers = () => {
       }
       
       console.log('Fetching users with token:', token ? 'Token present' : 'No token');
-      const response = await axios.get(`${API_URL}/auth/users`, {
+      const response = await axios.get(`${API_URL}/admin/users`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -152,7 +152,7 @@ const AdminUsers = () => {
         return;
       }
       
-      await axios.post(`${API_URL}/auth/register`, formData, {
+      await axios.post(`${API_URL}/admin/users`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -189,7 +189,7 @@ const AdminUsers = () => {
         ...(formData.password ? { password: formData.password } : {})
       };
       
-      await axios.put(`${API_URL}/auth/users/${selectedUser._id}`, updateData, {
+      await axios.put(`${API_URL}/admin/users/${selectedUser._id}`, updateData, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -218,7 +218,7 @@ const AdminUsers = () => {
         return;
       }
       
-      await axios.delete(`${API_URL}/auth/users/${userId}`, {
+      await axios.delete(`${API_URL}/admin/users/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }

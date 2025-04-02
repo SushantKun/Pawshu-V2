@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
 import { toast } from 'react-toastify';
+import { checkSession, USER_ROLES } from '../../utils/auth';
 
 interface Appointment {
   _id: string;
@@ -53,10 +54,9 @@ const DoctorAppointments = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if doctor is logged in
-    const token = localStorage.getItem('doctorToken');
-    
-    if (!token) {
+    // Check if doctor is logged in using the auth utility
+    if (!checkSession(USER_ROLES.DOCTOR)) {
+      toast.error('Please log in to access this page.');
       navigate('/doctor/login');
       return;
     }
@@ -69,12 +69,8 @@ const DoctorAppointments = () => {
     try {
       setLoading(true);
       
-      // Use the correct API endpoint
-      const response = await api.get('/appointments/doctor', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('doctorToken')}`
-        }
-      });
+      // Use the api instance which will automatically handle auth headers
+      const response = await api.get('/appointments/doctor');
       
       console.log('Doctor appointments fetched:', response.data.length);
       
@@ -85,87 +81,80 @@ const DoctorAppointments = () => {
       const errorMsg = err.response?.data?.message || 'Failed to fetch appointments';
       setError(errorMsg);
       
-      if (err.response?.status === 401) {
-        toast.error('Your session has expired. Please log in again.');
-        // Unauthorized, redirect to login
-        localStorage.removeItem('doctorToken');
-        localStorage.removeItem('doctorInfo');
-        navigate('/doctor/login');
-      } else {
-        toast.warning(`${errorMsg} - Using dummy data for now`);
-        // Use dummy data as fallback
-        const dummyAppointments: Appointment[] = [
-          {
-            _id: "appointment1",
-            date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            timeSlot: "10:00 AM",
-            status: "pending",
-            petName: "Max",
-            petType: "Dog",
-            reason: "Annual checkup",
-            notes: "First time visit",
-            createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-            doctor: {
-              _id: "doctor1",
-              firstName: "John",
-              lastName: "Smith",
-              specialization: "General"
-            },
-            user: {
-              _id: "user1",
-              firstName: "Alice",
-              lastName: "Johnson",
-              email: "alice@example.com"
-            }
+      // The axios interceptor will handle redirects for 401/403 errors
+      toast.warning(`${errorMsg} - Using dummy data for now`);
+      // Use dummy data as fallback
+      const dummyAppointments: Appointment[] = [
+        {
+          _id: "appointment1",
+          date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          timeSlot: "10:00 AM",
+          status: "pending",
+          petName: "Max",
+          petType: "Dog",
+          reason: "Annual checkup",
+          notes: "First time visit",
+          createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+          doctor: {
+            _id: "doctor1",
+            firstName: "John",
+            lastName: "Smith",
+            specialization: "General"
           },
-          {
-            _id: "appointment2",
-            date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-            timeSlot: "2:30 PM",
-            status: "confirmed",
-            petName: "Bella",
-            petType: "Cat",
-            reason: "Vaccination",
-            notes: "Follow-up visit",
-            createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-            doctor: {
-              _id: "doctor1",
-              firstName: "John",
-              lastName: "Smith",
-              specialization: "General"
-            },
-            user: {
-              _id: "user2",
-              firstName: "Bob",
-              lastName: "Williams",
-              email: "bob@example.com"
-            }
-          },
-          {
-            _id: "appointment3",
-            date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-            timeSlot: "11:15 AM",
-            status: "completed",
-            petName: "Charlie",
-            petType: "Dog",
-            reason: "Skin condition",
-            createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-            doctor: {
-              _id: "doctor1",
-              firstName: "John",
-              lastName: "Smith",
-              specialization: "General"
-            },
-            user: {
-              _id: "user3",
-              firstName: "Carol",
-              lastName: "Brown",
-              email: "carol@example.com"
-            }
+          user: {
+            _id: "user1",
+            firstName: "Alice",
+            lastName: "Johnson",
+            email: "alice@example.com"
           }
-        ];
-        setAppointments(dummyAppointments);
-      }
+        },
+        {
+          _id: "appointment2",
+          date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+          timeSlot: "2:30 PM",
+          status: "confirmed",
+          petName: "Bella",
+          petType: "Cat",
+          reason: "Vaccination",
+          notes: "Follow-up visit",
+          createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+          doctor: {
+            _id: "doctor1",
+            firstName: "John",
+            lastName: "Smith",
+            specialization: "General"
+          },
+          user: {
+            _id: "user2",
+            firstName: "Bob",
+            lastName: "Williams",
+            email: "bob@example.com"
+          }
+        },
+        {
+          _id: "appointment3",
+          date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          timeSlot: "11:15 AM",
+          status: "completed",
+          petName: "Charlie",
+          petType: "Dog",
+          reason: "Skin condition",
+          createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+          doctor: {
+            _id: "doctor1",
+            firstName: "John",
+            lastName: "Smith",
+            specialization: "General"
+          },
+          user: {
+            _id: "user3",
+            firstName: "Carol",
+            lastName: "Brown",
+            email: "carol@example.com"
+          }
+        }
+      ];
+      setAppointments(dummyAppointments);
     } finally {
       setLoading(false);
     }
@@ -177,12 +166,7 @@ const DoctorAppointments = () => {
       
       await api.put(
         `/appointments/${appointmentId}/status`,
-        { status },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('doctorToken')}`
-          }
-        }
+        { status }
       );
       
       // Show success message
@@ -219,11 +203,6 @@ const DoctorAppointments = () => {
         { 
           status: selectedAppointment.status,
           notes 
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('doctorToken')}`
-          }
         }
       );
       
@@ -240,8 +219,8 @@ const DoctorAppointments = () => {
       );
       
       setShowNotesModal(false);
-      setNotes('');
       setSelectedAppointment(null);
+      setNotes('');
       setError('');
     } catch (err: any) {
       console.error('Error adding notes:', err);
@@ -263,12 +242,7 @@ const DoctorAppointments = () => {
       
       await api.put(
         `/appointments/${appointmentId}/payment`,
-        paymentData,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('doctorToken')}`
-          }
-        }
+        paymentData
       );
       
       // Show success message
@@ -391,6 +365,28 @@ const DoctorAppointments = () => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  // Helper function to get user's full name from different possible data structures
+  const getUserFullName = (user: any): string => {
+    if (!user) return 'Unknown Patient';
+    
+    // If name is available as a virtual property
+    if (user.name && typeof user.name === 'string' && user.name.trim() !== '') {
+      return user.name;
+    }
+    
+    // If firstName and lastName are available
+    if (user.firstName || user.lastName) {
+      return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    }
+    
+    // If email is available but no name
+    if (user.email) {
+      return user.email.split('@')[0]; // Use the part before @ as a fallback name
+    }
+    
+    return 'Unknown Patient';
   };
 
   // Add UI for the payment modal
@@ -573,12 +569,10 @@ const DoctorAppointments = () => {
                     <div className="flex flex-wrap justify-between items-start">
                       <div className="mb-4 md:mb-0">
                         <h3 className="text-lg font-medium">
-                          {appointment.user && appointment.user.firstName && appointment.user.lastName 
-                            ? `${appointment.user.firstName} ${appointment.user.lastName}`
-                            : 'Unknown Patient'}
+                          {getUserFullName(appointment.user)}
                         </h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          {appointment.user && appointment.user.email ? appointment.user.email : ''}
+                          {appointment.user?.email || ''}
                         </p>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {appointment.timeSlot} - Pet: {appointment.petName} ({appointment.petType})

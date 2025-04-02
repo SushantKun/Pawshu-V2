@@ -26,8 +26,10 @@ const CalendarIconComponent = CalendarIcon as IconComponent;
 interface Appointment {
   _id: string;
   user: {
-    name: string;
-    email: string;
+    name?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
   };
   date: string;
   timeSlot: string;
@@ -105,6 +107,28 @@ const StatCard = ({ title, value, icon, color }: StatCardProps) => (
 const formatMonthYear = (year: number, month: number) => {
   const date = new Date(year, month - 1);
   return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+};
+
+// Helper function to get user's full name from various data formats
+const getUserFullName = (user: any): string => {
+  if (!user) return 'Unknown Patient';
+  
+  // If name is available as a virtual property
+  if (user.name && typeof user.name === 'string' && user.name.trim() !== '') {
+    return user.name;
+  }
+  
+  // If firstName and lastName are available
+  if (user.firstName || user.lastName) {
+    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  }
+  
+  // If email is available but no name
+  if (user.email) {
+    return user.email.split('@')[0]; // Use the part before @ as a fallback name
+  }
+  
+  return 'Unknown Patient';
 };
 
 const DoctorDashboard = () => {
@@ -425,7 +449,7 @@ const DoctorDashboard = () => {
                         <tr key={appointment._id}>
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {appointment.user && appointment.user.name ? appointment.user.name : 'Unknown Patient'}
+                              {getUserFullName(appointment.user)}
                             </div>
                             <div className="text-sm text-gray-500 dark:text-gray-400">
                               {appointment.user && appointment.user.email ? appointment.user.email : 'No email provided'}

@@ -165,6 +165,31 @@ const generateUserGrowthData = (months: number) => {
   return data;
 };
 
+// Helper function to get user's full name from various data formats
+const getUserFullName = (user: any): string => {
+  if (!user) return 'Unknown User';
+  
+  // If user is a string, it's likely just an ID reference
+  if (typeof user === 'string') return 'Unknown User';
+  
+  // If name is available as a virtual property
+  if (user.name && typeof user.name === 'string' && user.name.trim() !== '') {
+    return user.name;
+  }
+  
+  // If firstName and lastName are available
+  if (user.firstName || user.lastName) {
+    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  }
+  
+  // Fall back to email if available
+  if (user.email) {
+    return user.email.split('@')[0]; // Use the part before @ as a fallback name
+  }
+  
+  return 'Unknown User';
+};
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -575,7 +600,7 @@ const AdminDashboard = () => {
                   <div key={order._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {order.userId && order.userId.name ? order.userId.name : 'Unknown User'}
+                        {getUserFullName(order.userId)}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Order #{order._id?.slice(-6) || 'N/A'}</p>
                     </div>
@@ -596,7 +621,7 @@ const AdminDashboard = () => {
                   <div key={appointment._id} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {appointment.user && appointment.user.name ? appointment.user.name : 'Unknown User'}
+                        {getUserFullName(appointment.user)}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         Dr. {appointment.doctor?.firstName || ''} {appointment.doctor?.lastName || ''}

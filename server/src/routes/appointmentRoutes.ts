@@ -144,7 +144,6 @@ router.get('/my-appointments', verifyToken, async (req: AuthRequest, res: Respon
     } else if (isDoctor) {
       // Doctor can see their own appointments
       appointments = await Appointment.find({ doctor: req.user._id })
-        .sort({ date: -1, time: -1 })
         .populate('user', 'firstName lastName email phone');
     } else {
       // Regular user can see their own appointments
@@ -177,7 +176,7 @@ router.get('/doctor', doctorAuth as RequestHandler, (async (req: AuthRequest, re
     console.log(`Finding appointments for doctor: ${req.user._id}`);
     
     const appointments = await Appointment.find({ doctor: req.user._id })
-      .populate('user', 'name email')
+      .populate('user', 'firstName lastName email name')
       .sort({ date: 1 });
 
     console.log(`Found ${appointments.length} appointments for doctor ${req.user._id}`);
@@ -333,7 +332,7 @@ router.delete('/:id', verifyToken, (async (req: AuthRequest, res: Response) => {
 
 // @route   PUT /api/appointments/:id/payment
 // @desc    Update appointment payment status
-// @access  Private (User, Admin)
+// @access  Private (User, Admin, Doctor)
 router.put('/:id/payment', verifyToken, (async (req: AuthRequest, res: Response) => {
   try {
     console.log(`PUT /api/appointments/${req.params.id}/payment - Updating payment status`);
@@ -347,11 +346,12 @@ router.put('/:id/payment', verifyToken, (async (req: AuthRequest, res: Response)
       return res.status(404).json({ message: 'Appointment not found' });
     }
 
-    // Only allow the user who created the appointment or an admin to update payment
+    // Allow the user who created the appointment, the assigned doctor, or an admin to update payment
     const isAdmin = req.user.isAdmin;
     const isAppointmentOwner = appointment.user.toString() === req.user._id.toString();
+    const isAssignedDoctor = req.user.isDoctor && appointment.doctor.toString() === req.user._id.toString();
     
-    if (!isAdmin && !isAppointmentOwner) {
+    if (!isAdmin && !isAppointmentOwner && !isAssignedDoctor) {
       return res.status(403).json({ message: 'Not authorized to update payment for this appointment' });
     }
 

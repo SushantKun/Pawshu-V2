@@ -17,12 +17,14 @@ interface ShippingAddress {
   state: string;
   postalCode: string;
   phone: string;
+  email: string;
 }
 
 interface Order {
   _id: string;
   userId: string;
   userName: string;
+  user?: any; // Object containing user details from populated userId field
   items: OrderItem[];
   totalAmount: number;
   shippingAddress: ShippingAddress;
@@ -31,6 +33,31 @@ interface Order {
   createdAt: string;
   updatedAt: string;
 }
+
+// Helper function to get user's full name from various data formats
+const getUserFullName = (user: any): string => {
+  if (!user) return 'Unknown User';
+  
+  // If user is a string, it's likely just an ID reference
+  if (typeof user === 'string') return 'Unknown User';
+  
+  // If name is available as a virtual property
+  if (user.name && typeof user.name === 'string' && user.name.trim() !== '') {
+    return user.name;
+  }
+  
+  // If firstName and lastName are available
+  if (user.firstName || user.lastName) {
+    return `${user.firstName || ''} ${user.lastName || ''}`.trim();
+  }
+  
+  // Fall back to email if available
+  if (user.email) {
+    return user.email.split('@')[0]; // Use the part before @ as a fallback name
+  }
+  
+  return 'Unknown User';
+};
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -209,7 +236,7 @@ const AdminOrders = () => {
                   <span className="font-medium">Date:</span> {formatDate(selectedOrder.createdAt)}
                 </p>
                 <p className="text-gray-900 dark:text-white mb-1">
-                  <span className="font-medium">Customer:</span> {selectedOrder.userName}
+                  <span className="font-medium">Customer:</span> {getUserFullName(selectedOrder.user || { firstName: selectedOrder.shippingAddress.firstName, lastName: selectedOrder.shippingAddress.lastName })}
                 </p>
                 <p className="text-gray-900 dark:text-white mb-1">
                   <span className="font-medium">Total Amount:</span> {formatCurrency(selectedOrder.totalAmount)}
@@ -476,8 +503,13 @@ const AdminOrders = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
                       #{order._id.slice(-8)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                      {order.userName}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        {getUserFullName(order.user || { firstName: order.shippingAddress.firstName, lastName: order.shippingAddress.lastName })}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {order.shippingAddress.email || ''}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
                       {formatDate(order.createdAt)}
