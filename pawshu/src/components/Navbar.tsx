@@ -4,15 +4,18 @@ import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
 import ProfileDropdown from './ProfileDropdown';
 import CartSlideOver from './CartSlideOver';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   ShoppingCartIcon as ShoppingCartIconOutline, 
   HeartIcon as HeartIconOutline,
   SunIcon as SunIconOutline,
-  MoonIcon as MoonIconOutline
+  MoonIcon as MoonIconOutline,
+  BellIcon as BellIconOutline,
+  ChatBubbleLeftIcon as ChatIconOutline
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import type { ComponentType, SVGProps } from 'react';
+import api from '../api/axios';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -21,6 +24,36 @@ const HeartIcon = HeartIconOutline as IconComponent;
 const HeartSolidIcon = HeartIconSolid as IconComponent;
 const SunIcon = SunIconOutline as IconComponent;
 const MoonIcon = MoonIconOutline as IconComponent;
+const BellIcon = BellIconOutline as IconComponent;
+const ChatIcon = ChatIconOutline as IconComponent;
+
+// Define the Appointment interface for notifications
+interface Appointment {
+  _id: string;
+  doctor: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+  };
+  date: string;
+  timeSlot: string;
+  petName: string;
+  status: string;
+  payment?: {
+    status: string;
+    method?: string;
+    amount?: number;
+  };
+}
+
+// Define message interface for chat
+interface Message {
+  id: string;
+  sender: string;
+  content: string;
+  timestamp: string;
+  isRead: boolean;
+}
 
 const Navbar = () => {
   const { user, loading } = useAuth();
@@ -28,6 +61,20 @@ const Navbar = () => {
   const { darkMode, toggleDarkMode } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  
+  // State for notification dropdown
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const [pendingPayments, setPendingPayments] = useState<Appointment[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const notificationRef = useRef<HTMLDivElement>(null);
+  
+  // State for chat dropdown
+  const [showChatDropdown, setShowChatDropdown] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([
+    { id: '1', sender: 'Support', content: 'Hello! How can we help you today?', timestamp: new Date().toISOString(), isRead: false },
+    { id: '2', sender: 'Dr. Smith', content: 'Your pet\'s checkup is scheduled for tomorrow.', timestamp: new Date().toISOString(), isRead: false }
+  ]);
+  const chatRef = useRef<HTMLDivElement>(null);
 
   // Debug log for user authentication state
   useEffect(() => {
@@ -47,8 +94,61 @@ const Navbar = () => {
     });
   }, [user, loading]);
 
+  // Fetch notifications on mount
+  useEffect(() => {
+    if (user) {
+      fetchPendingPayments();
+    }
+  }, [user]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotificationDropdown(false);
+      }
+      if (chatRef.current && !chatRef.current.contains(event.target as Node)) {
+        setShowChatDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const fetchPendingPayments = async () => {
+    try {
+      setNotificationsLoading(true);
+      const response = await api.get('/appointments/my-appointments');
+      
+      // Extract the appointments array safely
+      let appointmentsData = [];
+      if (response.data && response.data.appointments) {
+        appointmentsData = response.data.appointments;
+      } else if (Array.isArray(response.data)) {
+        appointmentsData = response.data;
+      }
+      
+      // Filter appointments that are confirmed but payment is pending
+      const pendingPaymentAppointments = appointmentsData.filter(
+        (appointment: Appointment) => 
+          appointment.status === 'confirmed' && 
+          (!appointment.payment || appointment.payment.status !== 'paid')
+      );
+      
+      setPendingPayments(pendingPaymentAppointments);
+      setNotificationsLoading(false);
+    } catch (error) {
+      console.error('Error fetching pending payments:', error);
+      setNotificationsLoading(false);
+    }
+  };
+
   const cartItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const wishlistCount = wishlist.length;
+  const unreadMessagesCount = messages.filter(msg => !msg.isRead).length;
 
   // Add scroll event listener
   useEffect(() => {
@@ -130,6 +230,145 @@ const Navbar = () => {
                         </span>
                       )}
                     </Link>
+                    
+                    {/* Notification Bell Icon with Dropdown */}
+                    <div className="relative" ref={notificationRef}>
+                      <button
+                        onClick={() => {
+                          setShowNotificationDropdown(!showNotificationDropdown);
+                          setShowChatDropdown(false);
+                        }}
+                        className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
+                        aria-label="Notifications"
+                      >
+                        <BellIcon className="h-6 w-6" style={{ display: 'block', minWidth: '1.5rem', minHeight: '1.5rem' }} />
+                        {pendingPayments.length > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                            {pendingPayments.length}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Notification Dropdown */}
+                      {showNotificationDropdown && (
+                        <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 animate-fadeIn">
+                          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Notifications</h3>
+                          </div>
+                          
+                          <div className="max-h-80 overflow-y-auto">
+                            {notificationsLoading ? (
+                              <div className="p-4 flex justify-center">
+                                <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
+                              </div>
+                            ) : pendingPayments.length > 0 ? (
+                              <div>
+                                {pendingPayments.map((appointment) => (
+                                  <div key={appointment._id} className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                                    <p className="text-sm text-gray-800 dark:text-white font-medium">
+                                      Payment Required
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                      Appointment with Dr. {appointment.doctor.firstName} {appointment.doctor.lastName} 
+                                      on {new Date(appointment.date).toLocaleDateString()} at {appointment.timeSlot} 
+                                      for {appointment.petName}.
+                                    </p>
+                                    <div className="mt-2">
+                                      <Link 
+                                        to="/profile" 
+                                        className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                                        onClick={() => setShowNotificationDropdown(false)}
+                                      >
+                                        Make Payment →
+                                      </Link>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                No new notifications
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="p-3 border-t border-gray-200 dark:border-gray-700 text-center">
+                            <Link 
+                              to="/notifications" 
+                              className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                              onClick={() => setShowNotificationDropdown(false)}
+                            >
+                              View All Notifications
+                            </Link>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Chat Icon with Dropdown */}
+                    <div className="relative" ref={chatRef}>
+                      <button
+                        onClick={() => {
+                          setShowChatDropdown(!showChatDropdown);
+                          setShowNotificationDropdown(false);
+                        }}
+                        className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
+                        aria-label="Chat"
+                      >
+                        <ChatIcon className="h-6 w-6" style={{ display: 'block', minWidth: '1.5rem', minHeight: '1.5rem' }} />
+                        {unreadMessagesCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                            {unreadMessagesCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Chat Dropdown */}
+                      {showChatDropdown && (
+                        <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 animate-fadeIn">
+                          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Recent Messages</h3>
+                          </div>
+                          
+                          <div className="max-h-80 overflow-y-auto">
+                            {messages.length > 0 ? (
+                              <div>
+                                {messages.map((message) => (
+                                  <div key={message.id} className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <div className="flex justify-between items-start">
+                                      <p className="text-sm text-gray-800 dark:text-white font-medium">
+                                        {message.sender}
+                                      </p>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                                        {new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                                      {message.content}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                No messages
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="p-3 border-t border-gray-200 dark:border-gray-700 text-center">
+                            <Link 
+                              to="/chat" 
+                              className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                              onClick={() => setShowChatDropdown(false)}
+                            >
+                              Open Chat
+                            </Link>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
                     <button
                       onClick={openCart}
                       className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
@@ -216,6 +455,48 @@ const Navbar = () => {
                 </>
               )}
             </button>
+            
+            {/* Add Notification and Chat links for mobile when user is logged in */}
+            {user && (
+              <>
+                <button 
+                  onClick={() => {
+                    setShowNotificationDropdown(!showNotificationDropdown);
+                    setShowChatDropdown(false);
+                    setIsMenuOpen(false);
+                  }}
+                  className="flex items-center justify-between text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors w-full"
+                >
+                  <div className="flex items-center">
+                    <BellIcon className="h-5 w-5 mr-2" />
+                    <span>Notifications</span>
+                  </div>
+                  {pendingPayments.length > 0 && (
+                    <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {pendingPayments.length}
+                    </span>
+                  )}
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowChatDropdown(!showChatDropdown);
+                    setShowNotificationDropdown(false);
+                    setIsMenuOpen(false);
+                  }}
+                  className="flex items-center justify-between text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors w-full"
+                >
+                  <div className="flex items-center">
+                    <ChatIcon className="h-5 w-5 mr-2" />
+                    <span>Chat</span>
+                  </div>
+                  {unreadMessagesCount > 0 && (
+                    <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {unreadMessagesCount}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
             
             {!user && !loading && (
               <div className="flex flex-col space-y-2 pt-2 border-t border-white/20 dark:border-gray-700/20">

@@ -37,6 +37,7 @@ import Doctors from './pages/Doctors';
 import AdminSidebar from './components/admin/AdminSidebar';
 import RetryPayment from './pages/RetryPayment';
 import { useNavigate, useLocation } from 'react-router-dom';
+import NotificationsPage from './pages/Notifications';
 
 // Protected route component for admin routes
 const ProtectedAdminRoute = ({ children }: { children: JSX.Element }) => {
@@ -216,6 +217,23 @@ const EsewaRedirect = () => {
     </div>
   );
 };
+
+// Placeholder for Chat page until it's implemented
+const ChatPage = () => (
+  <div className="container mx-auto px-4 py-8">
+    <h1 className="text-3xl font-bold mb-6">Chat Feature</h1>
+    <p className="text-xl mb-4">This feature is coming soon!</p>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+      <p className="mb-4">The chat feature will allow you to communicate with:</p>
+      <ul className="list-disc pl-5 mb-4">
+        <li>Customer support</li>
+        <li>Veterinarians</li>
+        <li>Other pet owners</li>
+      </ul>
+      <p>Stay tuned for updates!</p>
+    </div>
+  </div>
+);
 
 function App() {
   return (
@@ -417,6 +435,20 @@ function App() {
                 </ProtectedRoute>
               } />
               <Route path="/esewa-success" element={<EsewaRedirect />} />
+              <Route path="/notifications" element={
+                <ProtectedRoute>
+                  <UserLayout>
+                    <NotificationsPage />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/chat" element={
+                <ProtectedRoute>
+                  <UserLayout>
+                    <ChatPage />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Router>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingCartIcon, UserIcon, SunIcon, MoonIcon, HeartIcon } from '@heroicons/react/24/outline';
+import { ShoppingCartIcon, UserIcon, SunIcon, MoonIcon, HeartIcon, BellIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -8,9 +8,8 @@ import { useTheme } from '../../context/ThemeContext';
 import PawshuLogo from '../../assets/images/pawshu-logo.png';
 import LogoWhite from '../../assets/images/pawshu-logo-white.png';
 import MobileMenu from './MobileMenu';
-import Notifications from '../Notifications';
-import NotificationBell from '../NotificationBell';
 import './Navbar.css';
+import Notifications from '../Notifications';
 
 // Type cast icon components to fix TypeScript errors
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
@@ -19,6 +18,8 @@ const UserIconComponent = UserIcon as IconComponent;
 const SunIconComponent = SunIcon as IconComponent;
 const MoonIconComponent = MoonIcon as IconComponent;
 const HeartIconComponent = HeartIcon as IconComponent;
+const BellIconComponent = BellIcon as IconComponent;
+const ChatIconComponent = ChatBubbleLeftIcon as IconComponent;
 
 // Import User interface from AuthContext
 interface User {
@@ -195,9 +196,20 @@ const Navbar = () => {
               </Link>
             )}
 
-            {/* Notifications */}
+            {/* Notification Bell */}
             {user && (
               <Notifications />
+            )}
+
+            {/* Chat Icon */}
+            {user && (
+              <Link 
+                to="/chat" 
+                className="p-2 rounded-full text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors duration-200 relative"
+                aria-label="Chat"
+              >
+                <ChatIconComponent className="navbar-icon" style={{ width: '1.75rem', height: '1.75rem', display: 'block', color: 'currentColor' }} />
+              </Link>
             )}
 
             {/* Cart Icon */}

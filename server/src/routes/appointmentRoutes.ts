@@ -6,6 +6,7 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 import axios from 'axios';
 import { Types } from 'mongoose';
+import { sendEmail } from '../utils/email';
 
 const router = express.Router();
 
@@ -356,7 +357,7 @@ router.put('/:id/status', verifyToken, async (req: AuthRequest, res: Response) =
     const updatedAppointment = await appointment.save();
     console.log(`Successfully updated appointment ${appointmentId} status to ${status}`);
     
-    // Send notification email for status change
+    // Send notification for status change
     try {
       // Email to patient
       if (populatedUser.email) {
@@ -367,6 +368,7 @@ router.put('/:id/status', verifyToken, async (req: AuthRequest, res: Response) =
         if (status === 'confirmed') {
           subject = 'Appointment Confirmed';
           message = `Your appointment with Dr. ${populatedDoctor.firstName} ${populatedDoctor.lastName} has been confirmed. Please arrive 10 minutes before your scheduled time.`;
+          console.log("DOCTOR ACCEPTED APPOINTMENT NOTIFICATION would be sent to user:", populatedUser.email);
         } else if (status === 'completed') {
           subject = 'Appointment Completed';
           message = `Your appointment with Dr. ${populatedDoctor.firstName} ${populatedDoctor.lastName} has been marked as completed. Thank you for using our service.`;
@@ -378,12 +380,17 @@ router.put('/:id/status', verifyToken, async (req: AuthRequest, res: Response) =
           }
         }
         
-        // Send email (uncomment when email service is configured)
-        // await sendEmail(populatedUser.email, subject, message);
+        // Call the email service with the updated interface
+        console.log(`Notification logging (email will be sent in future implementation):`);
+        await sendEmail({
+          to: populatedUser.email,
+          subject: subject,
+          text: message
+        });
       }
     } catch (emailError) {
-      console.error('Failed to send notification email:', emailError);
-      // Don't fail the request if email sending fails
+      console.error('Failed to send notification:', emailError);
+      // Don't fail the request if notification fails
     }
     
     res.status(200).json(updatedAppointment);
