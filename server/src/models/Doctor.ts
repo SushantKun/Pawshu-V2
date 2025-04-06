@@ -1,4 +1,4 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Schema, Model } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IDoctor extends Document {
@@ -9,102 +9,108 @@ export interface IDoctor extends Document {
   specialization: string;
   experience: number;
   bio: string;
-  availability: string[]; // Format: "Day startHour-endHour", e.g., "Monday 9-12"
+  availability: string[];
   isActive: boolean;
   locationPreference: 'clinic' | 'home_visit' | 'both';
   clinicAddress?: string;
-  appointmentDuration: number; // in minutes
-  bookingFee: number; // doctor's booking fee in NPR
+  appointmentDuration: number;
+  bookingFee: number;
   profileImage?: {
-    public_id: string;
-    url: string;
+    public_id?: string;
+    url?: string;
   };
-  createdAt: Date;
-  comparePassword(candidatePassword: string): Promise<boolean>;
+  comparePassword(password: string): Promise<boolean>;
 }
 
-const doctorSchema = new Schema<IDoctor>({
-  firstName: {
-    type: String,
-    required: [true, 'Please provide first name'],
-    trim: true
+const DoctorSchema = new Schema<IDoctor>(
+  {
+    firstName: {
+      type: String,
+      required: [true, 'First name is required'],
+      trim: true,
+    },
+    lastName: {
+      type: String,
+      required: [true, 'Last name is required'],
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: [true, 'Email is required'],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address'],
+    },
+    password: {
+      type: String,
+      required: [true, 'Password is required'],
+      minlength: [6, 'Password must be at least 6 characters'],
+      select: false,
+    },
+    specialization: {
+      type: String,
+      required: [true, 'Specialization is required'],
+    },
+    experience: {
+      type: Number,
+      default: 0,
+    },
+    bio: {
+      type: String,
+      default: '',
+    },
+    availability: {
+      type: [String],
+      default: [],
+      // Each availability entry should be in the format: "Day StartHour-EndHour"
+      // e.g., "Monday 9-17"
+      validate: {
+        validator: function(v: string[]) {
+          // Each entry should match this format: "Day StartHour-EndHour"
+          return v.every((entry: string) => {
+            return /^[A-Z][a-z]+ \d+-\d+$/.test(entry);
+          });
+        },
+        message: props => `${props.value} is not a valid availability format! Expected format: "Day StartHour-EndHour"`
+      }
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    locationPreference: {
+      type: String,
+      enum: ['clinic', 'home_visit', 'both'],
+      default: 'clinic',
+    },
+    clinicAddress: {
+      type: String,
+      default: '',
+    },
+    appointmentDuration: {
+      type: Number,
+      default: 30, // minutes
+    },
+    bookingFee: {
+      type: Number,
+      default: 500, // NPR
+    },
+    profileImage: {
+      public_id: String,
+      url: String,
+    },
   },
-  lastName: {
-    type: String,
-    required: [true, 'Please provide last name'],
-    trim: true
-  },
-  email: {
-    type: String,
-    required: [true, 'Please provide email'],
-    unique: true,
-    trim: true,
-    lowercase: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email']
-  },
-  password: {
-    type: String,
-    required: [true, 'Please provide password'],
-    minlength: [6, 'Password must be at least 6 characters'],
-    select: false
-  },
-  specialization: {
-    type: String,
-    required: [true, 'Please provide specialization'],
-    trim: true
-  },
-  experience: {
-    type: Number,
-    required: [true, 'Please provide years of experience'],
-    min: [0, 'Experience cannot be negative']
-  },
-  bio: {
-    type: String,
-    required: [true, 'Please provide a short bio'],
-    maxlength: [500, 'Bio cannot exceed 500 characters']
-  },
-  availability: [{
-    type: String,
-    required: [true, 'Please provide availability']
-    // Format: "Day startHour-endHour", e.g., "Monday 9-12"
-  }],
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-  locationPreference: {
-    type: String,
-    enum: ['clinic', 'home_visit', 'both'],
-    default: 'clinic'
-  },
-  clinicAddress: {
-    type: String,
-    trim: true
-  },
-  appointmentDuration: {
-    type: Number,
-    default: 30, // Default to 30 minutes
-    min: [15, 'Appointment duration must be at least 15 minutes']
-  },
-  bookingFee: {
-    type: Number,
-    default: 500, // Default to 500 NPR
-    min: [0, 'Booking fee cannot be negative']
-  },
-  profileImage: {
-    public_id: String,
-    url: String
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  {
+    timestamps: true,
   }
-});
+);
 
 // Hash password before saving
-doctorSchema.pre('save', async function(next) {
+DoctorSchema.pre<IDoctor>('save', async function (next) {
+  // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
-  
+
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -114,27 +120,18 @@ doctorSchema.pre('save', async function(next) {
   }
 });
 
-// Compare password method
-doctorSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
+// Method to compare password
+DoctorSchema.methods.comparePassword = async function (
+  candidatePassword: string
+): Promise<boolean> {
   try {
-    console.log('Comparing password for doctor:', this.email);
-    if (!candidatePassword) {
-      console.error('Empty candidate password provided');
-      return false;
-    }
-    
-    if (!this.password) {
-      console.error('Doctor has no stored password');
-      return false;
-    }
-    
-    const isMatch = await bcrypt.compare(candidatePassword, this.password);
-    console.log('Password comparison result:', isMatch);
-    return isMatch;
+    return await bcrypt.compare(candidatePassword, this.password);
   } catch (error) {
-    console.error('Password comparison error:', error);
-    throw new Error('Password comparison failed');
+    throw new Error(error as any);
   }
 };
 
-export default mongoose.model<IDoctor>('Doctor', doctorSchema); 
+// Create and export the Doctor model
+const Doctor: Model<IDoctor> = mongoose.model<IDoctor>('Doctor', DoctorSchema);
+
+export default Doctor; 

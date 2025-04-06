@@ -4,6 +4,7 @@ import { BellIcon } from '@heroicons/react/24/solid';
 import type { ComponentType, SVGProps } from 'react';
 import api from '../api/axios';
 import './layout/Navbar.css'; // Import the Navbar.css file
+import AppointmentsLink from './AppointmentsLink';
 
 // Type cast icon components to fix TypeScript errors
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
@@ -93,7 +94,7 @@ const Notifications: React.FC = () => {
             type: 'payment',
             date: new Date().toISOString(),
             read: false,
-            link: '/profile',
+            link: '/profile',  // Will handle this via AppointmentsLink
             data: appointment
           });
         }
@@ -109,7 +110,7 @@ const Notifications: React.FC = () => {
               type: 'status',
               date: appointment.updatedAt,
               read: false,
-              link: '/profile',
+              link: '/profile',  // Will handle this via AppointmentsLink
               data: appointment
             });
           }
@@ -126,7 +127,7 @@ const Notifications: React.FC = () => {
               type: 'status',
               date: appointment.updatedAt,
               read: false,
-              link: '/profile',
+              link: '/profile',  // Will handle this via AppointmentsLink
               data: appointment
             });
           }
@@ -157,6 +158,16 @@ const Notifications: React.FC = () => {
     if (!showDropdown) {
       setHasNewNotifications(false); // Reset the notification indicator when opening dropdown
     }
+  };
+
+  // Add a direct navigation handler for payment links
+  const handlePaymentClick = () => {
+    // Set the active tab marker in sessionStorage
+    sessionStorage.setItem('activeTab', 'appointments');
+    // Add a trigger that we're coming from notifications
+    sessionStorage.setItem('fromNotification', 'true');
+    // Close the dropdown
+    setShowDropdown(false);
   };
 
   return (
@@ -205,12 +216,21 @@ const Notifications: React.FC = () => {
                       {notification.message}
                     </p>
                     <div className="mt-2 flex justify-between items-center">
-                      <Link 
-                        to={notification.link} 
-                        className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        {notification.type === 'payment' ? 'Make Payment →' : 'View Details →'}
-                      </Link>
+                      {notification.type === 'payment' ? (
+                        <AppointmentsLink 
+                          className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                          onClick={handlePaymentClick}
+                        >
+                          Make Payment →
+                        </AppointmentsLink>
+                      ) : (
+                        <AppointmentsLink 
+                          className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                          onClick={() => setShowDropdown(false)}
+                        >
+                          View Details →
+                        </AppointmentsLink>
+                      )}
                       <span className="text-xs text-gray-400">
                         {new Date(notification.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                       </span>

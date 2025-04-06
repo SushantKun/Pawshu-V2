@@ -85,7 +85,24 @@ const Profile = () => {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState(() => {
+    // Check sessionStorage first (has priority)
+    const sessionTab = sessionStorage.getItem('activeTab');
+    if (sessionTab) {
+      // Clear it immediately to prevent it persisting across page refreshes
+      sessionStorage.removeItem('activeTab');
+      return sessionTab;
+    }
+    
+    // Then check localStorage (previous implementation)
+    const savedTab = localStorage.getItem('activeProfileTab');
+    if (savedTab) {
+      localStorage.removeItem('activeProfileTab');
+      return savedTab;
+    }
+    
+    return 'profile';
+  });
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState<UserProfile | null>(null);
@@ -581,6 +598,55 @@ const Profile = () => {
     }
   }, []);
 
+  // Check URL for tab parameter to set active tab
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    
+    // Only set the tab if it's a valid one
+    if (tabParam && ['profile', 'appointments', 'donations', 'orders'].includes(tabParam)) {
+      setActiveTab(tabParam);
+      console.log(`Setting active tab to ${tabParam} from URL parameter`);
+    }
+  }, []);
+
+  // Add event listener for tab switching
+  useEffect(() => {
+    const handleTabChange = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail && customEvent.detail.tab) {
+        console.log('Switching to tab:', customEvent.detail.tab);
+        setActiveTab(customEvent.detail.tab);
+      }
+    };
+
+    // Listen for the custom event
+    window.addEventListener('switchToAppointmentsTab', handleTabChange);
+
+    return () => {
+      window.removeEventListener('switchToAppointmentsTab', handleTabChange);
+    };
+  }, []);
+
+  // This useEffect runs on first render and activates the appointments tab if specified in URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    
+    if (tabParam && ['profile', 'appointments', 'donations', 'orders'].includes(tabParam)) {
+      setActiveTab(tabParam);
+      console.log(`Setting active tab to ${tabParam} from URL parameter`);
+    }
+    
+    // Force set the tab to appointments if coming from a notification
+    const fromNotification = sessionStorage.getItem('fromNotification');
+    if (fromNotification === 'true') {
+      sessionStorage.removeItem('fromNotification');
+      setActiveTab('appointments');
+      console.log('Setting active tab to appointments from notification');
+    }
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -753,7 +819,7 @@ const Profile = () => {
                 className={`${
                   activeTab === 'profile'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                 } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm`}
               >
                 Profile
@@ -763,7 +829,7 @@ const Profile = () => {
                 className={`${
                   activeTab === 'appointments'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                 } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm`}
               >
                 Appointments
@@ -773,7 +839,7 @@ const Profile = () => {
                 className={`${
                   activeTab === 'donations'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                 } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm`}
               >
                 Donations
@@ -783,7 +849,7 @@ const Profile = () => {
                 className={`${
                   activeTab === 'orders'
                     ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                 } whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm`}
               >
                 Orders

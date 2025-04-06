@@ -119,28 +119,70 @@ const DoctorProfile = () => {
 
   useEffect(() => {
     // Convert availability strings to custom time slots
-    if (formData.availability && formData.availability.length > 0) {
+    if (doctor && doctor.availability && doctor.availability.length > 0) {
       const slots: TimeSlot[] = [];
-      formData.availability.forEach(availability => {
+      console.log('Initializing time slots from doctor data:', doctor.availability);
+      
+      doctor.availability.forEach(availability => {
+        if (!availability) return; // Skip empty values
+        
         const parts = availability.split(' ');
         if (parts.length >= 2) {
           const day = parts[0];
           const timeRange = parts[1];
+          
+          if (!timeRange.includes('-')) {
+            console.warn('Invalid time range format:', timeRange);
+            return;
+          }
+          
           const [timeStart, timeEnd] = timeRange.split('-');
           
           if (timeStart && timeEnd) {
-            slots.push({
-              day,
-              startTime: `${timeStart.padStart(2, '0')}:00`,
-              endTime: `${timeEnd.padStart(2, '0')}:00`,
-              id: `${day}-${timeStart}-${timeEnd}`
-            });
+            try {
+              // Ensure we're dealing with hour integers
+              const startHour = parseInt(timeStart);
+              const endHour = parseInt(timeEnd);
+              
+              if (isNaN(startHour) || isNaN(endHour)) {
+                console.warn('Invalid hours in time slot:', timeStart, timeEnd);
+                return;
+              }
+              
+              // Create a formatted time slot
+              const timeSlot = {
+                day,
+                startTime: `${startHour.toString().padStart(2, '0')}:00`,
+                endTime: `${endHour.toString().padStart(2, '0')}:00`,
+                id: `${day}-${startHour}-${endHour}`
+              };
+              
+              slots.push(timeSlot);
+            } catch (err) {
+              console.error('Error parsing time slot:', err);
+            }
           }
         }
       });
+      
+      console.log('Initialized time slots:', slots);
       setCustomTimeSlots(slots);
+      
+      // Update formData.availability to match doctor.availability
+      setFormData(prevFormData => ({
+        ...prevFormData,
+        availability: [...doctor.availability]
+      }));
+    } else {
+      console.log('No availability data in doctor profile or doctor not loaded yet');
+      
+      // Clear time slots if there are no availability entries
+      if (doctor && (!doctor.availability || doctor.availability.length === 0)) {
+        console.log('Clearing time slots - no availability in doctor data');
+        setCustomTimeSlots([]);
+      }
     }
-  }, [formData.availability]);
+  }, [doctor]);
 
   const fetchDoctorProfile = async () => {
     try {
@@ -240,51 +282,62 @@ const DoctorProfile = () => {
       return;
     }
     
-    // Add to custom slots - keep the original time with minutes for display
-    setCustomTimeSlots([
-      ...customTimeSlots,
-      {
-        day,
-        startTime,
-        endTime,
-        id: slotId
-      }
-    ]);
-    
-    // Add to availability in the required format - use clean hours WITHOUT any minutes
+    // Create the formatted availability value
     const availabilityValue = `${day} ${startHour}-${endHour}`;
     console.log('Adding availability value:', availabilityValue);
     
-    if (!formData.availability.includes(availabilityValue)) {
-      setFormData({
-        ...formData,
-        availability: [...formData.availability, availabilityValue]
-      });
-    }
+    // Add to custom slots - keep the original time with minutes for display
+    const newTimeSlot = {
+      day,
+      startTime,
+      endTime,
+      id: slotId
+    };
     
-    // Reset the error if there was one
+    setCustomTimeSlots(prev => [...prev, newTimeSlot]);
+    
+    // Update the formData availability array
+    setFormData(prev => ({
+      ...prev,
+      availability: [...prev.availability.filter(item => item !== availabilityValue), availabilityValue]
+    }));
+    
+    // Show success message
     setError('');
+    setSuccess('Time slot added successfully');
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => {
+      setSuccess('');
+    }, 3000);
   };
 
   const handleTimeSlotDelete = (slotId: string) => {
-    // Remove from custom slots
-    const updatedSlots = customTimeSlots.filter(slot => slot.id !== slotId);
-    setCustomTimeSlots(updatedSlots);
-    
     // Get the slot that's being deleted
     const slotToDelete = customTimeSlots.find(slot => slot.id === slotId);
-    if (slotToDelete) {
-      // Extract the components to create the availability value
-      const startHour = parseInt(slotToDelete.startTime.split(':')[0]);
-      const endHour = parseInt(slotToDelete.endTime.split(':')[0]);
-      const availabilityValue = `${slotToDelete.day} ${startHour}-${endHour}`;
-      
-      // Remove from availability
-      setFormData({
-        ...formData,
-        availability: formData.availability.filter(item => item !== availabilityValue)
-      });
-    }
+    if (!slotToDelete) return;
+    
+    // Extract the components to create the availability value
+    const startHour = parseInt(slotToDelete.startTime.split(':')[0]);
+    const endHour = parseInt(slotToDelete.endTime.split(':')[0]);
+    const availabilityValue = `${slotToDelete.day} ${startHour}-${endHour}`;
+    
+    // Remove from custom slots
+    setCustomTimeSlots(prev => prev.filter(slot => slot.id !== slotId));
+    
+    // Remove from availability in formData
+    setFormData(prev => ({
+      ...prev,
+      availability: prev.availability.filter(item => item !== availabilityValue)
+    }));
+    
+    // Show success message
+    setSuccess('Time slot removed successfully');
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => {
+      setSuccess('');
+    }, 3000);
   };
 
   const handleNewSlotChange = (field: 'day' | 'startTime' | 'endTime', value: string) => {
@@ -459,18 +512,34 @@ const DoctorProfile = () => {
       formDataToSend.append('appointmentDuration', formData.appointmentDuration.toString());
       formDataToSend.append('bookingFee', formData.bookingFee.toString());
       
-      // Add availability slots
+      // Process availability data from customTimeSlots to ensure consistency
+      let availabilitySlots: string[] = [];
+      
+      // Generate availability entries from customTimeSlots
       if (customTimeSlots.length > 0) {
-        // Convert custom time slots to availability format
-        const availabilityStrings = customTimeSlots.map(slot => {
+        console.log('Preparing time slots for submission:', customTimeSlots);
+        
+        customTimeSlots.forEach(slot => {
+          // Parse hours from the time strings (HH:MM format)
           const startHour = parseInt(slot.startTime.split(':')[0]);
           const endHour = parseInt(slot.endTime.split(':')[0]);
-          return `${slot.day} ${startHour}-${endHour}`;
+          
+          // Format the availability entry
+          const availabilityString = `${slot.day} ${startHour}-${endHour}`;
+          availabilitySlots.push(availabilityString);
         });
         
-        availabilityStrings.forEach(slot => {
+        // Log the final availability data being sent
+        console.log('Sending availability slots:', availabilitySlots);
+        
+        // Append each slot individually to the FormData object
+        availabilitySlots.forEach(slot => {
           formDataToSend.append('availability[]', slot);
         });
+      } else {
+        // If there are no slots, append an empty value to clear the array
+        console.log('No time slots to send, clearing availability');
+        formDataToSend.append('availability[]', '');
       }
       
       // Handle password update
@@ -480,9 +549,15 @@ const DoctorProfile = () => {
       }
       
       // Add profile image if selected
-      if (imagePreview) {
+      if (formData.profileImage && formData.profileImage.startsWith('data:')) {
+        formDataToSend.append('profileImage', formData.profileImage);
+      } else if (imagePreview && !imagePreview.startsWith('http')) {
         formDataToSend.append('profileImage', imagePreview);
       }
+      
+      // Debug output before sending
+      console.log('Form data to be sent (customTimeSlots):', customTimeSlots);
+      console.log('Form data to be sent (availability):', availabilitySlots);
       
       const response = await axios.put(`${API_URL}/doctors/profile`, formDataToSend, {
         headers: {
@@ -490,6 +565,10 @@ const DoctorProfile = () => {
           'Content-Type': 'multipart/form-data'
         }
       });
+      
+      // Update form data with the newly saved availability array
+      const updatedAvailability = response.data.availability || [];
+      console.log('Response from server (availability):', updatedAvailability);
       
       setSuccess('Profile updated successfully');
       
@@ -499,16 +578,22 @@ const DoctorProfile = () => {
       doctorInfo.lastName = formData.lastName;
       localStorage.setItem('doctorInfo', JSON.stringify(doctorInfo));
       
-      // Reset password fields
-      setFormData({
-        ...formData,
+      // Update form data with the data returned from the server
+      setFormData(prev => ({
+        ...prev,
         currentPassword: '',
         newPassword: '',
-        confirmPassword: ''
-      });
+        confirmPassword: '',
+        availability: updatedAvailability  // Use server's copy of availability
+      }));
       
-      // Refresh doctor data
-      setDoctor(response.data);
+      // Update doctor data from response (which should trigger useEffect to rebuild time slots)
+      if (response.data) {
+        setDoctor(response.data);
+        
+        // Note: We don't need to manually set customTimeSlots here as the useEffect will handle it
+        // when doctor state changes and picks up the updated availability array
+      }
     } catch (err: any) {
       console.error('Error updating profile:', err);
       setError(err.response?.data?.message || 'Failed to update profile');

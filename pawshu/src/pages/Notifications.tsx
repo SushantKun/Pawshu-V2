@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
+import AppointmentsLink from '../components/AppointmentsLink';
 
 // Define the Appointment interface 
 interface Appointment {
@@ -156,6 +157,14 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
+  // Add the navigation handler for payment links
+  const handlePaymentClick = () => {
+    // Set the active tab marker in sessionStorage
+    sessionStorage.setItem('activeTab', 'appointments');
+    // Add a trigger that we're coming from notifications
+    sessionStorage.setItem('fromNotification', 'true');
+  };
+
   return (
     <div className="container mx-auto px-4 py-8 pt-24">
       <div className="max-w-4xl mx-auto">
@@ -216,20 +225,28 @@ const NotificationsPage: React.FC = () => {
                       <h3 className="font-semibold text-gray-800 dark:text-white">
                         {notification.title}
                       </h3>
-                      <span className="text-sm text-gray-500 dark:text-gray-400">
-                        {formatNotificationDate(notification.date)}
-                      </span>
                     </div>
                     <p className="text-gray-600 dark:text-gray-300 mt-1">
                       {notification.message}
                     </p>
-                    <div className="mt-2">
-                      <Link 
-                        to={notification.link} 
-                        className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        {notification.type === 'payment' ? 'Make Payment →' : 'View Details →'}
-                      </Link>
+                    <div className="mt-3 flex justify-between items-center">
+                      {notification.type === 'payment' ? (
+                        <AppointmentsLink 
+                          className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                          onClick={handlePaymentClick}
+                        >
+                          Make Payment →
+                        </AppointmentsLink>
+                      ) : (
+                        <AppointmentsLink 
+                          className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          View Details →
+                        </AppointmentsLink>
+                      )}
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {formatNotificationDate(notification.date)}
+                      </span>
                     </div>
                   </div>
                 </div>
