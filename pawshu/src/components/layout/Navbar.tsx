@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingCartIcon, UserIcon, SunIcon, MoonIcon } from '@heroicons/react/24/outline';
+import { ShoppingCartIcon, UserIcon, SunIcon, MoonIcon, HeartIcon } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -8,6 +8,8 @@ import { useTheme } from '../../context/ThemeContext';
 import PawshuLogo from '../../assets/images/pawshu-logo.png';
 import LogoWhite from '../../assets/images/pawshu-logo-white.png';
 import MobileMenu from './MobileMenu';
+import Notifications from '../Notifications';
+import NotificationBell from '../NotificationBell';
 import './Navbar.css';
 
 // Type cast icon components to fix TypeScript errors
@@ -16,6 +18,7 @@ const ShoppingCartIconComponent = ShoppingCartIcon as IconComponent;
 const UserIconComponent = UserIcon as IconComponent;
 const SunIconComponent = SunIcon as IconComponent;
 const MoonIconComponent = MoonIcon as IconComponent;
+const HeartIconComponent = HeartIcon as IconComponent;
 
 // Import User interface from AuthContext
 interface User {
@@ -54,6 +57,9 @@ const Navbar = () => {
   useEffect(() => {
     console.log('Navbar user data:', user);
     console.log('Navbar avatar data:', typedUser?.avatar);
+    if (user) {
+      console.log('Notifications component should render (user logged in)');
+    }
   }, [user, typedUser]);
 
   useEffect(() => {
@@ -172,11 +178,27 @@ const Navbar = () => {
               aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {darkMode ? (
-                <SunIconComponent className="navbar-icon" />
+                <SunIconComponent className="navbar-icon" style={{ width: '1.75rem', height: '1.75rem', display: 'block' }} />
               ) : (
-                <MoonIconComponent className="navbar-icon" />
+                <MoonIconComponent className="navbar-icon" style={{ width: '1.75rem', height: '1.75rem', display: 'block' }} />
               )}
             </button>
+
+            {/* Wishlist Icon */}
+            {user && (
+              <Link 
+                to="/wishlist" 
+                className="p-2 rounded-full text-gray-700 hover:bg-gray-200 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors duration-200"
+                aria-label="Wishlist"
+              >
+                <HeartIconComponent className="navbar-icon" style={{ width: '1.75rem', height: '1.75rem', display: 'block' }} />
+              </Link>
+            )}
+
+            {/* Notifications */}
+            {user && (
+              <Notifications />
+            )}
 
             {/* Cart Icon */}
             <Link 

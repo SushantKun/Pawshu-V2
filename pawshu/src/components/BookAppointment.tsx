@@ -16,6 +16,8 @@ interface Doctor {
   bio: string;
   isActive: boolean;
   locationPreference: 'clinic' | 'home_visit' | 'both';
+  clinicAddress?: string;
+  bookingFee: number;
   profileImage?: {
     public_id: string;
     url: string;
@@ -40,14 +42,14 @@ const BookAppointment = () => {
   const [bookingStep, setBookingStep] = useState(1);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [bookingError, setBookingError] = useState('');
+  const [locationPreference, setLocationPreference] = useState<'clinic' | 'home_visit'>('clinic');
+  const [address, setAddress] = useState('');
 
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [specializationFilter, setSpecializationFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [specializations, setSpecializations] = useState<string[]>([]);
-  const [locationPreference, setLocationPreference] = useState<'clinic' | 'home_visit'>('clinic');
-  const [address, setAddress] = useState('');
 
   // New fields for appointment settings
   const [appointmentInfo, setAppointmentInfo] = useState({
@@ -205,6 +207,12 @@ const BookAppointment = () => {
       return;
     }
 
+    // Validate address for home visits
+    if (locationPreference === 'home_visit' && !address.trim()) {
+      setBookingError('Please provide your address for home visits');
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -215,18 +223,11 @@ const BookAppointment = () => {
         petName,
         petType,
         reason,
-        locationPreference: appointmentInfo.locationPreference,
-        address: appointmentInfo.locationPreference === 'home_visit' ? address : undefined
+        locationPreference,
+        address: locationPreference === 'home_visit' ? address : undefined
       };
 
       const response = await api.post('/appointments', appointmentData);
-
-      // Check if payment is required
-      if (response.data.paymentRequired) {
-        // Here you would typically redirect to payment page
-        // For now we just show a success message
-        toast.success(`Booking fee: Rs. ${response.data.bookingFee}. Payment feature will be implemented soon.`);
-      }
 
       setBookingSuccess(true);
       setBookingError('');
@@ -235,6 +236,7 @@ const BookAppointment = () => {
       setPetName('');
       setPetType('');
       setReason('');
+      setAddress('');
     } catch (err: any) {
       console.error('Error booking appointment:', err);
       setBookingError(err.response?.data?.message || 'Failed to book appointment');
@@ -434,6 +436,400 @@ const BookAppointment = () => {
     );
   };
 
+  const renderDoctorSelection = () => {
+    if (loading) {
+      return (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      );
+    }
+
+    if (filteredDoctors.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <p className="text-gray-600 dark:text-gray-400">No doctors found matching your search criteria.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredDoctors.map((doctor) => (
+          <div
+            key={doctor._id}
+            className={`bg-white dark:bg-gray-800 border rounded-lg shadow-sm overflow-hidden cursor-pointer transition-all duration-200 ${selectedDoctor?._id === doctor._id
+                ? 'border-blue-500 ring-2 ring-blue-500'
+                : 'border-gray-200 dark:border-gray-700 hover:shadow-md'
+              }`}
+            onClick={() => handleDoctorSelect(doctor)}
+          >
+            <div className="p-4">
+              <div className="flex items-center mb-3">
+                <div className="flex-shrink-0 h-14 w-14 mr-3">
+                  <img
+                    src={doctor.profileImage?.url || PLACEHOLDER_IMAGE}
+                    alt={`Dr. ${doctor.firstName} ${doctor.lastName}`}
+                    className="h-full w-full object-cover rounded-full"
+                    onError={(e: any) => {
+                      e.target.onerror = null;
+                      e.target.src = PLACEHOLDER_IMAGE;
+                    }}
+                  />
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                    Dr. {doctor.firstName} {doctor.lastName}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {doctor.specialization}
+                  </p>
+                </div>
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                <p>{doctor.experience} years of experience</p>
+                <p>
+                  Location: {doctor.locationPreference === 'clinic'
+                    ? 'Clinic Only'
+                    : doctor.locationPreference === 'home_visit'
+                      ? 'Home Visit Only'
+                      : 'Clinic & Home Visit'}
+                </p>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                {doctor.bio.length > 100 ? `${doctor.bio.slice(0, 100)}...` : doctor.bio}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderDateAndTimeSelection = () => {
+    if (!selectedDoctor) return null;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center space-x-4">
+          <img 
+            src={selectedDoctor.profileImage?.url || PLACEHOLDER_IMAGE} 
+            alt={`Dr. ${selectedDoctor.firstName} ${selectedDoctor.lastName}`} 
+            className="w-16 h-16 rounded-full object-cover"
+          />
+          <div>
+            <h3 className="text-lg font-medium">Dr. {selectedDoctor.firstName} {selectedDoctor.lastName}</h3>
+            <p className="text-gray-600 dark:text-gray-400">{selectedDoctor.specialization}</p>
+            <p className="text-gray-600 dark:text-gray-400">Booking Fee: NPR {selectedDoctor.bookingFee}</p>
+          </div>
+        </div>
+
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+          <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Location Information</h4>
+          {selectedDoctor.locationPreference === 'clinic' && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              <span className="font-medium">Clinic Address:</span> {selectedDoctor.clinicAddress || 'Not provided'}
+            </p>
+          )}
+          {selectedDoctor.locationPreference === 'home_visit' && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              This doctor only provides home visits.
+            </p>
+          )}
+          {selectedDoctor.locationPreference === 'both' && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              <span className="font-medium">Clinic Address:</span> {selectedDoctor.clinicAddress || 'Not provided'}
+              <br />
+              This doctor provides both clinic visits and home visits.
+            </p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Select Date
+            </label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={handleDateSelect}
+              min={getMinDate()}
+              max={getMaxDate()}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+
+          {selectedDate && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Available Time Slots
+              </label>
+              {loading ? (
+                <div className="py-2">Loading available slots...</div>
+              ) : availableSlots.length === 0 ? (
+                <div className="py-2 text-red-500 dark:text-red-400">No slots available on this date</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {availableSlots.map(slot => (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => handleSlotSelect(slot)}
+                      className={`py-2 px-3 text-sm rounded-md focus:outline-none ${
+                        selectedSlot === slot
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Location preference selection */}
+        {(selectedDoctor.locationPreference === 'both' || appointmentInfo.doctorLocationOptions.length > 1) && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Location Preference
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {(selectedDoctor.locationPreference === 'clinic' || selectedDoctor.locationPreference === 'both') && (
+                <button
+                  type="button"
+                  onClick={() => setLocationPreference('clinic')}
+                  className={`py-2 px-4 text-sm rounded-md border focus:outline-none ${
+                    locationPreference === 'clinic'
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  Visit Doctor's Clinic
+                </button>
+              )}
+              {(selectedDoctor.locationPreference === 'home_visit' || selectedDoctor.locationPreference === 'both') && (
+                <button
+                  type="button"
+                  onClick={() => setLocationPreference('home_visit')}
+                  className={`py-2 px-4 text-sm rounded-md border focus:outline-none ${
+                    locationPreference === 'home_visit'
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  Home Visit
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedDoctor(null);
+              setBookingStep(1);
+            }}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (selectedSlot) {
+                setBookingStep(3);
+              } else {
+                toast.warning("Please select a time slot");
+              }
+            }}
+            disabled={!selectedSlot}
+            className={`px-4 py-2 rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              selectedSlot
+                ? 'bg-blue-500 text-white hover:bg-blue-600'
+                : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPetInfoForm = () => {
+    if (!selectedDoctor || !selectedDate || !selectedSlot) return null;
+
+    return (
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex items-center space-x-4">
+          <img 
+            src={selectedDoctor.profileImage?.url || PLACEHOLDER_IMAGE} 
+            alt={`Dr. ${selectedDoctor.firstName} ${selectedDoctor.lastName}`} 
+            className="w-16 h-16 rounded-full object-cover"
+          />
+          <div>
+            <h3 className="text-lg font-medium">Dr. {selectedDoctor.firstName} {selectedDoctor.lastName}</h3>
+            <p className="text-gray-600 dark:text-gray-400">{selectedDoctor.specialization}</p>
+            <p className="text-gray-600 dark:text-gray-400">
+              {formatDate(selectedDate)} at {selectedSlot}
+            </p>
+          </div>
+        </div>
+
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md flex justify-between items-center">
+          <div>
+            <h4 className="font-medium text-blue-800 dark:text-blue-300">Booking Details</h4>
+            <p className="text-sm text-gray-700 dark:text-gray-300">Booking Fee: NPR {selectedDoctor.bookingFee}</p>
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              Location: {locationPreference === 'clinic' ? 'Clinic Visit' : 'Home Visit'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBookingStep(2)}
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm"
+          >
+            Change
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Pet Name
+            </label>
+            <input
+              type="text"
+              value={petName}
+              onChange={(e) => setPetName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Pet Type
+            </label>
+            <select
+              value={petType}
+              onChange={(e) => setPetType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              required
+            >
+              <option value="">Select Pet Type</option>
+              <option value="Dog">Dog</option>
+              <option value="Cat">Cat</option>
+              <option value="Bird">Bird</option>
+              <option value="Rabbit">Rabbit</option>
+              <option value="Hamster">Hamster</option>
+              <option value="Guinea Pig">Guinea Pig</option>
+              <option value="Reptile">Reptile</option>
+              <option value="Fish">Fish</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Reason for Visit
+          </label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            required
+            placeholder="Please describe the reason for your visit"
+          ></textarea>
+        </div>
+
+        {/* Home Address for home visits */}
+        {locationPreference === 'home_visit' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Your Home Address
+            </label>
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              required
+              placeholder="Please provide your complete address for the home visit"
+            ></textarea>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              This address will be shared with the doctor for the home visit
+            </p>
+          </div>
+        )}
+
+        {bookingError && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-red-700 dark:text-red-300 text-sm">
+            {bookingError}
+          </div>
+        )}
+
+        <div className="flex justify-between mt-6">
+          <button
+            type="button"
+            onClick={() => setBookingStep(2)}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Back
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md shadow-sm text-sm font-medium hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            {loading ? 'Booking...' : 'Confirm Booking'}
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  const renderBookingSuccessMessage = () => {
+    return (
+      <div className="text-center py-8">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300 mb-4">
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">Booking Successful!</h2>
+        <p className="text-gray-600 dark:text-gray-400 mb-4">
+          Your appointment has been booked successfully. The doctor will review and confirm your appointment. You'll receive a confirmation notification once approved.
+        </p>
+        <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <strong>Note:</strong> Payment will be processed after the doctor confirms your appointment.
+        </p>
+        <div className="space-x-4">
+          <button
+            onClick={() => navigate('/profile')}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md shadow-sm text-sm font-medium hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            View My Appointments
+          </button>
+          <button
+            onClick={resetBooking}
+            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Book Another Appointment
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   if (authLoading) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50 dark:bg-gray-900">
@@ -453,16 +849,7 @@ const BookAppointment = () => {
       )}
 
       {bookingSuccess ? (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4" role="alert">
-          <p className="font-bold">Appointment Booked Successfully!</p>
-          <p>You will receive a confirmation email shortly.</p>
-          <button
-            onClick={() => navigate('/profile')}
-            className="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-          >
-            View My Appointments
-          </button>
-        </div>
+        renderBookingSuccessMessage()
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
           {/* Booking Steps */}
@@ -498,67 +885,7 @@ const BookAppointment = () => {
                 {/* Add search and filters section */}
                 {renderSearchAndFilters()}
 
-                {loading ? (
-                  <div className="flex justify-center items-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredDoctors.map((doctor) => (
-                      <div
-                        key={doctor._id}
-                        className={`bg-white dark:bg-gray-800 border rounded-lg shadow-sm overflow-hidden cursor-pointer transition-all duration-200 ${selectedDoctor?._id === doctor._id
-                            ? 'border-blue-500 ring-2 ring-blue-500'
-                            : 'border-gray-200 dark:border-gray-700 hover:shadow-md'
-                          }`}
-                        onClick={() => handleDoctorSelect(doctor)}
-                      >
-                        <div className="p-4">
-                          <div className="flex items-center mb-3">
-                            <div className="flex-shrink-0 h-14 w-14 mr-3">
-                              <img
-                                src={doctor.profileImage?.url || PLACEHOLDER_IMAGE}
-                                alt={`Dr. ${doctor.firstName} ${doctor.lastName}`}
-                                className="h-full w-full object-cover rounded-full"
-                                onError={(e: any) => {
-                                  e.target.onerror = null;
-                                  e.target.src = PLACEHOLDER_IMAGE;
-                                }}
-                              />
-                            </div>
-                            <div>
-                              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                                Dr. {doctor.firstName} {doctor.lastName}
-                              </h3>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                {doctor.specialization}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                            <p>{doctor.experience} years of experience</p>
-                            <p>
-                              Location: {doctor.locationPreference === 'clinic'
-                                ? 'Clinic Only'
-                                : doctor.locationPreference === 'home_visit'
-                                  ? 'Home Visit Only'
-                                  : 'Clinic & Home Visit'}
-                            </p>
-                          </div>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                            {doctor.bio.length > 100 ? `${doctor.bio.slice(0, 100)}...` : doctor.bio}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {filteredDoctors.length === 0 && !loading && (
-                  <div className="text-center py-8">
-                    <p className="text-gray-600 dark:text-gray-400">No doctors found matching your search criteria.</p>
-                  </div>
-                )}
+                {renderDoctorSelection()}
 
                 <div className="mt-8 flex justify-end">
                   <button
@@ -581,109 +908,7 @@ const BookAppointment = () => {
                   Choose Date & Time
                 </h2>
 
-                <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-medium mb-3 text-gray-900 dark:text-white">
-                    Selected Doctor:
-                  </h3>
-                  {selectedDoctor && (
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-12 w-12 mr-3">
-                        <img
-                          src={selectedDoctor.profileImage?.url || PLACEHOLDER_IMAGE}
-                          alt={`Dr. ${selectedDoctor.firstName} ${selectedDoctor.lastName}`}
-                          className="h-full w-full object-cover rounded-full"
-                          onError={(e: any) => {
-                            e.target.onerror = null;
-                            e.target.src = PLACEHOLDER_IMAGE;
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <h4 className="text-md font-medium text-gray-900 dark:text-white">
-                          Dr. {selectedDoctor.firstName} {selectedDoctor.lastName}
-                        </h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">{selectedDoctor.specialization}</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setBookingStep(1);
-                          setSelectedDate('');
-                          setSelectedSlot('');
-                          setAvailableSlots([]);
-                        }}
-                        className="ml-auto text-blue-500 hover:text-blue-700"
-                      >
-                        Change
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mb-6">
-                  <h3 className="text-lg font-medium mb-3 text-gray-900 dark:text-white">Select Date:</h3>
-                  <input
-                    type="date"
-                    min={new Date().toISOString().split('T')[0]}
-                    max={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
-                    value={selectedDate}
-                    onChange={handleDateSelect}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  {error && (
-                    <div className="mt-2 text-red-500 dark:text-red-400 text-sm">
-                      {error}
-                    </div>
-                  )}
-                </div>
-
-                {selectedDate && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-medium mb-3 text-gray-900 dark:text-white">Select Time Slot:</h3>
-                    {loading ? (
-                      <div className="flex justify-center items-center h-24">
-                        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-                      </div>
-                    ) : availableSlots.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                        {availableSlots.map((slot) => (
-                          <button
-                            key={slot}
-                            className={`py-2 px-4 rounded-md text-center ${selectedSlot === slot
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-gray-600'
-                              }`}
-                            onClick={() => handleSlotSelect(slot)}
-                          >
-                            {slot}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center text-gray-600 dark:text-gray-400">
-                        No available slots for this date. Please select another date.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-8 flex justify-between">
-                  <button
-                    onClick={() => setBookingStep(1)}
-                    className="px-6 py-2 rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={() => setBookingStep(3)}
-                    disabled={!selectedSlot || loading}
-                    className={`px-6 py-2 rounded-md ${!selectedSlot || loading
-                        ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                        : 'bg-blue-500 hover:bg-blue-600 text-white'
-                      }`}
-                  >
-                    Continue
-                  </button>
-                </div>
+                {renderDateAndTimeSelection()}
               </div>
             )}
 
@@ -693,119 +918,7 @@ const BookAppointment = () => {
                   Appointment Details
                 </h2>
 
-                <div className="mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-medium mb-3 text-gray-900 dark:text-white">
-                    Appointment Summary:
-                  </h3>
-                  {selectedDoctor && (
-                    <div>
-                      <div className="flex items-center mb-2">
-                        <div className="flex-shrink-0 h-12 w-12 mr-3">
-                          <img
-                            src={selectedDoctor.profileImage?.url || PLACEHOLDER_IMAGE}
-                            alt={`Dr. ${selectedDoctor.firstName} ${selectedDoctor.lastName}`}
-                            className="h-full w-full object-cover rounded-full"
-                            onError={(e: any) => {
-                              e.target.onerror = null;
-                              e.target.src = PLACEHOLDER_IMAGE;
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <h4 className="text-md font-medium text-gray-900 dark:text-white">
-                            Dr. {selectedDoctor.firstName} {selectedDoctor.lastName}
-                          </h4>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">{selectedDoctor.specialization}</p>
-                        </div>
-                      </div>
-                      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-900 dark:text-white">Date:</span>{' '}
-                          <span className="text-gray-700 dark:text-gray-300">{selectedDate}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-900 dark:text-white">Time:</span>{' '}
-                          <span className="text-gray-700 dark:text-gray-300">{selectedSlot}</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setBookingStep(2)}
-                        className="mt-3 text-blue-500 hover:text-blue-700"
-                      >
-                        Change Date/Time
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <form onSubmit={handleSubmit}>
-                  {/* Location preference options */}
-                  {renderLocationPreferenceOptions()}
-
-                  <div className="mb-4">
-                    <label htmlFor="petName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Pet Name
-                    </label>
-                    <input
-                      type="text"
-                      id="petName"
-                      value={petName}
-                      onChange={(e) => setPetName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      required
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="petType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Pet Type (e.g., Dog, Cat, Bird)
-                    </label>
-                    <input
-                      type="text"
-                      id="petType"
-                      value={petType}
-                      onChange={(e) => setPetType(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      required
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Reason for Visit
-                    </label>
-                    <textarea
-                      id="reason"
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      required
-                    ></textarea>
-                  </div>
-
-                  {bookingError && (
-                    <div className="mb-4 text-red-500">{bookingError}</div>
-                  )}
-
-                  <div className="mt-8 flex justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setBookingStep(2)}
-                      className="px-6 py-2 rounded-md border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className={`px-6 py-2 rounded-md ${loading
-                          ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                          : 'bg-blue-500 hover:bg-blue-600 text-white'
-                        }`}
-                    >
-                      {loading ? 'Booking...' : 'Book Appointment'}
-                    </button>
-                  </div>
-                </form>
+                {renderPetInfoForm()}
               </div>
             )}
           </div>

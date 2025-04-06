@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import OrderList from '../components/orders/OrderList';
+import AppointmentPayment from '../components/AppointmentPayment';
 
 interface Appointment {
   _id: string;
@@ -23,6 +24,16 @@ interface Appointment {
   reason: string;
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
   createdAt: string;
+  locationPreference?: 'clinic' | 'home';
+  address?: string;
+  payment?: {
+    status: 'pending' | 'paid' | 'refunded';
+    amount: number;
+    method?: 'cash' | 'card' | 'khalti' | 'esewa';
+    transactionId?: string;
+    paidAt?: string;
+  };
+  cancellationReason?: string;
 }
 
 interface Donation {
@@ -89,6 +100,11 @@ const Profile = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'success' | 'error' | ''>('');
   const [showNotification, setShowNotification] = useState(false);
+  const [appointmentFilter, setAppointmentFilter] = useState('active');
+  const [cancelAppointmentId, setCancelAppointmentId] = useState<string | null>(null);
+  const [cancellationLoading, setCancellationLoading] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   // Helper function to get display name regardless of how it's stored
   const getDisplayName = (profile: UserProfile | null): string => {
@@ -116,16 +132,33 @@ const Profile = () => {
 
   const fetchProfile = async () => {
     try {
-      const response = await api.get('/auth/profile');
-      console.log('Profile data response:', response.data);
-      setProfile(response.data);
-      setEditedProfile(response.data);
-      if (response.data.avatar?.url) {
-        setImagePreview(response.data.avatar.url);
+      // Use direct fetch instead of axios to avoid baseURL issues
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await fetch('http://localhost:5000/api/auth/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch profile: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Profile data response:', data);
+      setProfile(data);
+      setEditedProfile(data);
+      if (data.avatar?.url) {
+        setImagePreview(data.avatar.url);
       }
     } catch (err: any) {
       console.error('Error fetching profile:', err);
-      setError(err.response?.data?.message || 'Failed to fetch profile');
+      setError(err.message || 'Failed to fetch profile');
     }
   };
 
@@ -186,18 +219,122 @@ const Profile = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  // Function to filter appointments based on active/history filter
+  const filteredAppointments = appointments.filter(appointment => {
+    if (appointmentFilter === 'active') {
+      return ['pending', 'confirmed'].includes(appointment.status);
+    } else {
+      return ['completed', 'cancelled'].includes(appointment.status);
+    }
+  });
+
+  // Function to cancel an appointment
+  const cancelAppointment = async (appointmentId: string) => {
+    if (!window.confirm('Are you sure you want to cancel this appointment?')) {
+      return;
+    }
+    
+    setCancellationLoading(true);
+    setCancelAppointmentId(appointmentId);
+    
+    try {
+      await api.put(`/appointments/${appointmentId}/status`, {
+        status: 'cancelled',
+        cancellationReason: 'Cancelled by user'
+      });
+      
+      // Update the local state
+      setAppointments(appointments.map(app => {
+        if (app._id === appointmentId) {
+          return {
+            ...app,
+            status: 'cancelled',
+            cancellationReason: 'Cancelled by user'
+          };
+        }
+        return app;
+      }));
+      
+      toast.success('Appointment cancelled successfully');
+    } catch (err: any) {
+      console.error('Error cancelling appointment:', err);
+      toast.error(err.response?.data?.message || 'Failed to cancel appointment');
+    } finally {
+      setCancellationLoading(false);
+      setCancelAppointmentId(null);
+    }
+  };
+
+  // Add this useEffect to the component level, near other useEffects
+  useEffect(() => {
+    // Only run if we have appointments
+    if (!appointments || appointments.length === 0) return;
+    
+    // Find all pending eSewa payments
+    const pendingEsewaAppointments = appointments.filter(
+      app => app.payment?.status === 'pending' && app.payment?.method === 'esewa'
+    );
+    
+    if (pendingEsewaAppointments.length === 0) return;
+    
+    console.log('Auto-verifying pending eSewa appointments:', pendingEsewaAppointments.length);
+    
+    // Process each pending eSewa payment
+    pendingEsewaAppointments.forEach(appointment => {
+      console.log('Verifying eSewa payment for appointment:', appointment._id);
+      
+      api.post('/appointments/manual-verify', {
+        appointmentId: appointment._id,
+        method: 'esewa'
+      })
+      .then(response => {
+        if (response.data.status === 'Complete') {
+          console.log('Payment status updated successfully:', response.data);
+          toast.success('Payment verified successfully!');
+          fetchAppointments(); // Refresh the appointments list
+        }
+      })
+      .catch(error => {
+        console.error('Error verifying eSewa payment:', error);
+      });
+    });
+  }, [appointments]);
+
+  // Modify the renderPaymentStatus function to remove the useEffect
+  const renderPaymentStatus = (appointment: Appointment) => {
+    if (!appointment.payment) return null;
+    
+    // Check for pending eSewa payment 
+    const isPendingEsewa = appointment.payment.status === 'pending' && appointment.payment.method === 'esewa';
+    
+    return (
+      <div className="mt-2">
+        <p className={`text-sm ${
+          appointment.payment.status === 'paid' 
+            ? 'text-green-600 dark:text-green-400' 
+            : 'text-orange-600 dark:text-orange-400'
+        }`}>
+          Payment: {appointment.payment.status}
+          {appointment.payment.method && ` (${appointment.payment.method})`}
+          {appointment.payment.amount && ` - Rs. ${appointment.payment.amount}`}
+        </p>
+      </div>
+    );
+  };
+
+  // Function to get status color
+  const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'confirmed':
-        return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300';
       case 'pending':
-        return 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-300';
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100';
+      case 'confirmed':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100';
       case 'completed':
-        return 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300';
+        return 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100';
       case 'cancelled':
-        return 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300';
+        return 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100';
       default:
-        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100';
     }
   };
 
@@ -325,6 +462,124 @@ const Profile = () => {
       setSaving(false);
     }
   };
+
+  const handlePaymentClick = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentComplete = () => {
+    // Refresh appointments after successful payment
+    fetchAppointments();
+    setShowPaymentModal(false);
+    setSelectedAppointment(null);
+    toast.success('Payment completed successfully!');
+  };
+
+  // Check URL parameters for payment success on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status');
+    const appointmentId = urlParams.get('appointmentId');
+    const pidx = urlParams.get('pidx');
+    const reason = urlParams.get('reason');
+    
+    // Handle payment failure cases
+    if (status === 'failed') {
+      let errorMessage = 'Payment failed. Please try again.';
+      
+      // Add more specific error messages based on reason
+      if (reason === 'missing_fields') {
+        errorMessage = 'Payment failed due to missing information. Please try again or use a different payment method.';
+      } else if (reason === 'appointment_not_found') {
+        errorMessage = 'Payment failed: Appointment not found. Please contact support.';
+      } else if (reason === 'server_error') {
+        errorMessage = 'Payment failed due to a server error. Please try again later.';
+      }
+      
+      toast.error(errorMessage);
+      
+      // Refresh the appointments to ensure we have the latest data
+      fetchAppointments();
+      return;
+    }
+    
+    // If returning from a payment gateway with success
+    if (status === 'success') {
+      // For Khalti, check both URL params and localStorage
+      const storedPidx = localStorage.getItem('appointment_payment_pidx');
+      const storedAppointmentId = localStorage.getItem('appointment_id');
+      
+      if (pidx || storedPidx) {
+        // Use stored values as fallback
+        const verificationPidx = pidx || storedPidx;
+        const verificationAppointmentId = appointmentId || storedAppointmentId;
+        
+        // Show processing indicator
+        toast.info('Verifying payment...', { autoClose: 2000 });
+        
+        // Verify the payment through the API
+        api.post('/appointments/khalti-verify', {
+          pidx: verificationPidx,
+          appointment_id: verificationAppointmentId
+        })
+        .then(response => {
+          if (response.data.status === 'Complete') {
+            toast.success('Payment verified successfully!');
+            fetchAppointments(); // Refresh the appointments
+            
+            // Clean up localStorage
+            localStorage.removeItem('appointment_payment_pidx');
+            localStorage.removeItem('appointment_id');
+          } else {
+            toast.error('Payment verification failed. Please try again or contact support.');
+          }
+        })
+        .catch(error => {
+          console.error('Error verifying payment:', error);
+          toast.error('Failed to verify payment. Please contact support.');
+        });
+      } else if (appointmentId) {
+        // For eSewa or other payment methods
+        toast.success('Payment completed successfully!');
+        fetchAppointments();
+      }
+    }
+    
+    // Check localStorage on component mount in case user closed the window after payment
+    const storedPidx = localStorage.getItem('appointment_payment_pidx');
+    const storedAppointmentId = localStorage.getItem('appointment_id');
+    
+    if (storedPidx && storedAppointmentId) {
+      // Show processing indicator
+      toast.info('Verifying previous payment...', { autoClose: 2000 });
+      
+      // Verify the payment
+      api.post('/appointments/khalti-verify', {
+        pidx: storedPidx,
+        appointment_id: storedAppointmentId
+      })
+      .then(response => {
+        if (response.data.status === 'Complete') {
+          toast.success('Payment verified successfully!');
+          fetchAppointments();
+          
+          // Clean up localStorage
+          localStorage.removeItem('appointment_payment_pidx');
+          localStorage.removeItem('appointment_id');
+        } else {
+          // Silent fail for old stored values
+          localStorage.removeItem('appointment_payment_pidx');
+          localStorage.removeItem('appointment_id');
+        }
+      })
+      .catch(() => {
+        // Silent cleanup
+        localStorage.removeItem('appointment_payment_pidx');
+        localStorage.removeItem('appointment_id');
+      });
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -708,16 +963,45 @@ const Profile = () => {
 
             {activeTab === 'appointments' && (
               <div>
-                <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Appointment History</h2>
+                <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">My Appointments</h2>
+                
+                {/* Filter buttons for active/history */}
+                <div className="mb-4">
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setAppointmentFilter('active')}
+                      className={`px-4 py-2 text-sm font-medium rounded-md ${
+                        appointmentFilter === 'active'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Active Appointments
+                    </button>
+                    <button
+                      onClick={() => setAppointmentFilter('history')}
+                      className={`px-4 py-2 text-sm font-medium rounded-md ${
+                        appointmentFilter === 'history'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Appointment History
+                    </button>
+                  </div>
+                </div>
+                
                 {appointmentsLoading ? (
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                   </div>
-                ) : !appointments || appointments.length === 0 ? (
-                  <p className="text-gray-500 dark:text-gray-400">No appointments found.</p>
+                ) : !filteredAppointments || filteredAppointments.length === 0 ? (
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {appointmentFilter === 'active' ? 'No active appointments found.' : 'No appointment history found.'}
+                  </p>
                 ) : (
                   <div className="space-y-4">
-                    {appointments.map((appointment) => (
+                    {filteredAppointments.map((appointment) => (
                       <div
                         key={appointment._id}
                         className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4"
@@ -740,6 +1024,50 @@ const Profile = () => {
                           <p>Time: {appointment.timeSlot}</p>
                           <p>Pet: {appointment.petName} ({appointment.petType})</p>
                           <p>Reason: {appointment.reason}</p>
+                          
+                          {/* Location information */}
+                          {appointment.locationPreference && (
+                            <p>
+                              Location: {appointment.locationPreference === 'clinic' ? 'Clinic Visit' : 'Home Visit'}
+                              {appointment.address && appointment.locationPreference === 'home' && ` - ${appointment.address}`}
+                            </p>
+                          )}
+                          
+                          {/* Payment status */}
+                          {renderPaymentStatus(appointment)}
+                          
+                          {/* Cancellation reason */}
+                          {appointment.cancellationReason && (
+                            <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                              <span className="font-medium">Cancellation reason:</span> {appointment.cancellationReason}
+                            </p>
+                          )}
+                        </div>
+                        
+                        {/* Action buttons */}
+                        <div className="mt-3 flex justify-end space-x-2">
+                          {appointment.status === 'pending' && (
+                            <button
+                              onClick={() => cancelAppointment(appointment._id)}
+                              disabled={cancellationLoading && cancelAppointmentId === appointment._id}
+                              className="px-3 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600"
+                            >
+                              {cancellationLoading && cancelAppointmentId === appointment._id 
+                                ? 'Cancelling...' 
+                                : 'Cancel Appointment'}
+                            </button>
+                          )}
+
+                          {appointment.status === 'confirmed' && appointment.payment?.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => handlePaymentClick(appointment)}
+                                className="px-3 py-1 text-xs font-medium text-white bg-green-500 rounded hover:bg-green-600"
+                              >
+                                Make Payment
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -802,6 +1130,26 @@ const Profile = () => {
           </div>
         </div>
       </div>
+
+      {/* Payment modal */}
+      {showPaymentModal && selectedAppointment && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md relative">
+            <button
+              onClick={() => setShowPaymentModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-500"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <AppointmentPayment 
+              appointment={selectedAppointment} 
+              onPaymentComplete={handlePaymentComplete} 
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

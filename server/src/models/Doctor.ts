@@ -14,6 +14,7 @@ export interface IDoctor extends Document {
   locationPreference: 'clinic' | 'home_visit' | 'both';
   clinicAddress?: string;
   appointmentDuration: number; // in minutes
+  bookingFee: number; // doctor's booking fee in NPR
   profileImage?: {
     public_id: string;
     url: string;
@@ -77,12 +78,18 @@ const doctorSchema = new Schema<IDoctor>({
     default: 'clinic'
   },
   clinicAddress: {
-    type: String
+    type: String,
+    trim: true
   },
   appointmentDuration: {
     type: Number,
     default: 30, // Default to 30 minutes
     min: [15, 'Appointment duration must be at least 15 minutes']
+  },
+  bookingFee: {
+    type: Number,
+    default: 500, // Default to 500 NPR
+    min: [0, 'Booking fee cannot be negative']
   },
   profileImage: {
     public_id: String,

@@ -10,6 +10,7 @@ export interface IAppointment extends Document {
   reason: string;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   notes?: string;
+  cancellationReason?: string;
   locationPreference: 'clinic' | 'home_visit';
   address?: string;
   appointmentDuration: number; // in minutes
@@ -63,6 +64,10 @@ const appointmentSchema = new Schema<IAppointment>({
     default: 'pending'
   },
   notes: {
+    type: String,
+    trim: true
+  },
+  cancellationReason: {
     type: String,
     trim: true
   },

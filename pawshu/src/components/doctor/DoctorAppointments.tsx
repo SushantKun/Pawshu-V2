@@ -33,6 +33,7 @@ interface Appointment {
     paidAt?: string;
   };
   createdAt: string;
+  cancellationReason?: string;
 }
 
 interface GroupedAppointments {
@@ -43,12 +44,14 @@ const DoctorAppointments = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [notes, setNotes] = useState('');
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCancellationModal, setShowCancellationModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'khalti' | 'esewa'>('cash');
   const [transactionId, setTransactionId] = useState('');
   const navigate = useNavigate();
@@ -57,6 +60,15 @@ const DoctorAppointments = () => {
     // Check if doctor is logged in using the auth utility
     if (!checkSession(USER_ROLES.DOCTOR)) {
       toast.error('Please log in to access this page.');
+      navigate('/doctor/login');
+      return;
+    }
+    
+    // Additional check to ensure doctorInfo exists
+    const doctorInfo = localStorage.getItem('doctorInfo');
+    if (!doctorInfo) {
+      console.error('Doctor session exists but no doctor info found');
+      toast.error('Session information incomplete. Please log in again.');
       navigate('/doctor/login');
       return;
     }
@@ -160,34 +172,142 @@ const DoctorAppointments = () => {
     }
   };
 
-  const updateAppointmentStatus = async (appointmentId: string, status: string) => {
+  const updateAppointmentStatus = async (appointmentId: string, status: string, reason?: string) => {
     try {
       setLoading(true);
       
-      await api.put(
-        `/appointments/${appointmentId}/status`,
-        { status }
-      );
+      // Start with the basic payload
+      const payload: any = { 
+        status,
+        ...reason && { cancellationReason: reason }
+      };
       
-      // Show success message
-      toast.success(`Appointment status updated to ${status}`);
+      // Get doctor data from localStorage - FIXED: use 'doctorInfo' instead of 'doctor'
+      const doctorData = localStorage.getItem('doctorInfo');
       
-      // Update local state
-      setAppointments(prevAppointments => 
-        prevAppointments.map(appointment => 
-          appointment._id === appointmentId 
-            ? { ...appointment, status: status as 'pending' | 'confirmed' | 'completed' | 'cancelled' } 
-            : appointment
-        )
-      );
+      // Debug log the data (remove in production)
+      console.log('Attempting to update appointment status with doctor data:', doctorData);
       
-      setError('');
+      if (!doctorData) {
+        console.error('No doctor data found in localStorage. Looking for data with key "doctorInfo"');
+        toast.error('Authentication required. Please log in again.');
+        setTimeout(() => navigate('/doctor/login'), 1500);
+        return;
+      }
+      
+      try {
+        // Parse the doctor data JSON
+        const doctor = JSON.parse(doctorData);
+        
+        // Log the complete doctor object for debugging
+        console.log('Doctor data parsed successfully:', doctor);
+        
+        // Ensure the doctor ID is included in the payload
+        payload.doctorId = doctor._id;
+        
+        console.log('Updating appointment with payload:', payload);
+        
+        // Make the API request with the enhanced payload
+        const response = await api.put(`/appointments/${appointmentId}/status`, payload);
+        
+        console.log('Appointment update response:', response.data);
+        
+        // Show success message
+        toast.success(`Appointment status updated to ${status}`);
+        
+        // Update local state
+        setAppointments(prevAppointments => 
+          prevAppointments.map(appointment => 
+            appointment._id === appointmentId 
+              ? { ...appointment, status: status as 'pending' | 'confirmed' | 'completed' | 'cancelled', cancellationReason: reason } 
+              : appointment
+          )
+        );
+        
+        setError('');
+      } catch (parseError) {
+        console.error('Error parsing doctor data:', parseError);
+        toast.error('Invalid doctor data. Please log in again.');
+        setTimeout(() => navigate('/doctor/login'), 1500);
+      }
     } catch (err: any) {
       console.error('Error updating appointment:', err);
-      toast.error(err.response?.data?.message || 'Failed to update appointment');
-      setError(err.response?.data?.message || 'Failed to update appointment');
+      console.error('Error details:', err.response?.data);
+      
+      const errorMessage = err.response?.data?.message || 'Failed to update appointment status';
+      toast.error(errorMessage);
+      setError(errorMessage);
+      
+      // Check if the error is due to authentication issues
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        toast.error('Authorization error. Please log in again as the assigned doctor.');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancellation = (appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setShowCancellationModal(true);
+    setCancellationReason('');
+  };
+
+  const submitCancellation = () => {
+    if (!selectedAppointment || !cancellationReason.trim()) {
+      toast.error('Please provide a reason for cancellation');
+      return;
+    }
+
+    updateAppointmentStatus(selectedAppointment._id, 'cancelled', cancellationReason);
+    setShowCancellationModal(false);
+    setSelectedAppointment(null);
+    setCancellationReason('');
+  };
+
+  const processPayment = async (appointmentId: string) => {
+    try {
+      // Get the appointment details
+      const appointment = appointments.find(app => app._id === appointmentId);
+      if (!appointment) {
+        throw new Error('Appointment not found');
+      }
+      
+      // Update payment status to 'paid'
+      await api.put(
+        `/appointments/${appointmentId}/payment`,
+        {
+          status: 'paid',
+          method: 'card', // Default to card payment
+          transactionId: `auto-${Date.now()}` // Generate a transaction ID
+        }
+      );
+      
+      toast.success('Payment processed successfully');
+      
+      // Update appointment in local state
+      setAppointments(prevAppointments => 
+        prevAppointments.map(app => {
+          if (app._id === appointmentId) {
+            return {
+              ...app,
+              payment: {
+                ...(app.payment || {}),
+                status: 'paid',
+                method: 'card',
+                transactionId: `auto-${Date.now()}`,
+                paidAt: new Date().toISOString(),
+                // Ensure amount is present if it was in the original appointment
+                amount: app.payment?.amount || 0
+              }
+            };
+          }
+          return app;
+        })
+      );
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      throw error;
     }
   };
 
@@ -306,9 +426,15 @@ const DoctorAppointments = () => {
 
   // Filter appointments based on status and search term
   const filteredAppointments = appointments.filter(appointment => {
-    const matchesStatus = filterStatus === 'all' || appointment.status === filterStatus;
+    // Filter by active/history tab
+    if (filterStatus === 'active' && ['completed', 'cancelled'].includes(appointment.status)) {
+      return false;
+    }
+    if (filterStatus === 'history' && !['completed', 'cancelled'].includes(appointment.status)) {
+      return false;
+    }
     
-    // Create a safe user name for searching
+    // Apply search filter
     const userName = appointment.user 
       ? `${appointment.user?.firstName || ''} ${appointment.user?.lastName || ''}`.toLowerCase()
       : '';
@@ -318,7 +444,7 @@ const DoctorAppointments = () => {
       userName.includes(searchTerm.toLowerCase()) ||
       appointment.reason.toLowerCase().includes(searchTerm.toLowerCase());
     
-    return matchesStatus && matchesSearch;
+    return matchesSearch;
   });
 
   // Group appointments by date
@@ -476,11 +602,50 @@ const DoctorAppointments = () => {
     );
   };
 
-  // Add UI for showing payment status in the appointment card
-  // This should be added to the existing render logic for appointment cards
+  // Add this useEffect to the component level, near the other useEffects
+  useEffect(() => {
+    // Auto-verify any pending eSewa payments
+    const pendingEsewaAppointments = appointments.filter(
+      app => app.payment?.status === 'pending' && app.payment?.method === 'esewa'
+    );
+    
+    if (pendingEsewaAppointments.length === 0) return;
+    
+    console.log('Auto-verifying pending eSewa payments:', pendingEsewaAppointments.length);
+    
+    // Get doctor data for authorization if needed
+    const doctorInfo = localStorage.getItem('doctorInfo');
+    if (!doctorInfo) {
+      console.warn('Cannot auto-verify payments: No doctor info found');
+      return;
+    }
+    
+    // Process each pending eSewa payment
+    pendingEsewaAppointments.forEach(appointment => {
+      console.log('Verifying eSewa payment for appointment:', appointment._id);
+      
+      api.post('/appointments/manual-verify', {
+        appointmentId: appointment._id,
+        method: 'esewa'
+      })
+      .then(response => {
+        if (response.data.status === 'Complete') {
+          console.log('Payment status updated successfully:', response.data);
+          toast.success('Payment verified successfully!');
+          fetchAppointments(); // Refresh the appointments list
+        }
+      })
+      .catch(error => {
+        console.error('Error verifying eSewa payment:', error);
+      });
+    });
+  }, [appointments]);
 
-  // Inside your function that renders appointment cards, add:
+  // Now modify the renderPaymentStatus function to remove the useEffect
   const renderPaymentStatus = (appointment: Appointment) => {
+    // Check if this is a pending eSewa payment
+    const isPendingEsewa = appointment.payment?.status === 'pending' && appointment.payment?.method === 'esewa';
+    
     return (
       <div className="mt-2">
         <span className="text-sm font-medium">Payment: </span>
@@ -492,7 +657,9 @@ const DoctorAppointments = () => {
           {appointment.payment?.status || 'pending'}
           {appointment.payment?.method && ` (${appointment.payment.method})`}
         </span>
-        {appointment.payment?.status !== 'paid' && (
+        
+        {/* Only show the regular update button for non-eSewa pending payments */}
+        {!isPendingEsewa && appointment.payment?.status !== 'paid' && (
           <button
             onClick={() => {
               setSelectedAppointment(appointment);
@@ -503,6 +670,69 @@ const DoctorAppointments = () => {
             Update
           </button>
         )}
+      </div>
+    );
+  };
+
+  // Render cancellation reason modal
+  const renderCancellationModal = () => {
+    if (!selectedAppointment) return null;
+
+    return (
+      <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+            Cancel Appointment
+          </h2>
+          
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              You are about to cancel the appointment for:
+            </p>
+            <p className="font-medium text-gray-900 dark:text-white">
+              {getUserFullName(selectedAppointment.user)}
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {formatDate(selectedAppointment.date)} at {selectedAppointment.timeSlot}
+            </p>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Reason for Cancellation
+            </label>
+            <textarea
+              value={cancellationReason}
+              onChange={(e) => setCancellationReason(e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
+              placeholder="Please provide a reason for cancelling this appointment"
+              required
+            ></textarea>
+          </div>
+          
+          <div className="flex justify-end space-x-3 mt-6">
+            <button
+              type="button"
+              onClick={() => {
+                setShowCancellationModal(false);
+                setSelectedAppointment(null);
+                setCancellationReason('');
+              }}
+              className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={submitCancellation}
+              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              disabled={loading || !cancellationReason.trim()}
+            >
+              {loading ? 'Cancelling...' : 'Confirm Cancellation'}
+            </button>
+          </div>
+        </div>
       </div>
     );
   };
@@ -520,19 +750,30 @@ const DoctorAppointments = () => {
       <div className="flex flex-col md:flex-row justify-between mb-6">
         <div className="mb-4 md:mb-0">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Filter by status
+            View
           </label>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="block w-full md:w-48 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200"
-          >
-            <option value="all">All Appointments</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setFilterStatus('active')}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${
+                filterStatus === 'active'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              Active Appointments
+            </button>
+            <button
+              onClick={() => setFilterStatus('history')}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${
+                filterStatus === 'history'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+            >
+              Appointment History
+            </button>
+          </div>
         </div>
         
         <div>
@@ -555,7 +796,11 @@ const DoctorAppointments = () => {
         </div>
       ) : filteredAppointments.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 text-center">
-          <p className="text-gray-600 dark:text-gray-400">No appointments found.</p>
+          <p className="text-gray-600 dark:text-gray-400">
+            {filterStatus === 'active' 
+              ? 'No active appointments found.' 
+              : 'No appointment history found.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-6">
@@ -586,7 +831,13 @@ const DoctorAppointments = () => {
                           </p>
                         )}
                         
-                        {/* Add payment status display */}
+                        {appointment.cancellationReason && (
+                          <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                            <span className="font-medium">Cancellation reason:</span> {appointment.cancellationReason}
+                          </p>
+                        )}
+                        
+                        {/* Payment status display */}
                         {renderPaymentStatus(appointment)}
                       </div>
                       
@@ -596,16 +847,27 @@ const DoctorAppointments = () => {
                         </span>
                         
                         <div className="flex space-x-2 mt-2">
+                          {/* For pending appointments, show Confirm and Cancel buttons */}
                           {appointment.status === 'pending' && (
-                            <button
-                              onClick={() => updateAppointmentStatus(appointment._id, 'confirmed')}
-                              className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
-                            >
-                              Confirm
-                            </button>
+                            <>
+                              <button
+                                onClick={() => updateAppointmentStatus(appointment._id, 'confirmed')}
+                                className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600"
+                              >
+                                Confirm
+                              </button>
+                              
+                              <button
+                                onClick={() => handleCancellation(appointment)}
+                                className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                              >
+                                Cancel
+                              </button>
+                            </>
                           )}
                           
-                          {appointment.status !== 'completed' && appointment.status !== 'cancelled' && (
+                          {/* For confirmed appointments, show Complete button */}
+                          {appointment.status === 'confirmed' && (
                             <button
                               onClick={() => updateAppointmentStatus(appointment._id, 'completed')}
                               className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -614,25 +876,19 @@ const DoctorAppointments = () => {
                             </button>
                           )}
                           
+                          {/* Show notes button for all non-cancelled appointments */}
                           {appointment.status !== 'cancelled' && (
                             <button
-                              onClick={() => updateAppointmentStatus(appointment._id, 'cancelled')}
-                              className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                              onClick={() => {
+                                setSelectedAppointment(appointment);
+                                setNotes(appointment.notes || '');
+                                setShowNotesModal(true);
+                              }}
+                              className="px-3 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
                             >
-                              Cancel
+                              Add Notes
                             </button>
                           )}
-                          
-                          <button
-                            onClick={() => {
-                              setSelectedAppointment(appointment);
-                              setNotes(appointment.notes || '');
-                              setShowNotesModal(true);
-                            }}
-                            className="px-3 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600"
-                          >
-                            Add Notes
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -644,6 +900,7 @@ const DoctorAppointments = () => {
         </div>
       )}
       
+      {/* Notes Modal */}
       {showNotesModal && selectedAppointment && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
@@ -652,7 +909,7 @@ const DoctorAppointments = () => {
             <form onSubmit={handleAddNotes}>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Notes for {selectedAppointment.user.firstName} {selectedAppointment.user.lastName}'s appointment
+                  Notes for {getUserFullName(selectedAppointment.user)}'s appointment
                 </label>
                 <textarea
                   value={notes}
@@ -688,8 +945,11 @@ const DoctorAppointments = () => {
         </div>
       )}
       
-      {/* Add payment modal */}
+      {/* Payment modal */}
       {showPaymentModal && renderPaymentModal()}
+      
+      {/* Cancellation modal */}
+      {showCancellationModal && renderCancellationModal()}
     </div>
   );
 };

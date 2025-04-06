@@ -18,6 +18,7 @@ interface Doctor {
   locationPreference: 'clinic' | 'home_visit' | 'both';
   clinicAddress?: string;
   appointmentDuration: number;
+  bookingFee: number;
   profileImage?: {
     url: string;
   };
@@ -34,6 +35,7 @@ interface ProfileFormData {
   locationPreference: 'clinic' | 'home_visit' | 'both';
   clinicAddress?: string;
   appointmentDuration: number;
+  bookingFee: number;
   profileImage?: string;
   currentPassword: string;
   newPassword: string;
@@ -65,6 +67,7 @@ const DoctorProfile = () => {
     locationPreference: 'clinic',
     clinicAddress: '',
     appointmentDuration: 30,
+    bookingFee: 500,
     profileImage: '',
     currentPassword: '',
     newPassword: '',
@@ -165,6 +168,7 @@ const DoctorProfile = () => {
         locationPreference: doctorData.locationPreference || 'clinic',
         clinicAddress: doctorData.clinicAddress || '',
         appointmentDuration: doctorData.appointmentDuration || 30,
+        bookingFee: doctorData.bookingFee || 500,
         profileImage: '',
         currentPassword: '',
         newPassword: '',
@@ -395,92 +399,105 @@ const DoctorProfile = () => {
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate form
-    if (!formData.firstName || !formData.lastName || !formData.specialization) {
-      setError('Please fill in all required fields');
-      return;
-    }
-    
-    // Validate clinic address if clinic location is selected
-    if ((formData.locationPreference === 'clinic' || formData.locationPreference === 'both') && !formData.clinicAddress) {
-      setError('Please provide your clinic address');
-      return;
-    }
-    
-    // Ensure at least one availability slot
-    if (formData.availability.length === 0) {
-      setError('Please select at least one availability time slot');
-      return;
-    }
-    
     try {
       setSaving(true);
-      const token = localStorage.getItem('doctorToken');
+      setError('');
+      setSuccess('');
       
-      // Prepare data for profile update with new fields
-      const updateData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        specialization: formData.specialization,
-        experience: formData.experience,
-        bio: formData.bio,
-        availability: formData.availability,
-        locationPreference: formData.locationPreference,
-        clinicAddress: formData.clinicAddress,
-        appointmentDuration: formData.appointmentDuration
-      };
-      
-      // Add profile image if changed
-      if (formData.profileImage) {
-        Object.assign(updateData, { profileImage: formData.profileImage });
+      // Validate form inputs
+      if (!formData.firstName || !formData.lastName || !formData.specialization) {
+        setError('Please fill in all required fields');
+        setSaving(false);
+        return;
       }
       
-      console.log('Updating profile with data:', updateData);
+      // For clinic location, require clinic address
+      if ((formData.locationPreference === 'clinic' || formData.locationPreference === 'both') && !formData.clinicAddress) {
+        setError('Please provide your clinic address');
+        setSaving(false);
+        return;
+      }
       
-      // Update profile
-      await axios.put(`${API_URL}/doctors/profile`, updateData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Validate booking fee
+      if (formData.bookingFee < 0) {
+        setError('Booking fee cannot be negative');
+        setSaving(false);
+        return;
+      }
       
-      // Handle password update if requested
-      if (formData.newPassword) {
-        // Validate password fields
-        if (!formData.currentPassword) {
-          setError('Current password is required to set a new password');
-          setSaving(false);
-          return;
-        }
-        
+      // Handle password update
+      if (formData.currentPassword && formData.newPassword) {
         if (formData.newPassword !== formData.confirmPassword) {
-          setError('New password and confirmation do not match');
+          setError('New passwords do not match');
           setSaving(false);
           return;
         }
         
         if (formData.newPassword.length < 6) {
-          setError('New password must be at least 6 characters long');
+          setError('New password must be at least 6 characters');
           setSaving(false);
           return;
         }
-        
-        // Update password
-        await axios.put(`${API_URL}/doctors/profile/password`, {
-          currentPassword: formData.currentPassword,
-          newPassword: formData.newPassword
-        }, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+      }
+      
+      const token = localStorage.getItem('doctorToken');
+      
+      // Create form data for multipart/form-data
+      const formDataToSend = new FormData();
+      formDataToSend.append('firstName', formData.firstName);
+      formDataToSend.append('lastName', formData.lastName);
+      formDataToSend.append('specialization', formData.specialization);
+      formDataToSend.append('experience', formData.experience.toString());
+      formDataToSend.append('bio', formData.bio);
+      formDataToSend.append('isActive', formData.isActive.toString());
+      formDataToSend.append('locationPreference', formData.locationPreference);
+      
+      if (formData.clinicAddress) {
+        formDataToSend.append('clinicAddress', formData.clinicAddress);
+      }
+      
+      formDataToSend.append('appointmentDuration', formData.appointmentDuration.toString());
+      formDataToSend.append('bookingFee', formData.bookingFee.toString());
+      
+      // Add availability slots
+      if (customTimeSlots.length > 0) {
+        // Convert custom time slots to availability format
+        const availabilityStrings = customTimeSlots.map(slot => {
+          const startHour = parseInt(slot.startTime.split(':')[0]);
+          const endHour = parseInt(slot.endTime.split(':')[0]);
+          return `${slot.day} ${startHour}-${endHour}`;
         });
         
-        setSuccess('Profile, availability, and password updated successfully');
-      } else {
-        setSuccess('Profile and availability updated successfully');
+        availabilityStrings.forEach(slot => {
+          formDataToSend.append('availability[]', slot);
+        });
       }
+      
+      // Handle password update
+      if (formData.currentPassword && formData.newPassword) {
+        formDataToSend.append('currentPassword', formData.currentPassword);
+        formDataToSend.append('newPassword', formData.newPassword);
+      }
+      
+      // Add profile image if selected
+      if (imagePreview) {
+        formDataToSend.append('profileImage', imagePreview);
+      }
+      
+      const response = await axios.put(`${API_URL}/doctors/profile`, formDataToSend, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      setSuccess('Profile updated successfully');
+      
+      // Update local storage with new name info
+      const doctorInfo = JSON.parse(localStorage.getItem('doctorInfo') || '{}');
+      doctorInfo.firstName = formData.firstName;
+      doctorInfo.lastName = formData.lastName;
+      localStorage.setItem('doctorInfo', JSON.stringify(doctorInfo));
       
       // Reset password fields
       setFormData({
@@ -490,11 +507,11 @@ const DoctorProfile = () => {
         confirmPassword: ''
       });
       
-      // Refresh doctor profile
-      fetchDoctorProfile();
+      // Refresh doctor data
+      setDoctor(response.data);
     } catch (err: any) {
       console.error('Error updating profile:', err);
-      setError(err.response?.data?.message || 'Failed to update profile. Make sure your server is running.');
+      setError(err.response?.data?.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
@@ -864,6 +881,27 @@ const DoctorProfile = () => {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 />
               </div>
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Booking Fee</h2>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Booking Fee (NPR)
+              </label>
+              <input
+                type="number"
+                name="bookingFee"
+                value={formData.bookingFee}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                min="0"
+              />
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Set your consultation fee for appointments
+              </p>
             </div>
           </div>
           
