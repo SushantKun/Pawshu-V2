@@ -10,8 +10,7 @@ import {
   HeartIcon as HeartIconOutline,
   SunIcon as SunIconOutline,
   MoonIcon as MoonIconOutline,
-  BellIcon as BellIconOutline,
-  ChatBubbleLeftIcon as ChatIconOutline
+  BellIcon as BellIconOutline
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import type { ComponentType, SVGProps } from 'react';
@@ -25,7 +24,6 @@ const HeartSolidIcon = HeartIconSolid as IconComponent;
 const SunIcon = SunIconOutline as IconComponent;
 const MoonIcon = MoonIconOutline as IconComponent;
 const BellIcon = BellIconOutline as IconComponent;
-const ChatIcon = ChatIconOutline as IconComponent;
 
 // Define the Appointment interface for notifications
 interface Appointment {
@@ -46,15 +44,6 @@ interface Appointment {
   };
 }
 
-// Define message interface for chat
-interface Message {
-  id: string;
-  sender: string;
-  content: string;
-  timestamp: string;
-  isRead: boolean;
-}
-
 const Navbar = () => {
   const { user, loading } = useAuth();
   const { cartItems, isCartOpen, openCart, closeCart, updateQuantity, removeFromCart, wishlist } = useCart();
@@ -67,14 +56,6 @@ const Navbar = () => {
   const [pendingPayments, setPendingPayments] = useState<Appointment[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const notificationRef = useRef<HTMLDivElement>(null);
-  
-  // State for chat dropdown
-  const [showChatDropdown, setShowChatDropdown] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', sender: 'Support', content: 'Hello! How can we help you today?', timestamp: new Date().toISOString(), isRead: false },
-    { id: '2', sender: 'Dr. Smith', content: 'Your pet\'s checkup is scheduled for tomorrow.', timestamp: new Date().toISOString(), isRead: false }
-  ]);
-  const chatRef = useRef<HTMLDivElement>(null);
 
   // Debug log for user authentication state
   useEffect(() => {
@@ -106,9 +87,6 @@ const Navbar = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotificationDropdown(false);
-      }
-      if (chatRef.current && !chatRef.current.contains(event.target as Node)) {
-        setShowChatDropdown(false);
       }
     };
 
@@ -148,7 +126,6 @@ const Navbar = () => {
 
   const cartItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const wishlistCount = wishlist.length;
-  const unreadMessagesCount = messages.filter(msg => !msg.isRead).length;
 
   // Add scroll event listener
   useEffect(() => {
@@ -236,7 +213,6 @@ const Navbar = () => {
                       <button
                         onClick={() => {
                           setShowNotificationDropdown(!showNotificationDropdown);
-                          setShowChatDropdown(false);
                         }}
                         className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
                         aria-label="Notifications"
@@ -299,70 +275,6 @@ const Navbar = () => {
                               onClick={() => setShowNotificationDropdown(false)}
                             >
                               View All Notifications
-                            </Link>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Chat Icon with Dropdown */}
-                    <div className="relative" ref={chatRef}>
-                      <button
-                        onClick={() => {
-                          setShowChatDropdown(!showChatDropdown);
-                          setShowNotificationDropdown(false);
-                        }}
-                        className="text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 relative transition-colors"
-                        aria-label="Chat"
-                      >
-                        <ChatIcon className="h-6 w-6" style={{ display: 'block', minWidth: '1.5rem', minHeight: '1.5rem' }} />
-                        {unreadMessagesCount > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                            {unreadMessagesCount}
-                          </span>
-                        )}
-                      </button>
-
-                      {/* Chat Dropdown */}
-                      {showChatDropdown && (
-                        <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 animate-fadeIn">
-                          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                            <h3 className="text-sm font-semibold text-gray-800 dark:text-white">Recent Messages</h3>
-                          </div>
-                          
-                          <div className="max-h-80 overflow-y-auto">
-                            {messages.length > 0 ? (
-                              <div>
-                                {messages.map((message) => (
-                                  <div key={message.id} className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                                    <div className="flex justify-between items-start">
-                                      <p className="text-sm text-gray-800 dark:text-white font-medium">
-                                        {message.sender}
-                                      </p>
-                                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                                        {new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                      </span>
-                                    </div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                                      {message.content}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                No messages
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="p-3 border-t border-gray-200 dark:border-gray-700 text-center">
-                            <Link 
-                              to="/chat" 
-                              className="text-xs font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-                              onClick={() => setShowChatDropdown(false)}
-                            >
-                              Open Chat
                             </Link>
                           </div>
                         </div>
@@ -462,7 +374,6 @@ const Navbar = () => {
                 <button 
                   onClick={() => {
                     setShowNotificationDropdown(!showNotificationDropdown);
-                    setShowChatDropdown(false);
                     setIsMenuOpen(false);
                   }}
                   className="flex items-center justify-between text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors w-full"
@@ -474,24 +385,6 @@ const Navbar = () => {
                   {pendingPayments.length > 0 && (
                     <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                       {pendingPayments.length}
-                    </span>
-                  )}
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowChatDropdown(!showChatDropdown);
-                    setShowNotificationDropdown(false);
-                    setIsMenuOpen(false);
-                  }}
-                  className="flex items-center justify-between text-gray-800 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 px-4 py-2 transition-colors w-full"
-                >
-                  <div className="flex items-center">
-                    <ChatIcon className="h-5 w-5 mr-2" />
-                    <span>Chat</span>
-                  </div>
-                  {unreadMessagesCount > 0 && (
-                    <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {unreadMessagesCount}
                     </span>
                   )}
                 </button>

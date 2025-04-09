@@ -27,7 +27,6 @@ import AdminDoctors from './pages/admin/AdminDoctors';
 import CharityManagement from './pages/admin/CharityManagement';
 import OrderDetail from './components/orders/OrderDetail';
 import AdminOrders from './pages/admin/AdminOrders';
-// Import doctor components
 import DoctorLogin from './components/doctor/DoctorLogin';
 import DoctorDashboard from './components/doctor/DoctorDashboard';
 import DoctorProfile from './components/doctor/DoctorProfile';
@@ -217,23 +216,6 @@ const EsewaRedirect = () => {
     </div>
   );
 };
-
-// Placeholder for Chat page until it's implemented
-const ChatPage = () => (
-  <div className="container mx-auto px-4 py-8">
-    <h1 className="text-3xl font-bold mb-6">Chat Feature</h1>
-    <p className="text-xl mb-4">This feature is coming soon!</p>
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-      <p className="mb-4">The chat feature will allow you to communicate with:</p>
-      <ul className="list-disc pl-5 mb-4">
-        <li>Customer support</li>
-        <li>Veterinarians</li>
-        <li>Other pet owners</li>
-      </ul>
-      <p>Stay tuned for updates!</p>
-    </div>
-  </div>
-);
 
 function App() {
   return (
@@ -439,13 +421,6 @@ function App() {
                 <ProtectedRoute>
                   <UserLayout>
                     <NotificationsPage />
-                  </UserLayout>
-                </ProtectedRoute>
-              } />
-              <Route path="/chat" element={
-                <ProtectedRoute>
-                  <UserLayout>
-                    <ChatPage />
                   </UserLayout>
                 </ProtectedRoute>
               } />

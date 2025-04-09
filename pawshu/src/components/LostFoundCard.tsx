@@ -45,6 +45,7 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [showContact, setShowContact] = useState(false);
   
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), 'PPP');
@@ -52,9 +53,9 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
 
   const isOwner = Boolean(user && report.userId && user._id === report.userId._id);
 
-  const handleContact = async () => {
+  const handleContact = () => {
     if (!user) {
-      toast.error('Please log in to contact the owner');
+      toast.error('Please log in to view contact information');
       navigate('/login');
       return;
     }
@@ -64,47 +65,7 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
       return;
     }
 
-    try {
-      setLoading(true);
-      toast.loading('Initiating chat...');
-      
-      // Create a more meaningful initial message based on report type
-      let initialMessage = '';
-      if (report.type === 'lost') {
-        initialMessage = `Hello, I'm reaching out about your lost ${report.petType}${report.breed ? ` (${report.breed})` : ''}. I believe I may have some information that could help you.`;
-      } else {
-        initialMessage = `Hello, I'm contacting you about the ${report.petType}${report.breed ? ` (${report.breed})` : ''} you found. I may be able to help identify the owner.`;
-      }
-      
-      // Create or get existing chat
-      const response = await axios.post('http://localhost:5000/api/chats/initiate', {
-        recipientId: report.userId._id,
-        contextType: 'lost-found',
-        referenceId: report._id,
-        initialMessage
-      }, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      setLoading(false);
-      toast.dismiss();
-      
-      if (response.data && response.data._id) {
-        // Navigate to the chat
-        toast.success('Chat initiated successfully');
-        navigate(`/chat/${response.data._id}`);
-      } else {
-        toast.error('Failed to initiate chat: Invalid response from server');
-        console.error('Invalid chat response:', response.data);
-      }
-    } catch (error: any) {
-      setLoading(false);
-      toast.dismiss();
-      console.error('Error initiating chat:', error);
-      toast.error(error.response?.data?.message || 'Failed to initiate chat');
-    }
+    setShowContact(true);
   };
 
   const handleStatusChange = async (newStatus: 'open' | 'resolved' | 'closed') => {
@@ -188,6 +149,17 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
         <p className="text-gray-700 dark:text-gray-300 mb-4 line-clamp-3">
           {report.description}
         </p>
+
+        {showContact && (
+          <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+            <h4 className="font-semibold mb-2">Contact Information:</h4>
+            <p><strong>Name:</strong> {report.contact.name}</p>
+            <p><strong>Email:</strong> {report.contact.email}</p>
+            {report.contact.phone && (
+              <p><strong>Phone:</strong> {report.contact.phone}</p>
+            )}
+          </div>
+        )}
         
         <div className="flex flex-col space-y-2">
           <button
@@ -197,7 +169,7 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
               loading || isOwner ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
             }`}
           >
-            {loading ? 'Loading...' : isOwner ? 'Your Post' : 'Contact'}
+            {loading ? 'Loading...' : isOwner ? 'Your Post' : showContact ? 'Hide Contact' : 'Show Contact'}
           </button>
           
           {isOwner && (

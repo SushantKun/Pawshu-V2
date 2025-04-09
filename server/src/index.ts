@@ -22,8 +22,6 @@ import User from './models/User';
 import charityRoutes from './routes/charityRoutes';
 import { Charity, initialCharities } from './models/Charity';
 import lostFoundRoutes from './routes/lostFoundRoutes';
-import chatRoutes from './routes/chatRoutes';
-import setupSocketIO from './services/ChatService';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -47,9 +45,6 @@ console.log('Cloudinary configuration:', {
 
 const app = express();
 const server = http.createServer(app);
-
-// Set up Socket.io
-const io = setupSocketIO(server);
 
 // Middleware
 app.use(cors({
@@ -482,7 +477,6 @@ app.use('/api/donations', donationRoutes);
 app.use('/api/charities', charityRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
-app.use('/api/chat', chatRoutes);
 app.use('/api/upload', verifyToken, uploadRoutes);
 
 // Error handling middleware
