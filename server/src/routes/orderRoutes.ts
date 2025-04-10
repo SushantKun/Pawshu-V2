@@ -796,7 +796,7 @@ router.post('/:id/retry-payment', verifyToken, async (req: AuthRequest, res: Res
 // Khalti payment initiation
 router.post('/khalti-payment', verifyToken, async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    console.log('Initiating Khalti payment with data:', JSON.stringify(req.body, null, 2));
+    console.log('Initializing Khalti payment request from server...');
     console.log('Auth user:', req.user);
 
     if (!req.user) {
@@ -858,15 +858,12 @@ router.post('/khalti-payment', verifyToken, async (req: AuthRequest, res: Respon
     };
 
     console.log('Sending Khalti request with payload:', JSON.stringify(khaltiPayload, null, 2));
-    console.log('Using Khalti secret key:', khaltiSecretKey.substring(0, 5) + '...');
 
-    // Use Khalti API URL based on environment - use prod for development too since sandbox has issues
+    // Use the sandbox endpoint during development
     const isProduction = process.env.NODE_ENV === 'production';
-    const khaltiApiUrl = isProduction 
-      ? 'https://khalti.com/api/v2/epayment/initiate/'
-      : 'https://khalti.com/api/v2/epayment/initiate/'; // Using production URL for both environments
+    const khaltiApiUrl = 'https://dev.khalti.com/api/v2/epayment/initiate/';
 
-    console.log(`Using Khalti ${isProduction ? 'production' : 'development'} API URL:`, khaltiApiUrl);
+    console.log(`Using Khalti sandbox API URL: ${khaltiApiUrl}`);
 
     // Define a function to make the Khalti API request with retry logic
     const makeKhaltiRequest = async (retryCount = 0, maxRetries = 2) => {
