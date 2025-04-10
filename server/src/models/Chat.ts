@@ -34,6 +34,11 @@ const chatSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  reportId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LostFound',
+    default: null
   }
 }, {
   timestamps: true

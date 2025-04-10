@@ -291,8 +291,90 @@ router.patch('/:id/status', verifyToken as any, async (req: AuthRequest, res: Re
       return res.status(403).json({ message: 'Not authorized to update this report' });
     }
 
+    // Save previous status to check if it changed
+    const previousStatus = report.status;
+    
     report.status = status;
     await report.save();
+    
+    // If status changed to/from resolved, update associated chat isActive field
+    if ((previousStatus !== 'resolved' && status === 'resolved') || 
+        (previousStatus === 'resolved' && status !== 'resolved')) {
+      
+      // Get Chat model through mongoose
+      const Chat = mongoose.model('Chat');
+      
+      // Update any chat related to this report
+      await Chat.updateMany(
+        { reportId: report._id },
+        { isActive: status !== 'resolved' }
+      );
+      
+      console.log(`Updated chat active status for report ${report._id} to ${status !== 'resolved'}`);
+    }
+    
+    // Notify clients about status change if it actually changed
+    if (previousStatus !== status) {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('report_status_changed', { reportId: report._id, status });
+      }
+    }
+
+    res.json(report);
+  } catch (error) {
+    console.error('Error updating report status:', error);
+    res.status(500).json({ message: 'An error occurred while updating the report' });
+  }
+});
+
+// Update report status (PUT version for broader compatibility)
+router.put('/:id/status', verifyToken as any, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    const { status } = req.body;
+    const report = await LostFound.findById(req.params.id);
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    if (report.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to update this report' });
+    }
+
+    // Save previous status to check if it changed
+    const previousStatus = report.status;
+    
+    report.status = status;
+    await report.save();
+    
+    // If status changed to/from resolved, update associated chat isActive field
+    if ((previousStatus !== 'resolved' && status === 'resolved') || 
+        (previousStatus === 'resolved' && status !== 'resolved')) {
+      
+      // Get Chat model through mongoose
+      const Chat = mongoose.model('Chat');
+      
+      // Update any chat related to this report
+      await Chat.updateMany(
+        { reportId: report._id },
+        { isActive: status !== 'resolved' }
+      );
+      
+      console.log(`Updated chat active status for report ${report._id} to ${status !== 'resolved'}`);
+    }
+    
+    // Notify clients about status change if it actually changed
+    if (previousStatus !== status) {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('report_status_changed', { reportId: report._id, status });
+      }
+    }
 
     res.json(report);
   } catch (error) {

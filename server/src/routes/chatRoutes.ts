@@ -11,7 +11,10 @@ import {
   getUserChats, 
   getChatMessages, 
   createChat, 
-  sendMessage 
+  sendMessage, 
+  updateChatStatus, 
+  updateMessageStatus,
+  getUserProfileForChat
 } from '../controllers/chatController';
 
 const router = express.Router();
@@ -27,5 +30,14 @@ router.post('/', verifyToken, createChat);
 
 // Send a message
 router.post('/:chatId/message', verifyToken, sendMessage);
+
+// Update chat active status
+router.patch('/:chatId/status', verifyToken, updateChatStatus);
+
+// Update message status in a chat
+router.patch('/:chatId/messages/status', verifyToken, updateMessageStatus);
+
+// Get user profile for chat (for displaying avatars, names, etc.)
+router.get('/users/:userId', verifyToken, getUserProfileForChat);
 
 export default router; 

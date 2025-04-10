@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
-import { FaComment } from 'react-icons/fa';
+import { FaComment, FaTrash } from 'react-icons/fa';
 
 // Create a configured axios instance
 const api = axios.create({
@@ -23,6 +23,9 @@ api.interceptors.request.use(config => {
   return config;
 });
 
+// Define the report status type to ensure consistency
+type ReportStatus = 'open' | 'resolved' | 'closed';
+
 interface PetReport {
   _id: string;
   type: 'lost' | 'found';
@@ -32,7 +35,7 @@ interface PetReport {
   date: string;
   description: string;
   images: Array<{ url: string }>;
-  status: 'open' | 'resolved' | 'closed';
+  status: ReportStatus;
   contact: {
     name: string;
     email: string;
@@ -63,10 +66,12 @@ interface LostFoundCardProps {
 }
 
 const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
-  const { user, getUserName } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  // Track the current status state to handle UI updates
+  const [currentStatus, setCurrentStatus] = useState<ReportStatus>(report.status);
 
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), 'PPP');
@@ -101,6 +106,12 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
       return;
     }
 
+    // Prevent chatting for resolved reports
+    if (currentStatus === 'resolved') {
+      toast.error('This report has been resolved. Messaging has been disabled.');
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -132,20 +143,84 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
     }
   };
 
-  const handleStatusChange = async (newStatus: 'open' | 'resolved' | 'closed') => {
+  const handleStatusChange = async (newStatus: ReportStatus) => {
     if (!isOwner) {
       toast.error('Only the owner can change the status');
       return;
     }
 
+    if (newStatus === currentStatus) {
+      return; // No change needed
+    }
+
     try {
       setLoading(true);
-      await api.patch(`/api/lost-found/${report._id}/status`, { status: newStatus });
-      toast.success(`Status updated to ${newStatus}`);
-      if (onStatusChange) onStatusChange();
+      
+      const response = await api.put(`/api/lost-found/${report._id}/status`, { status: newStatus });
+      
+      if (response.status === 200) {
+        setCurrentStatus(newStatus);
+        toast.success(`Status updated to ${newStatus}`);
+        if (onStatusChange) onStatusChange();
+      } else {
+        toast.error('Failed to update status');
+      }
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteReport = async () => {
+    if (!isOwner) {
+      toast.error('Only the owner can delete this report');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await api.delete(`/api/lost-found/${report._id}`);
+      
+      if (response.status === 200) {
+        toast.success('Report deleted successfully');
+        if (onStatusChange) onStatusChange();
+      } else {
+        toast.error('Failed to delete report');
+      }
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      toast.error('Failed to delete report');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const reopenReport = async () => {
+    if (!isOwner) {
+      toast.error('Only the owner can reopen this report');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await api.put(`/api/lost-found/${report._id}/status`, { status: 'open' });
+      
+      if (response.status === 200) {
+        setCurrentStatus('open');
+        toast.success('Report reopened successfully');
+        if (onStatusChange) onStatusChange();
+      } else {
+        toast.error('Failed to reopen report');
+      }
+    } catch (error) {
+      console.error('Error reopening report:', error);
+      toast.error('Failed to reopen report');
     } finally {
       setLoading(false);
     }
@@ -168,17 +243,19 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
         )}
 
         {/* Status badge */}
-        <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-semibold rounded-full ${report.status === 'open'
+        <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-semibold rounded-full ${
+          currentStatus === 'open'
             ? 'bg-green-500 text-white'
-            : report.status === 'resolved'
+            : currentStatus === 'resolved'
               ? 'bg-blue-500 text-white'
               : 'bg-gray-500 text-white'
           }`}>
-          {report.status.toUpperCase()}
+          {currentStatus.toUpperCase()}
         </div>
 
         {/* Type badge */}
-        <div className={`absolute top-2 left-2 px-2 py-1 text-xs font-semibold rounded-full ${report.type === 'lost' ? 'bg-red-500 text-white' : 'bg-purple-500 text-white'
+        <div className={`absolute top-2 left-2 px-2 py-1 text-xs font-semibold rounded-full ${
+          report.type === 'lost' ? 'bg-red-500 text-white' : 'bg-purple-500 text-white'
           }`}>
           {report.type.toUpperCase()}
         </div>
@@ -219,14 +296,16 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
         <div className="flex flex-col space-y-2">
           <button
             onClick={handleContact}
-            disabled={loading || isOwner}
-            className={`w-full py-2 rounded-md text-white font-medium ${loading || isOwner ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
-              }`}
+            disabled={loading || isOwner || currentStatus === 'resolved'}
+            className={`w-full py-2 rounded-md text-white font-medium ${
+              loading || isOwner || currentStatus === 'resolved' ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
+            }`}
           >
-            {loading ? 'Loading...' : isOwner ? 'Your Post' : showContact ? 'Hide Contact' : 'Show Contact'}
+            {loading ? 'Loading...' : isOwner ? 'Your Post' : currentStatus === 'resolved' ? 'Report Resolved' : showContact ? 'Hide Contact' : 'Show Contact'}
           </button>
 
-          {!isOwner && (
+          {/* Only show contact button for non-resolved reports */}
+          {!isOwner && currentStatus !== 'resolved' && (
             <button
               onClick={handleStartChat}
               disabled={loading}
@@ -236,19 +315,75 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
               Contact
             </button>
           )}
+          
+          {/* For resolved reports, show a message instead of the contact button for non-owners */}
+          {!isOwner && currentStatus === 'resolved' && (
+            <div className="bg-green-500 text-white p-3 rounded-md text-center">
+              <p className="text-sm font-medium">This report has been resolved.</p>
+              <p className="text-xs mt-1">The owner has marked this issue as resolved.</p>
+            </div>
+          )}
 
           {isOwner && (
-            <div className="flex space-x-2 mt-2">
-              <select
-                disabled={loading}
-                value={report.status}
-                onChange={(e) => handleStatusChange(e.target.value as 'open' | 'resolved' | 'closed')}
-                className="w-full py-2 px-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="open">Open</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
-              </select>
+            <div className="flex flex-col space-y-2 mt-2 w-full">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {currentStatus === 'resolved' ? 'Report Actions:' : 'Update Status:'}
+              </label>
+              
+              {/* Actions based on status */}
+              {(() => {
+                if (currentStatus === 'resolved') {
+                  // Show delete and reopen buttons when resolved
+                  return (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={reopenReport}
+                        disabled={loading}
+                        className="py-2 rounded-md text-white font-medium bg-green-500 hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        Reopen
+                      </button>
+                      <button
+                        onClick={handleDeleteReport}
+                        disabled={loading}
+                        className="py-2 rounded-md text-white font-medium bg-red-500 hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  );
+                } else {
+                  // Show status buttons if not resolved
+                  return (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleStatusChange('open')}
+                        disabled={loading || currentStatus === 'open'}
+                        className={`py-2 rounded-md text-white font-medium ${
+                          currentStatus === 'open' 
+                            ? 'bg-green-600' 
+                            : loading 
+                              ? 'bg-gray-400 cursor-not-allowed' 
+                              : 'bg-green-500 hover:bg-green-600'
+                        }`}
+                      >
+                        Open
+                      </button>
+                      <button
+                        onClick={() => handleStatusChange('resolved')}
+                        disabled={loading}
+                        className={`py-2 rounded-md text-white font-medium ${
+                          loading 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-blue-500 hover:bg-blue-600'
+                        }`}
+                      >
+                        Resolved
+                      </button>
+                    </div>
+                  );
+                }
+              })()}
             </div>
           )}
         </div>
