@@ -1,4 +1,3 @@
-// src/components/AdminNavbar.tsx
 import { Link, useLocation } from 'react-router-dom';
 import { HomeIcon, ShoppingBagIcon, ChartBarIcon, UserIcon, CogIcon } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
@@ -86,4 +85,4 @@ const AdminNavbar = () => {
   );
 };
 
-export default AdminNavbar;
+export default AdminNavbar; 

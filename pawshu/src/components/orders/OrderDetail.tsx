@@ -28,6 +28,9 @@ interface Order {
   shippingAddress: ShippingAddress;
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   paymentStatus: 'pending' | 'completed' | 'failed';
+  paymentMethod?: 'card' | 'esewa' | 'khalti' | 'cash';
+  khaltiReference?: string;
+  esewaRefId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -169,6 +172,7 @@ const OrderDetail: React.FC = () => {
               </span>
               <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getPaymentStatusColor(order.paymentStatus)}`}>
                 Payment: {order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
+                {order.paymentMethod && ` (${order.paymentMethod})`}
               </span>
             </div>
           </div>

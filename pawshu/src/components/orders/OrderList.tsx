@@ -56,7 +56,7 @@ const OrderList: React.FC = () => {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/orders/user');
+      const response = await api.get('/orders');
       setOrders(response.data);
       setError(null);
     } catch (err: any) {

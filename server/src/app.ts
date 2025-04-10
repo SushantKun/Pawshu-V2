@@ -14,6 +14,7 @@ import uploadRoutes from './routes/uploadRoutes';
 import lostFoundRoutes from './routes/lostFoundRoutes';
 import charityRoutes from './routes/charityRoutes';
 import chatRoutes from './routes/chatRoutes';
+import authRoutes from './routes/authRoutes';
 
 dotenv.config();
 
@@ -64,6 +65,7 @@ console.log(`- Payment gateways: ${
 }`);
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/donations', donationRoutes);
 app.use('/api/products', productRoutes);

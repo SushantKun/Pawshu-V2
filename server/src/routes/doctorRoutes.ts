@@ -7,6 +7,12 @@ import { verifyToken, doctorAuth } from '../middleware/auth';
 import { AuthRequest } from '../types/auth';
 import { uploadImage } from '../utils/cloudinary';
 import mongoose from 'mongoose';
+import {
+  loginDoctor, 
+  getDoctorProfile, 
+  updateDoctorProfile,
+  getDoctorAppointments
+} from '../controllers/doctorController';
 
 const router = express.Router();
 
@@ -27,238 +33,15 @@ const isValidDate = (dateString: string): boolean => {
   return true;
 };
 
-// @route   POST /api/doctors/login
-// @desc    Login doctor
-// @access  Public
-router.post('/login', (async (req: Request, res: Response) => {
-  try {
-    console.log('POST /api/doctors/login - Doctor login attempt');
-    const { email, password } = req.body;
+// Auth routes
+router.post('/login', loginDoctor as RequestHandler);
 
-    console.log('Login attempt for email:', email);
+// Profile routes - protected with verifyToken and doctorAuth
+router.get('/profile', verifyToken, doctorAuth, getDoctorProfile as RequestHandler);
+router.put('/profile', verifyToken, doctorAuth, updateDoctorProfile as RequestHandler);
 
-    // Validate input
-    if (!email || !password) {
-      console.log('Missing email or password in request');
-      return res.status(400).json({ message: 'Please provide email and password' });
-    }
-
-    // Find doctor by email
-    const doctor = await Doctor.findOne({ email }).select('+password');
-    console.log('Doctor found:', doctor ? `ID: ${doctor._id}, Email: ${doctor.email}` : 'No doctor found');
-
-    if (!doctor) {
-      console.log('No doctor found with email:', email);
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    // Check password
-    try {
-      const isMatch = await doctor.comparePassword(password);
-      console.log('Password match:', isMatch);
-
-      if (!isMatch) {
-        console.log('Invalid password for doctor:', email);
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-    } catch (passwordError) {
-      console.error('Error comparing password:', passwordError);
-      return res.status(500).json({ message: 'Error validating credentials' });
-    }
-
-    // Create token
-    const token = jwt.sign(
-      {
-        _id: doctor._id,
-        name: `${doctor.firstName} ${doctor.lastName}`,
-        email: doctor.email,
-        isAdmin: false,
-        isDoctor: true,
-        role: 'doctor'
-      },
-      process.env.JWT_SECRET || 'defaultsecret',
-      { expiresIn: '1d' }
-    );
-
-    // Return token and doctor info (excluding password)
-    const doctorInfo = {
-      _id: doctor._id,
-      firstName: doctor.firstName,
-      lastName: doctor.lastName,
-      email: doctor.email,
-      specialization: doctor.specialization,
-      isDoctor: true,
-      role: 'doctor'
-    };
-
-    console.log('Doctor login successful for:', email);
-    res.json({ token, doctor: doctorInfo });
-  } catch (error) {
-    console.error('Doctor login error:', error);
-    res.status(500).json({
-      message: 'Server error',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-}) as RequestHandler);
-
-// Get doctor profile
-router.get('/profile', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
-    }
-
-    const doctor = await Doctor.findById(req.user._id).select('-password');
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-
-    res.json(doctor);
-  } catch (error) {
-    console.error('Error fetching doctor profile:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
-
-// Update doctor profile
-router.put('/profile', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
-  try {
-    console.log('Doctor authorization successful for path: /profile');
-    
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
-    }
-
-    const doctor = await Doctor.findById(req.user._id);
-    if (!doctor) {
-      return res.status(404).json({ message: 'Doctor not found' });
-    }
-
-    // Debug request body
-    console.log('Profile update request body keys:', Object.keys(req.body));
-    console.log('Profile update request body availability:', req.body.availability);
-    console.log('Profile update request body availability[]:', req.body['availability[]']);
-
-    // Create a clean update object
-    const updates: Partial<IDoctor> = {};
-    
-    // Handle basic fields
-    const fields = [
-      'firstName', 'lastName', 'specialization', 
-      'experience', 'bio', 'isActive', 'locationPreference',
-      'clinicAddress', 'appointmentDuration', 'bookingFee'
-    ];
-    
-    fields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        (updates as any)[field] = req.body[field];
-      }
-    });
-    
-    // Special handling for availability array
-    console.log('Received availability data:', req.body.availability);
-    console.log('Received availability[] data:', req.body['availability[]']);
-    
-    // Handle availability array specifically 
-    if (req.body.availability || req.body['availability[]']) {
-      // For form data, the field might be passed as 'availability[]'
-      let availabilityData = req.body.availability;
-      
-      // If it's not an array but we have availability[], use that instead
-      if (!Array.isArray(availabilityData) && req.body['availability[]']) {
-        availabilityData = req.body['availability[]'];
-        console.log('Using availability[] instead:', availabilityData);
-      }
-      
-      // Process the availability data - make sure we handle all cases
-      if (Array.isArray(availabilityData)) {
-        // Filter out any empty strings
-        updates.availability = availabilityData.filter((slot: string) => slot && slot.trim() !== '');
-        console.log('Using availability array with entries:', updates.availability);
-      } else if (typeof availabilityData === 'string' && availabilityData.trim() !== '') {
-        // Single string case
-        updates.availability = [availabilityData];
-        console.log('Using single availability string:', updates.availability);
-      } else if (availabilityData === undefined || availabilityData === null) {
-        // Empty case - set to empty array to clear existing
-        updates.availability = [];
-        console.log('Clearing availability array - no data provided');
-      }
-      
-      // Ensure each entry is correctly formatted as 'Day StartHour-EndHour'
-      if (updates.availability && updates.availability.length > 0) {
-        updates.availability = updates.availability.map((slot: string) => {
-          // Check if already in correct format
-          if (/^[A-Z][a-z]+ \d+-\d+$/.test(slot)) {
-            return slot;
-          }
-          
-          // Try to parse and reformat if needed
-          const parts = slot.split(' ');
-          if (parts.length >= 2) {
-            const day = parts[0];
-            const timeRange = parts[1];
-            if (timeRange.includes('-')) {
-              return `${day} ${timeRange}`;
-            }
-          }
-          return slot;
-        });
-      }
-
-      console.log('Final processed availability:', updates.availability);
-    } else {
-      // If availability is not provided at all, leave it as is
-      console.log('No availability data provided, leaving existing values');
-    }
-    
-    // Handle profile image separately to prevent validation errors
-    if (req.body.profileImage) {
-      // If it's a data URL, upload to Cloudinary
-      if (typeof req.body.profileImage === 'string' && req.body.profileImage.startsWith('data:')) {
-        try {
-          const uploadResult = await uploadImage(req.body.profileImage);
-          updates.profileImage = {
-            public_id: uploadResult.public_id,
-            url: uploadResult.secure_url
-          };
-        } catch (uploadError) {
-          console.error('Error uploading image:', uploadError);
-          return res.status(400).json({ message: 'Error uploading profile image' });
-        }
-      } else if (typeof req.body.profileImage === 'object') {
-        // If it's already an object with the right structure, use it directly
-        updates.profileImage = req.body.profileImage;
-      }
-      // Otherwise ignore it to prevent validation errors
-    }
-    
-    console.log('Doctor profile update object:', { 
-      ...updates, 
-      profileImage: updates.profileImage ? 'image data present' : 'no image data',
-      availability: updates.availability
-    });
-    
-    // Apply updates
-    Object.keys(updates).forEach((key) => {
-      if (key !== '_id' && key !== 'password' && key !== 'email') {
-        (doctor as any)[key] = (updates as any)[key];
-      }
-    });
-
-    await doctor.save();
-    
-    const updatedDoctor = await Doctor.findById(req.user._id).select('-password');
-    res.json(updatedDoctor);
-  } catch (error) {
-    console.error('Error updating doctor profile:', error);
-    res.status(500).json({ 
-      message: 'Server error', 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-}) as RequestHandler);
+// Appointment routes - protected with verifyToken and doctorAuth
+router.get('/appointments', verifyToken, doctorAuth, getDoctorAppointments as RequestHandler);
 
 // Update doctor password
 router.put('/profile/password', verifyToken, doctorAuth, (async (req: AuthRequest, res: Response) => {
@@ -304,27 +87,6 @@ router.get('/', (async (req: Request, res: Response) => {
     res.json(doctors);
   } catch (error) {
     console.error('Error fetching doctors:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
-
-// Get doctor's appointments
-router.get('/appointments', verifyToken as RequestHandler, doctorAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
-    }
-
-    console.log('Fetching appointments for doctor:', req.user._id);
-
-    const appointments = await Appointment.find({ doctor: req.user._id })
-      .populate('user', 'name email')
-      .sort({ date: 1 });
-
-    console.log('Found appointments:', appointments.length);
-    res.json(appointments);
-  } catch (error) {
-    console.error('Error fetching doctor appointments:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);

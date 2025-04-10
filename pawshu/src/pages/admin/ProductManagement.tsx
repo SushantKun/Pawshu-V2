@@ -126,6 +126,12 @@ const ProductManagement = () => {
         
         // Set the images array directly - this is what the server expects
         productData.images = base64Images;
+        
+        // If editing, add all existing image IDs to removedImages to ensure they're replaced
+        if (editingProduct && editingProduct.images && editingProduct.images.length > 0) {
+          productData.removedImages = editingProduct.images.map(img => img.public_id);
+          console.log('Will remove existing images:', productData.removedImages);
+        }
       } else {
         // If updating a product without changing images, don't send empty array
         if (!editingProduct) {

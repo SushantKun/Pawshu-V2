@@ -1,129 +1,31 @@
+/**
+ * Chat Routes
+ * 
+ * Defines API endpoints for chat functionality including fetching chats,
+ * getting messages, creating chats, and sending messages.
+ */
+
 import express from 'express';
-import { Chat, Message } from '../models/Chat';
 import { verifyToken } from '../middleware/auth';
-import { AuthRequest } from '../types/auth';
+import { 
+  getUserChats, 
+  getChatMessages, 
+  createChat, 
+  sendMessage 
+} from '../controllers/chatController';
 
 const router = express.Router();
 
 // Get all chats for a user
-router.get('/', verifyToken, async (req: AuthRequest, res) => {
-  try {
-    const chats = await Chat.find({
-      participants: req.user?._id
-    })
-    .populate('participants', 'firstName lastName email')
-    .sort({ lastMessage: -1 });
-    
-    res.json(chats);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching chats' });
-  }
-});
+router.get('/', verifyToken, getUserChats);
 
 // Get messages for a specific chat
-router.get('/:chatId/messages', verifyToken, async (req: AuthRequest, res) => {
-  try {
-    const chat = await Chat.findById(req.params.chatId);
-    
-    if (!chat) {
-      return res.status(404).json({ message: 'Chat not found' });
-    }
-    
-    // Check if user is a participant
-    if (req.user && !chat.participants.includes(req.user._id)) {
-      return res.status(403).json({ message: 'Not authorized to access this chat' });
-    }
-    
-    // Return messages with consistent sender format (just the ID string)
-    // This ensures consistency with socket.io messages
-    const messages = chat.messages.map(msg => ({
-      _id: msg._id,
-      sender: msg.sender,
-      content: msg.content,
-      timestamp: msg.timestamp,
-      status: msg.status
-    }));
-    
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ message: 'Error fetching messages' });
-  }
-});
+router.get('/:chatId/messages', verifyToken, getChatMessages);
 
 // Create a new chat or get existing chat
-router.post('/', verifyToken, async (req: AuthRequest, res) => {
-  try {
-    const { participantId } = req.body;
-    
-    if (!req.user) {
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-    
-    // Check if chat already exists
-    let chat = await Chat.findOne({
-      participants: {
-        $all: [req.user._id, participantId]
-      }
-    });
-    
-    if (chat) {
-      return res.json(chat);
-    }
-    
-    // Create new chat
-    chat = new Chat({
-      participants: [req.user._id, participantId],
-      messages: []
-    });
-    
-    await chat.save();
-    res.status(201).json(chat);
-  } catch (error) {
-    res.status(500).json({ message: 'Error creating chat' });
-  }
-});
+router.post('/', verifyToken, createChat);
 
 // Send a message
-router.post('/:chatId/message', verifyToken, async (req: AuthRequest, res) => {
-  try {
-    const { content } = req.body;
-    
-    if (!req.user) {
-      return res.status(401).json({ message: 'User not authenticated' });
-    }
-    
-    const chat = await Chat.findById(req.params.chatId);
-    
-    if (!chat) {
-      return res.status(404).json({ message: 'Chat not found' });
-    }
-    
-    // Check if user is a participant
-    if (!chat.participants.includes(req.user._id)) {
-      return res.status(403).json({ message: 'Not authorized to send messages in this chat' });
-    }
-    
-    const message = {
-      sender: req.user._id,
-      content,
-      timestamp: new Date(),
-      status: 'sent'
-    };
-    
-    chat.messages.push(message);
-    chat.lastMessage = new Date();
-    await chat.save();
-    
-    // Emit the message through socket.io
-    const io = req.app.get('io');
-    if (io) {
-      io.to(req.params.chatId).emit('receive_message', message);
-    }
-    
-    res.status(201).json(message);
-  } catch (error) {
-    res.status(500).json({ message: 'Error sending message' });
-  }
-});
+router.post('/:chatId/message', verifyToken, sendMessage);
 
 export default router; 

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import api from '../api/axios';
-import OrderSummary from '../components/OrderSummary';
+import OrderSummary from '../components/orders/OrderSummary';
+import { toast } from 'react-toastify';
 
 interface OrderItem {
   productId: string;
@@ -28,44 +29,65 @@ const CheckoutSuccess = () => {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [orderId, setOrderId] = useState<string | null>(null);
+
+  // Function to fetch order details
+  const fetchOrderDetails = async (id: string) => {
+    setLoading(true);
+    try {
+      console.log('Fetching order details for:', id);
+      const response = await api.get(`/orders/${id}`);
+      
+      // Get the order data from the response
+      const orderData = response.data;
+      
+      // Remove any eSewa verification property if it exists
+      if (orderData.esewaVerification) {
+        delete orderData.esewaVerification;
+      }
+      
+      setOrder(orderData);
+      
+      // Show toast if payment status is completed
+      if (orderData.paymentStatus === 'completed') {
+        toast.success('Payment has been verified and completed!');
+      }
+      
+      setError('');
+    } catch (err) {
+      console.error('Error fetching order:', err);
+      setError('Failed to load order details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle order update from OrderSummary component
+  const handleOrderUpdate = () => {
+    if (orderId) {
+      fetchOrderDetails(orderId);
+    }
+  };
 
   useEffect(() => {
     // Extract order ID from URL parameters
     const searchParams = new URLSearchParams(location.search);
-    const orderId = searchParams.get('orderId');
+    const id = searchParams.get('orderId');
     
-    if (!orderId) {
+    if (!id) {
       setError('Order ID not found');
       setLoading(false);
       return;
     }
 
+    // Set order ID in state
+    setOrderId(id);
+
     // Clear the cart
     clearCart();
 
     // Fetch order details
-    const getOrder = async () => {
-      try {
-        const response = await api.get(`/orders/${orderId}`);
-        
-        // Get the order data from the response
-        const orderData = response.data;
-        
-        // Remove any eSewa verification property if it exists
-        if (orderData.esewaVerification) {
-          delete orderData.esewaVerification;
-        }
-        
-        setOrder(orderData);
-      } catch (err) {
-        console.error('Error fetching order:', err);
-        setError('Failed to load order details');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    getOrder();
+    fetchOrderDetails(id);
   }, [location.search, clearCart]);
 
   if (loading) {
@@ -108,15 +130,21 @@ const CheckoutSuccess = () => {
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">Payment Successful!</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-300">Thank you for your order. Your payment has been processed successfully.</p>
+          <h1 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">
+            {order.paymentStatus === 'completed' ? 'Payment Successful!' : 'Order Received!'}
+          </h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-300">
+            {order.paymentStatus === 'completed' 
+              ? 'Thank you for your order. Your payment has been processed successfully.'
+              : 'Thank you for your order. We\'re currently processing your payment.'}
+          </p>
         </div>
 
-        <OrderSummary order={order} />
+        <OrderSummary order={order} onUpdate={handleOrderUpdate} />
         
         <div className="mt-8 flex justify-center space-x-4">
           <button
-            onClick={() => navigate('/orders')}
+            onClick={() => navigate('/profile')}
             className="px-6 py-3 bg-blue-500 text-white rounded-md hover:bg-blue-600"
           >
             View Your Orders

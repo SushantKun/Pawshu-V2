@@ -227,7 +227,7 @@ const Profile = () => {
   const fetchOrders = async () => {
     setOrdersLoading(true);
     try {
-      const response = await api.get('/orders/user');
+      const response = await api.get('/orders');
       setOrders(response.data);
     } catch (err: any) {
       console.error('Error fetching orders:', err);
