@@ -7,12 +7,10 @@ import axios from 'axios';
 // Message interface that matches our backend model
 interface Message {
   _id: string;
-  sender: string;
+  sender: string | { _id: string; [key: string]: any };  // Handle both string ID and populated sender object
   content: string;
   timestamp: Date;
   status: 'sent' | 'delivered' | 'read';
-  // Flag to determine message positioning
-  isSentByMe?: boolean;
 }
 
 // Constants for local storage keys
@@ -37,20 +35,21 @@ const ChatInterface: React.FC<{ chatId?: string, recipientName?: string }> = ({
     }
   }, [user]);
   
-  // Process messages to add the isSentByMe flag
-  const processMessages = (msgs: any[]): Message[] => {
-    if (!user) return msgs;
+  // Core function to determine if a message is from the current user
+  // This handles both string IDs and populated sender objects
+  const isMessageFromCurrentUser = (sender: string | { _id: string; [key: string]: any }): boolean => {
+    if (!user) return false;
+
+    // Handle when sender is a populated object (with _id field)
+    if (typeof sender === 'object' && sender !== null && '_id' in sender) {
+      return sender._id === user._id;
+    }
     
-    const currentUserId = user._id;
-    
-    return msgs.map(msg => ({
-      ...msg,
-      // Determine if this message was sent by the current user
-      isSentByMe: msg.sender === currentUserId
-    }));
+    // Handle when sender is just a string ID
+    return sender === user._id;
   };
 
-  // Fetch messages from API
+  // Fetch messages from API directly
   useEffect(() => {
     const fetchMessages = async () => {
       if (!user) return;
@@ -63,6 +62,8 @@ const ChatInterface: React.FC<{ chatId?: string, recipientName?: string }> = ({
         
         if (activeChatId) {
           const token = localStorage.getItem('token');
+          console.log('Fetching messages for chat ID:', activeChatId);
+
           const response = await axios.get(`http://localhost:5000/api/chats/${activeChatId}/messages`, {
             headers: {
               Authorization: `Bearer ${token}`
@@ -70,12 +71,8 @@ const ChatInterface: React.FC<{ chatId?: string, recipientName?: string }> = ({
           });
           
           if (Array.isArray(response.data)) {
-            // Process messages to add isSentByMe flag
-            const processedMessages = processMessages(response.data);
-            setMessages(processedMessages);
-            
-            // Store in localStorage for persistence
-            localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(processedMessages));
+            console.log('Raw message data:', response.data);
+            setMessages(response.data);
           }
         } else if (contextMessages && contextMessages.length > 0) {
           // Fallback to context messages if available
@@ -84,69 +81,33 @@ const ChatInterface: React.FC<{ chatId?: string, recipientName?: string }> = ({
             sender: msg.senderId,
             content: msg.content,
             timestamp: new Date(msg.timestamp),
-            status: 'sent' as const,
-            isSentByMe: msg.senderId === user._id
+            status: 'sent' as const
           }));
           
           setMessages(formattedMessages);
-          localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(formattedMessages));
         } else {
-          // Try to get messages from localStorage
-          const storedMessages = localStorage.getItem(MESSAGES_STORAGE_KEY);
-          
-          if (storedMessages) {
-            const parsedMessages = JSON.parse(storedMessages);
-            setMessages(parsedMessages);
-          } else {
-            // Use demo messages if nothing else is available
-            setMessages([
-              {
-                _id: '1',
-                sender: 'other-user',
-                content: "hi",
-                timestamp: new Date('2023-04-10T03:58:00'),
-                status: 'read',
-                isSentByMe: false
-              },
-              {
-                _id: '2',
-                sender: user._id,
-                content: "hello",
-                timestamp: new Date('2023-04-10T03:58:00'),
-                status: 'sent',
-                isSentByMe: true
-              }
-            ]);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching messages:', error);
-        // Check if we have stored messages in localStorage
-        const storedMessages = localStorage.getItem(MESSAGES_STORAGE_KEY);
-        
-        if (storedMessages) {
-          setMessages(JSON.parse(storedMessages));
-        } else {
-          // Use demo messages as a fallback
+          // Demo messages as fallback
           setMessages([
             {
               _id: '1',
-              sender: 'other-user',
+              sender: 'other-user-id', // This will show on the left
               content: "hi",
               timestamp: new Date('2023-04-10T03:58:00'),
-              status: 'read',
-              isSentByMe: false
+              status: 'read'
             },
             {
               _id: '2',
-              sender: user._id,
+              sender: user._id, // This will show on the right
               content: "hello",
               timestamp: new Date('2023-04-10T03:58:00'),
-              status: 'sent',
-              isSentByMe: true
+              status: 'sent'
             }
           ]);
         }
+      } catch (error) {
+        console.error('Error fetching messages:', error);
+        // Fallback to empty messages list
+        setMessages([]);
       } finally {
         setLoading(false);
       }
@@ -204,37 +165,23 @@ const ChatInterface: React.FC<{ chatId?: string, recipientName?: string }> = ({
         
         if (response.data) {
           // Add the new message to our local state
-          const newMsg = {
+          setMessages(prevMessages => [...prevMessages, {
             _id: response.data._id || Date.now().toString(),
-            sender: user._id,
+            sender: user._id, // Use the actual user ID
             content: newMessage,
             timestamp: new Date(),
-            status: 'sent' as const,
-            isSentByMe: true // This is a message we're sending, so it's from us
-          };
-          
-          setMessages(prevMessages => [...prevMessages, newMsg]);
-          
-          // Update localStorage
-          const updatedMessages = [...messages, newMsg];
-          localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(updatedMessages));
+            status: 'sent'
+          }]);
         }
       } else {
         // For demo - just add locally if no activeChat
-        const newMsg = {
+        setMessages(prevMessages => [...prevMessages, {
           _id: Date.now().toString(),
-          sender: user._id,
+          sender: user._id, // Use the actual user ID
           content: newMessage,
           timestamp: new Date(),
-          status: 'sent' as const,
-          isSentByMe: true // This is a message we're sending, so it's from us
-        };
-        
-        setMessages(prevMessages => [...prevMessages, newMsg]);
-        
-        // Update localStorage
-        const updatedMessages = [...messages, newMsg];
-        localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(updatedMessages));
+          status: 'sent'
+        }]);
       }
       
       setNewMessage('');
@@ -250,10 +197,42 @@ const ChatInterface: React.FC<{ chatId?: string, recipientName?: string }> = ({
     }
   };
 
+  // Format the date for display
+  const formatMessageDate = (date: Date): string => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Check if the message is from today
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    }
+    
+    // Check if the message is from yesterday
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday';
+    }
+    
+    // Otherwise, return the full date
+    return date.toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
   // Get recipient initial for the avatar
   const getRecipientInitial = () => {
     return recipientName.charAt(0).toUpperCase();
   };
+
+  // Debug info for troubleshooting
+  useEffect(() => {
+    if (messages.length > 0) {
+      console.log("Current user ID:", user?._id);
+      console.log("Message sample:", messages[0]);
+    }
+  }, [messages, user]);
 
   return (
     <div className="w-96 h-[500px] flex flex-col bg-gray-900 rounded-lg shadow-lg overflow-hidden">
@@ -286,36 +265,43 @@ const ChatInterface: React.FC<{ chatId?: string, recipientName?: string }> = ({
           </div>
         ) : (
           <>
-            {/* Date separator */}
-            <div className="flex justify-center my-2">
-              <div className="bg-gray-800 text-gray-400 text-xs px-3 py-1 rounded-full">
-                Thursday, Apr 10
-              </div>
-            </div>
-            
-            {/* Messages - using isSentByMe flag for positioning */}
-            {messages.map((message) => (
-              <div 
-                key={message._id} 
-                className={message.isSentByMe ? "flex justify-end" : "flex justify-start"}
-              >
-                <div 
-                  className={
-                    message.isSentByMe 
-                      ? "max-w-[70%] p-3 rounded-lg bg-blue-500 text-white rounded-br-none" 
-                      : "max-w-[70%] p-3 rounded-lg bg-gray-700 text-white rounded-bl-none"
-                  }
-                >
-                  <p className="break-words">{message.content}</p>
-                  <p className="text-xs mt-1 opacity-70 text-right">
-                    {new Date(message.timestamp).toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}
-                  </p>
+            {/* Date separator - only show if we have messages */}
+            {messages.length > 0 && (
+              <div className="flex justify-center my-2">
+                <div className="bg-gray-800 text-gray-400 text-xs px-3 py-1 rounded-full">
+                  {formatMessageDate(new Date(messages[0].timestamp))}
                 </div>
               </div>
-            ))}
+            )}
+            
+            {/* Messages */}
+            {messages.map((message) => {
+              // Directly check if the sender is the current user
+              const isFromMe = isMessageFromCurrentUser(message.sender);
+              
+              return (
+                <div 
+                  key={message._id} 
+                  className={isFromMe ? "flex justify-end" : "flex justify-start"}
+                >
+                  <div 
+                    className={
+                      isFromMe 
+                        ? "max-w-[70%] p-3 rounded-lg bg-blue-500 text-white rounded-br-none" 
+                        : "max-w-[70%] p-3 rounded-lg bg-gray-700 text-white rounded-bl-none"
+                    }
+                  >
+                    <p className="break-words">{message.content}</p>
+                    <p className="text-xs mt-1 opacity-70 text-right">
+                      {new Date(message.timestamp).toLocaleTimeString([], { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
             <div ref={messagesEndRef} />
           </>
         )}

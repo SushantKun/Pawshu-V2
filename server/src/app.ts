@@ -89,7 +89,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send_message', (data) => {
-    io.to(data.chatId).emit('receive_message', data);
+    // Ensure we're always using raw IDs for the sender
+    const messageToEmit = {
+      ...data,
+      sender: typeof data.sender === 'object' ? data.sender._id : data.sender
+    };
+    
+    io.to(data.chatId).emit('receive_message', messageToEmit);
     console.log(`Message sent in chat ${data.chatId}: ${data.content}`);
   });
 

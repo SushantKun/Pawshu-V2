@@ -30,11 +30,10 @@ const storeCurrentUserId = (id: string) => {
 interface Message {
   _id?: string;
   id?: string;
-  sender: string;
+  sender: string | { _id: string; [key: string]: any };
   content: string;
   timestamp: Date;
   chatId?: string;
-  isSentByMe: boolean;
 }
 
 interface Chat {
@@ -51,6 +50,20 @@ interface Chat {
 // Create a global state for active chat
 let globalActiveChat: string | null = null;
 let globalSetActiveChat: ((chatId: string | null) => void) | null = null;
+
+// Core function to determine if a message is from the current user
+// This handles both string IDs and populated sender objects
+const isMessageFromCurrentUser = (sender: string | { _id: string; [key: string]: any }, currentUserId?: string): boolean => {
+  if (!currentUserId) return false;
+
+  // Handle when sender is a populated object (with _id field)
+  if (typeof sender === 'object' && sender !== null && '_id' in sender) {
+    return sender._id === currentUserId;
+  }
+  
+  // Handle when sender is just a string ID
+  return sender === currentUserId;
+};
 
 const ChatButton: React.FC = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -140,19 +153,20 @@ const ChatButton: React.FC = () => {
     newSocket.on('receive_message', (message: any) => {
       console.log('Received message through socket:', message);
       
+      if (!user) return;
+      
       // Format the message to match our Message interface
       const formattedMessage: Message = {
         _id: message._id || message.id || Date.now().toString(),
-        sender: message.sender,
+        sender: message.sender, // Keep sender as is (could be object or ID)
         content: message.content,
         timestamp: new Date(message.timestamp || Date.now()),
-        chatId: message.chatId,
-        // Add this flag to ensure correct positioning
-        isSentByMe: message.sender === user._id
+        chatId: message.chatId
       };
       
       // Auto-open chat if it's the active chat
-      if (message.sender !== user._id) {
+      // Compare using the isMessageFromCurrentUser helper
+      if (!isMessageFromCurrentUser(message.sender, user._id)) {
         if (activeChat === message.chatId) {
           setMessages(prev => [...prev, formattedMessage]);
         } else {
@@ -234,17 +248,22 @@ const ChatButton: React.FC = () => {
       const response = await api.get(`/api/chats/${chatId}/messages`);
       
       if (Array.isArray(response.data)) {
-        // Map the messages to our Message interface
+        // Preserve the original sender data (could be object or string ID)
+        // This will ensure we can correctly identify the sender
         const formattedMessages: Message[] = response.data.map((msg: any) => ({
           _id: msg._id || Date.now().toString(),
-          sender: msg.sender, 
+          sender: msg.sender, // Keep sender as is (object or string ID)
           content: msg.content,
           timestamp: new Date(msg.timestamp || Date.now()),
-          chatId: chatId, // Add the chatId to each message
-          isSentByMe: user ? msg.sender === user._id : false
+          chatId: chatId
         }));
         
         console.log('Received messages from API:', formattedMessages.length);
+        // Log the first message to debug sender format
+        if (formattedMessages.length > 0) {
+          console.log('Sample message sender:', formattedMessages[0].sender);
+        }
+        
         setMessages(formattedMessages);
       } else {
         console.error('Expected array of messages but got:', response.data);
@@ -277,8 +296,7 @@ const ChatButton: React.FC = () => {
       _id: Date.now().toString(),
       sender: user._id,
       content: newMessage,
-      timestamp: new Date(),
-      isSentByMe: true // Always true for messages we send
+      timestamp: new Date()
     };
     
     setMessages(prev => [...prev, tempMessage]);
@@ -481,8 +499,8 @@ const ChatButton: React.FC = () => {
                 ) : (
                   <div className="space-y-4">
                     {messages.map((message, index) => {
-                      // Use the isSentByMe flag directly for consistent positioning
-                      const isFromMe = message.isSentByMe;
+                      // Direct comparison instead of relying on isSentByMe flag
+                      const isFromMe = isMessageFromCurrentUser(message.sender, user?._id);
                       const showDate = index === 0 || 
                         new Date(message.timestamp).toDateString() !== 
                         new Date(messages[index - 1].timestamp).toDateString();

@@ -23,11 +23,7 @@ router.get('/', verifyToken, async (req: AuthRequest, res) => {
 // Get messages for a specific chat
 router.get('/:chatId/messages', verifyToken, async (req: AuthRequest, res) => {
   try {
-    const chat = await Chat.findById(req.params.chatId)
-      .populate({
-        path: 'messages.sender',
-        select: 'firstName lastName email'
-      });
+    const chat = await Chat.findById(req.params.chatId);
     
     if (!chat) {
       return res.status(404).json({ message: 'Chat not found' });
@@ -38,7 +34,17 @@ router.get('/:chatId/messages', verifyToken, async (req: AuthRequest, res) => {
       return res.status(403).json({ message: 'Not authorized to access this chat' });
     }
     
-    res.json(chat.messages);
+    // Return messages with consistent sender format (just the ID string)
+    // This ensures consistency with socket.io messages
+    const messages = chat.messages.map(msg => ({
+      _id: msg._id,
+      sender: msg.sender,
+      content: msg.content,
+      timestamp: msg.timestamp,
+      status: msg.status
+    }));
+    
+    res.json(messages);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching messages' });
   }
