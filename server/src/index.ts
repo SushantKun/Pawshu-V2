@@ -11,6 +11,7 @@ import fileUpload, { UploadedFile, FileArray } from 'express-fileupload';
 import { verifyToken, adminAuth } from './middleware/auth';
 import { AuthRequest } from './types/auth';
 import http from 'http';
+import { Server } from 'socket.io';
 import productRoutes from './routes/productRoutes';
 import doctorRoutes from './routes/doctorRoutes';
 import appointmentRoutes from './routes/appointmentRoutes';
@@ -26,6 +27,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import uploadRoutes from './routes/uploadRoutes';
+import chatRoutes from './routes/chatRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -45,6 +47,36 @@ console.log('Cloudinary configuration:', {
 
 const app = express();
 const server = http.createServer(app);
+// Initialize Socket.IO server
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    methods: ['GET', 'POST']
+  }
+});
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+  console.log('Socket auth token:', socket.handshake.auth.token ? 'Present' : 'Missing');
+
+  socket.on('join_chat', (data) => {
+    socket.join(data.chatId);
+    console.log(`User ${socket.id} joined chat: ${data.chatId}`);
+  });
+
+  socket.on('send_message', (data) => {
+    io.to(data.chatId).emit('receive_message', data);
+    console.log(`Message sent in chat ${data.chatId}: ${data.content}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
+
+// Make io accessible to routes
+app.set('io', io);
 
 // Middleware
 app.use(cors({
@@ -478,6 +510,7 @@ app.use('/api/charities', charityRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
 app.use('/api/upload', verifyToken, uploadRoutes);
+app.use('/api/chats', chatRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

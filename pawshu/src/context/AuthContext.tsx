@@ -17,6 +17,7 @@ interface User {
   isAdmin?: boolean;
   isDoctor?: boolean;
   verified?: boolean;
+  name?: string; // Add the name property explicitly
   avatar?: {
     public_id?: string;
     url?: string;
@@ -29,6 +30,7 @@ interface User {
     isDoctor?: boolean;
     verified?: boolean;
   };
+  // Virtual property returned from MongoDB (computed from firstName and lastName)
 }
 
 interface AuthContextType {

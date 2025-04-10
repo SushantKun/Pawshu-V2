@@ -1,3 +1,1 @@
-export { default as ChatButton } from './ChatButton';
-export { default as ChatInterface } from './ChatInterface';
-export { ChatProvider, useChat } from './ChatContext'; 
+import ChatButton from './ChatButton'; import ChatInterface from './ChatInterface'; export { ChatButton, ChatInterface }; export default ChatButton;

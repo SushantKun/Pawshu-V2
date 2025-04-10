@@ -39,8 +39,11 @@ interface PetReport {
   };
   userId: {
     _id: string;
-    name: string;
     email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    name?: string;
   };
   additionalDetails?: {
     color?: string;
@@ -103,7 +106,7 @@ const LostFound = () => {
     date: '',
     description: '',
     contact: {
-      name: user?.name || '',
+      name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || '',
       email: user?.email || '',
       phone: ''
     },
@@ -193,8 +196,8 @@ const LostFound = () => {
         date: '',
         description: '',
         contact: {
-          name: user.name || '',
-          email: user.email || '',
+          name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || '',
+          email: user?.email || '',
           phone: ''
         },
         additionalDetails: {

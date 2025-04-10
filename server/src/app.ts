@@ -3,14 +3,38 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { Server } from 'socket.io';
-import http from 'http';
+import { createServer } from 'http';
+import orderRoutes from './routes/orderRoutes';
+import donationRoutes from './routes/donations';
+import productRoutes from './routes/productRoutes';
+import adminRoutes from './routes/adminRoutes';
+import doctorRoutes from './routes/doctorRoutes';
+import appointmentRoutes from './routes/appointmentRoutes';
+import uploadRoutes from './routes/uploadRoutes';
+import lostFoundRoutes from './routes/lostFoundRoutes';
+import charityRoutes from './routes/charityRoutes';
 import chatRoutes from './routes/chatRoutes';
 
 dotenv.config();
 
+// Check required environment variables
+const requiredEnvVars = [
+  'MONGODB_URI',
+  'JWT_SECRET',
+  'CLIENT_URL',
+  'KHALTI_SECRET_KEY',
+  'ESEWA_MERCHANT_ID'
+];
+
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+if (missingEnvVars.length > 0) {
+  console.warn(`⚠️ Missing environment variables: ${missingEnvVars.join(', ')}`);
+  console.warn('Some features may not work properly.');
+}
+
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
   cors: {
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
     methods: ['GET', 'POST']
@@ -18,31 +42,57 @@ const io = new Server(server, {
 });
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Log environment status
+console.log('Environment configuration:');
+console.log(`- NODE_ENV: ${process.env.NODE_ENV || 'not set'}`);
+console.log(`- CLIENT_URL: ${process.env.CLIENT_URL || 'not set'}`);
+console.log(`- PORT: ${process.env.PORT || '5000 (default)'}`);
+console.log(`- Payment gateways: ${
+  [
+    process.env.KHALTI_SECRET_KEY ? 'Khalti ✓' : 'Khalti ✗',
+    process.env.ESEWA_MERCHANT_ID ? 'eSewa ✓' : 'eSewa ✗'
+  ].join(', ')
+}`);
 
 // Routes
+app.use('/api/orders', orderRoutes);
+app.use('/api/donations', donationRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/doctors', doctorRoutes);
+app.use('/api/appointments', appointmentRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/lost-found', lostFoundRoutes);
+app.use('/api/charities', charityRoutes);
 app.use('/api/chats', chatRoutes);
+
+// Make uploads directory accessible
+app.use('/uploads', express.static('uploads'));
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  console.log('Socket auth token:', socket.handshake.auth.token ? 'Present' : 'Missing');
 
-  // Join chat room
-  socket.on('join-chat', (chatId) => {
-    socket.join(chatId);
-    console.log(`User ${socket.id} joined chat ${chatId}`);
+  socket.on('join_chat', (data) => {
+    socket.join(data.chatId);
+    console.log(`User ${socket.id} joined chat: ${data.chatId}`);
   });
 
-  // Handle typing indicator
-  socket.on('typing', (data) => {
-    socket.to(data.chatId).emit('typing', {
-      userId: data.userId,
-      isTyping: data.isTyping
-    });
+  socket.on('send_message', (data) => {
+    io.to(data.chatId).emit('receive_message', data);
+    console.log(`Message sent in chat ${data.chatId}: ${data.content}`);
   });
 
-  // Handle disconnect
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
@@ -56,7 +106,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pawshu')
   .then(() => {
     console.log('Connected to MongoDB');
     const PORT = process.env.PORT || 5000;
-    server.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
   })
@@ -64,4 +114,5 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pawshu')
     console.error('MongoDB connection error:', error);
   });
 
-export default app; 
+// Export both app and httpServer
+export { app, httpServer }; 

@@ -4,6 +4,7 @@ import axios from 'axios';
 import type { ComponentType, SVGProps } from 'react';
 import { HeartIcon as HeartIconOutline } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
+import ChatButton from '../components/Chat';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const HeartIcon = HeartIconOutline as IconComponent;
@@ -119,6 +120,7 @@ const Products = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 bg-gray-50 dark:bg-gray-900 pt-24">
+      <ChatButton />
       {/* Category Filter */}
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Categories</h2>

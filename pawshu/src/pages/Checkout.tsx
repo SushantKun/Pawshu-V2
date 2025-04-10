@@ -133,9 +133,8 @@ const Checkout = () => {
 
   const initiateKhaltiPayment = async (orderId: string) => {
     try {
-      console.log('Starting Khalti payment with direct axios call');
+      console.log('Starting Khalti payment process');
       const token = localStorage.getItem('token');
-      console.log('Using token:', token ? 'Found token' : 'No token');
       
       if (!token) {
         toast.error('Authentication error. Please try logging in again.');
@@ -143,39 +142,161 @@ const Checkout = () => {
         return;
       }
       
-      // Use direct axios call bypassing the interceptor
-      const response = await axios.post(
-        'http://localhost:5000/api/orders/khalti-payment', 
-        {
-          orderId,
-          amount: total.toFixed(2)
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` // Our API expects Bearer token format
-          }
+      // Show a loading toast
+      const loadingToast = toast.loading('Connecting to Khalti payment gateway...', {
+        style: { minWidth: '250px' }
+      });
+      
+      // First, check if the Khalti service is responsive by making a quick health check
+      try {
+        const healthCheckTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 5000)
+        );
+        
+        const healthCheckResponse = await Promise.race([
+          axios.head('https://khalti.com', { timeout: 5000 }),
+          healthCheckTimeout
+        ]);
+        
+        console.log('Khalti service is available');
+      } catch (healthError) {
+        console.error('Khalti health check failed:', healthError);
+        toast.dismiss(loadingToast);
+        toast.error('Khalti payment service appears to be unavailable. Would you like to try eSewa instead?', {
+          autoClose: 6000,
+          style: { minWidth: '300px' }
+        });
+        
+        // Add an option for the user to try eSewa
+        const tryEsewa = window.confirm('Khalti payment service seems to be unavailable. Would you like to try eSewa instead?');
+        if (tryEsewa) {
+          setPaymentMethod('esewa');
+          toast.success('Switched to eSewa payment method.');
+          setIsProcessing(false);
+          return;
         }
-      );
+        
+        setIsProcessing(false);
+        return;
+      }
+      
+      // If health check passes, proceed with the actual payment request
+      try {
+        // Update loading message
+        toast.dismiss(loadingToast);
+        const processingToast = toast.loading('Processing payment request...', {
+          style: { minWidth: '250px' }
+        });
+        
+        // Use direct axios call with increased timeout
+        const response = await axios.post(
+          'http://localhost:5000/api/orders/khalti-payment', 
+          {
+            orderId,
+            amount: total.toFixed(2)
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            timeout: 30000 // 30 seconds timeout
+          }
+        );
 
-      console.log('Khalti payment response:', response.data);
+        // Clear loading toast on success
+        toast.dismiss(processingToast);
+        console.log('Khalti payment response:', response.data);
 
-      if (response.data && response.data.paymentUrl) {
-        // Redirect to Khalti payment page
-        window.location.href = response.data.paymentUrl;
-      } else {
-        toast.error('Failed to initialize Khalti payment');
+        if (response.data && response.data.paymentUrl) {
+          // Redirect to Khalti payment page
+          toast.success('Redirecting to Khalti payment page...', {
+            autoClose: 3000,
+            style: { minWidth: '300px' }
+          });
+          
+          // Delay redirect slightly to allow toast to be seen
+          setTimeout(() => {
+            window.location.href = response.data.paymentUrl;
+          }, 1000);
+        } else {
+          toast.error('Failed to initialize Khalti payment. The payment gateway did not return the required data.', {
+            style: { minWidth: '300px' }
+          });
+          setIsProcessing(false);
+        }
+      } catch (error: unknown) {
+        toast.dismiss(loadingToast);
+        console.error('Error initiating Khalti payment:', error);
+        
+        if (error instanceof AxiosError) {
+          // Network or timeout errors
+          if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+            console.error('Khalti payment request timed out');
+            toast.error('Connection to Khalti payment gateway timed out. Please try again or use a different payment method.', {
+              style: { minWidth: '300px' }
+            });
+            
+            // Suggest eSewa as an alternative
+            const switchToEsewa = window.confirm('Would you like to try eSewa payment instead?');
+            if (switchToEsewa) {
+              setPaymentMethod('esewa');
+              toast.success('Switched to eSewa payment method.');
+            }
+          } 
+          // Server returned an error response
+          else if (error.response) {
+            console.error('Error details:', error.response.data);
+            
+            // Handle different error status codes appropriately
+            if (error.response.status === 503 || error.response.status === 504) {
+              toast.error('Khalti payment service is currently unavailable or not responding. Please try eSewa or card payment instead.', {
+                style: { minWidth: '300px' }
+              });
+              
+              // Auto-suggest eSewa
+              const tryEsewa = window.confirm('Would you like to try eSewa payment instead?');
+              if (tryEsewa) {
+                setPaymentMethod('esewa');
+                toast.success('Switched to eSewa payment method.');
+              }
+            } else {
+              // Extract the most useful error message
+              const errorMessage = 
+                error.response.data?.message || 
+                error.response.data?.error || 
+                'Unknown payment gateway error';
+              
+              toast.error(`Payment error: ${errorMessage}`, {
+                style: { minWidth: '300px' }
+              });
+            }
+          } 
+          // Request was made but no response received
+          else if (error.request) {
+            toast.error('No response received from the payment gateway. Please check your internet connection and try again.', {
+              style: { minWidth: '300px' }
+            });
+          } 
+          // Other errors during request setup
+          else {
+            toast.error('An error occurred while setting up the payment. Please try again.', {
+              style: { minWidth: '300px' }
+            });
+          }
+        } 
+        // Non-Axios errors
+        else {
+          toast.error('Failed to initialize payment. Please try again or use a different payment method.', {
+            style: { minWidth: '300px' }
+          });
+        }
         setIsProcessing(false);
       }
-    } catch (error: unknown) {
-      console.error('Error initiating Khalti payment:', error);
-      if (error instanceof AxiosError && error.response) {
-        console.error('Error details:', error.response.data);
-        // Show a more detailed error message to help with debugging
-        toast.error(`Payment error: ${error.response.data.message || error.response.data.error || 'Unknown error'}`);
-      } else {
-        toast.error('Failed to initialize payment. Please try again.');
-      }
+    } catch (topLevelError) {
+      // Handle any unexpected errors at the top level
+      console.error('Unexpected error during Khalti payment process:', topLevelError);
+      toast.error('An unexpected error occurred. Please try again later or choose a different payment method.');
       setIsProcessing(false);
     }
   };
@@ -260,7 +381,22 @@ const Checkout = () => {
       } else if (paymentMethod === 'khalti') {
         // Start Khalti payment flow
         console.log('Starting Khalti payment flow for order:', orderId);
-        await initiateKhaltiPayment(orderId);
+        try {
+          await initiateKhaltiPayment(orderId);
+        } catch (khaltiError) {
+          console.error('Khalti payment failed, falling back to eSewa:', khaltiError);
+          // If Khalti payment fails and we haven't auto-switched to eSewa yet,
+          // try eSewa as a fallback
+          try {
+            toast.info('Trying eSewa as an alternative payment method...');
+            await initiateEsewaPayment(orderId);
+          } catch (esewaError) {
+            console.error('Both Khalti and eSewa payment methods failed:', esewaError);
+            toast.error('All payment gateways are currently unavailable. Please try again later or use card payment.');
+            setPaymentMethod('card');
+            setIsProcessing(false);
+          }
+        }
       }
     } catch (error: unknown) {
       console.error('Error placing order:', error);

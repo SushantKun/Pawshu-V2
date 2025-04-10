@@ -25,7 +25,6 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminDoctors from './pages/admin/AdminDoctors';
 import CharityManagement from './pages/admin/CharityManagement';
-import OrderDetail from './components/orders/OrderDetail';
 import AdminOrders from './pages/admin/AdminOrders';
 import DoctorLogin from './components/doctor/DoctorLogin';
 import DoctorDashboard from './components/doctor/DoctorDashboard';
@@ -37,6 +36,8 @@ import AdminSidebar from './components/admin/AdminSidebar';
 import RetryPayment from './pages/RetryPayment';
 import { useNavigate, useLocation } from 'react-router-dom';
 import NotificationsPage from './pages/Notifications';
+import Chat from './pages/Chat';
+import { ChatButton } from './components/Chat/ChatButton';
 
 // Protected route component for admin routes
 const ProtectedAdminRoute = ({ children }: { children: JSX.Element }) => {
@@ -95,7 +96,7 @@ const ProtectedDoctorRoute = ({ children }: { children: JSX.Element }) => {
 // Layout component for user routes
 const UserLayout = ({ children, showFooter = true }: { children: JSX.Element, showFooter?: boolean }) => {
   const { darkMode } = useTheme();
-  
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -103,7 +104,7 @@ const UserLayout = ({ children, showFooter = true }: { children: JSX.Element, sh
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
-  
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <Navbar />
@@ -116,7 +117,7 @@ const UserLayout = ({ children, showFooter = true }: { children: JSX.Element, sh
 // Layout component for doctor routes
 const DoctorLayout = ({ children }: { children: JSX.Element }) => {
   const { darkMode } = useTheme();
-  
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -124,7 +125,7 @@ const DoctorLayout = ({ children }: { children: JSX.Element }) => {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
-  
+
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <div className="w-64 flex-shrink-0">
@@ -140,7 +141,7 @@ const DoctorLayout = ({ children }: { children: JSX.Element }) => {
 // Layout component for admin routes
 const AdminLayout = ({ children }: { children: JSX.Element }) => {
   const { darkMode } = useTheme();
-  
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -148,7 +149,7 @@ const AdminLayout = ({ children }: { children: JSX.Element }) => {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
-  
+
   return (
     <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <AdminSidebar />
@@ -201,7 +202,7 @@ const EsewaRedirect = () => {
         console.error("Error parsing eSewa data:", error);
       }
     }
-    
+
     // If we couldn't extract the order ID or there was an error, redirect to the checkout page
     navigate('/checkout', { replace: true });
   }, [navigate, location]);
@@ -230,7 +231,7 @@ function App() {
                   <AdminLogin />
                 </div>
               } />
-              
+
               {/* Protected Admin Routes */}
               <Route path="/admin" element={
                 <ProtectedAdminRoute>
@@ -302,7 +303,7 @@ function App() {
                   <DoctorLogin />
                 </div>
               } />
-              
+
               {/* Protected Doctor Routes */}
               <Route path="/doctor" element={
                 <ProtectedDoctorRoute>
@@ -359,6 +360,13 @@ function App() {
                   <LostFound />
                 </UserLayout>
               } />
+              <Route path="/chat/:chatId" element={
+                <ProtectedRoute>
+                  <UserLayout>
+                    <Chat />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
               <Route path="/donate" element={
                 <UserLayout>
                   <Donate />
@@ -409,13 +417,6 @@ function App() {
                   </UserLayout>
                 </ProtectedRoute>
               } />
-              <Route path="/retry-payment/:orderId" element={
-                <ProtectedRoute>
-                  <UserLayout showFooter={false}>
-                    <RetryPayment />
-                  </UserLayout>
-                </ProtectedRoute>
-              } />
               <Route path="/esewa-success" element={<EsewaRedirect />} />
               <Route path="/notifications" element={
                 <ProtectedRoute>
@@ -424,8 +425,18 @@ function App() {
                   </UserLayout>
                 </ProtectedRoute>
               } />
+              <Route path="/retry-payment/:orderId" element={
+                <ProtectedRoute>
+                  <UserLayout showFooter={false}>
+                    <RetryPayment />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+
+            {/* Add the ChatButton component globally */}
+            <ChatButton />
           </Router>
         </CartProvider>
       </ThemeProvider>
@@ -433,4 +444,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

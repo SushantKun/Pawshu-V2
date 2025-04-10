@@ -4,6 +4,24 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
+import { FaComment } from 'react-icons/fa';
+
+// Create a configured axios instance
+const api = axios.create({
+  baseURL: 'http://localhost:5000',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Add request interceptor to add auth token
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 interface PetReport {
   _id: string;
@@ -22,8 +40,11 @@ interface PetReport {
   };
   userId: {
     _id: string;
-    name: string;
     email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    name?: string;
   };
   additionalDetails?: {
     color?: string;
@@ -42,11 +63,11 @@ interface LostFoundCardProps {
 }
 
 const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
-  const { user } = useAuth();
+  const { user, getUserName } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showContact, setShowContact] = useState(false);
-  
+
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), 'PPP');
   };
@@ -65,7 +86,50 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
       return;
     }
 
-    setShowContact(true);
+    setShowContact(!showContact);
+  };
+
+  const handleStartChat = async () => {
+    if (!user) {
+      toast.error('Please log in to start a chat');
+      navigate('/login');
+      return;
+    }
+
+    if (isOwner) {
+      toast.error('You cannot chat with yourself');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Get the recipient name
+      const recipientName = report.userId.name ||
+        (report.userId.firstName && report.userId.lastName ?
+          `${report.userId.firstName} ${report.userId.lastName}` :
+          report.contact.name);
+
+      // Use the global startChat function from window
+      if ((window as any).startChat) {
+        (window as any).startChat(
+          report.userId._id,
+          recipientName,
+          {
+            reportId: report._id,
+            reportType: report.type,
+            petType: report.petType
+          }
+        );
+      } else {
+        toast.error('Chat functionality is currently unavailable');
+      }
+    } catch (error: any) {
+      console.error('Error starting chat:', error);
+      toast.error('Failed to start chat: ' + (error.message || 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleStatusChange = async (newStatus: 'open' | 'resolved' | 'closed') => {
@@ -76,21 +140,14 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
 
     try {
       setLoading(true);
-      await axios.patch(`http://localhost:5000/api/lost-found/${report._id}/status`, 
-        { status: newStatus },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
-      setLoading(false);
+      await api.patch(`/api/lost-found/${report._id}/status`, { status: newStatus });
       toast.success(`Status updated to ${newStatus}`);
       if (onStatusChange) onStatusChange();
     } catch (error) {
-      setLoading(false);
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,9 +156,9 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
       {/* Main image */}
       <div className="relative h-48 bg-gray-200 dark:bg-gray-700">
         {report.images && report.images.length > 0 ? (
-          <img 
-            src={report.images[0].url} 
-            alt={`${report.type} ${report.petType}`} 
+          <img
+            src={report.images[0].url}
+            alt={`${report.type} ${report.petType}`}
             className="w-full h-full object-cover"
           />
         ) : (
@@ -109,26 +166,24 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
             No image available
           </div>
         )}
-        
+
         {/* Status badge */}
-        <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-semibold rounded-full ${
-          report.status === 'open' 
-            ? 'bg-green-500 text-white' 
-            : report.status === 'resolved' 
-              ? 'bg-blue-500 text-white' 
+        <div className={`absolute top-2 right-2 px-2 py-1 text-xs font-semibold rounded-full ${report.status === 'open'
+            ? 'bg-green-500 text-white'
+            : report.status === 'resolved'
+              ? 'bg-blue-500 text-white'
               : 'bg-gray-500 text-white'
-        }`}>
+          }`}>
           {report.status.toUpperCase()}
         </div>
-        
+
         {/* Type badge */}
-        <div className={`absolute top-2 left-2 px-2 py-1 text-xs font-semibold rounded-full ${
-          report.type === 'lost' ? 'bg-red-500 text-white' : 'bg-purple-500 text-white'
-        }`}>
+        <div className={`absolute top-2 left-2 px-2 py-1 text-xs font-semibold rounded-full ${report.type === 'lost' ? 'bg-red-500 text-white' : 'bg-purple-500 text-white'
+          }`}>
           {report.type.toUpperCase()}
         </div>
       </div>
-      
+
       {/* Content */}
       <div className="p-4">
         <div className="flex justify-between items-start mb-2">
@@ -137,7 +192,7 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
             {report.breed && ` (${report.breed})`}
           </h3>
         </div>
-        
+
         <div className="text-sm text-gray-600 dark:text-gray-300 mb-4">
           <p><strong>Location:</strong> {report.location}</p>
           <p><strong>Date:</strong> {formatDate(report.date)}</p>
@@ -145,7 +200,7 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
             <p><strong>Color:</strong> {report.additionalDetails.color}</p>
           )}
         </div>
-        
+
         <p className="text-gray-700 dark:text-gray-300 mb-4 line-clamp-3">
           {report.description}
         </p>
@@ -160,18 +215,28 @@ const LostFoundCard = ({ report, onStatusChange }: LostFoundCardProps) => {
             )}
           </div>
         )}
-        
+
         <div className="flex flex-col space-y-2">
           <button
             onClick={handleContact}
             disabled={loading || isOwner}
-            className={`w-full py-2 rounded-md text-white font-medium ${
-              loading || isOwner ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
-            }`}
+            className={`w-full py-2 rounded-md text-white font-medium ${loading || isOwner ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'
+              }`}
           >
             {loading ? 'Loading...' : isOwner ? 'Your Post' : showContact ? 'Hide Contact' : 'Show Contact'}
           </button>
-          
+
+          {!isOwner && (
+            <button
+              onClick={handleStartChat}
+              disabled={loading}
+              className="w-full py-2 rounded-md text-white font-medium bg-green-500 hover:bg-green-600 flex items-center justify-center gap-2"
+            >
+              <FaComment size={16} />
+              Contact
+            </button>
+          )}
+
           {isOwner && (
             <div className="flex space-x-2 mt-2">
               <select

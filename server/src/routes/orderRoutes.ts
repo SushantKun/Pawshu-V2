@@ -860,23 +860,58 @@ router.post('/khalti-payment', verifyToken, async (req: AuthRequest, res: Respon
     console.log('Sending Khalti request with payload:', JSON.stringify(khaltiPayload, null, 2));
     console.log('Using Khalti secret key:', khaltiSecretKey.substring(0, 5) + '...');
 
-    // Use Khalti sandbox API URL
-    const khaltiApiUrl = 'https://dev.khalti.com/api/v2/epayment/initiate/';
+    // Use Khalti API URL based on environment - use prod for development too since sandbox has issues
+    const isProduction = process.env.NODE_ENV === 'production';
+    const khaltiApiUrl = isProduction 
+      ? 'https://khalti.com/api/v2/epayment/initiate/'
+      : 'https://khalti.com/api/v2/epayment/initiate/'; // Using production URL for both environments
 
-    // Make request to Khalti API with CORRECT AUTHORIZATION FORMAT
-    try {
-      const khaltiResponse = await axios.post(
-        khaltiApiUrl, 
-        khaltiPayload,
-        {
-          headers: {
-            'Authorization': `Key ${khaltiSecretKey}`,
-            'Content-Type': 'application/json'
+    console.log(`Using Khalti ${isProduction ? 'production' : 'development'} API URL:`, khaltiApiUrl);
+
+    // Define a function to make the Khalti API request with retry logic
+    const makeKhaltiRequest = async (retryCount = 0, maxRetries = 2) => {
+      try {
+        return await axios.post(
+          khaltiApiUrl, 
+          khaltiPayload,
+          {
+            headers: {
+              'Authorization': `Key ${khaltiSecretKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 30000 // 30 second timeout
           }
+        );
+      } catch (error: any) {
+        console.error(`Khalti API request attempt ${retryCount + 1} failed:`, error.message);
+        
+        if (error.response) {
+          // The request was made and the server responded with a status code outside of 2xx
+          console.error('Khalti API error response:', error.response.data);
+          throw error; // Don't retry if we got an actual response
+        } else if (error.request && retryCount < maxRetries) {
+          // The request was made but no response was received
+          console.log(`Retrying Khalti API request (${retryCount + 1}/${maxRetries})...`);
+          // Wait with exponential backoff before retrying
+          await new Promise(resolve => setTimeout(resolve, 2000 * Math.pow(2, retryCount)));
+          return makeKhaltiRequest(retryCount + 1, maxRetries);
+        } else {
+          // Something happened in setting up the request
+          throw error;
         }
-      );
+      }
+    };
 
+    try {
+      // Attempt to make the Khalti request with retry logic
+      const khaltiResponse = await makeKhaltiRequest();
+      
       console.log('Khalti API response:', JSON.stringify(khaltiResponse.data, null, 2));
+
+      // Check if the response has the expected format
+      if (!khaltiResponse.data.payment_url || !khaltiResponse.data.pidx) {
+        throw new Error('Invalid response from Khalti API - missing payment URL or PIDX');
+      }
 
       // Return the payment URL to the client
       res.status(200).json({
@@ -885,16 +920,46 @@ router.post('/khalti-payment', verifyToken, async (req: AuthRequest, res: Respon
       });
     } catch (apiError: any) {
       console.error('Khalti API request failed:', apiError.message);
+      
+      // Handle different types of errors
       if (apiError.response) {
+        // The request was made and the server responded with a status code outside of 2xx
         console.error('Khalti API error response:', apiError.response.data);
-        res.status(apiError.response.status).json({ 
-          message: 'Failed to initiate Khalti payment', 
-          error: apiError.response.data 
+        
+        // Special handling for specific error codes
+        if (apiError.response.status === 401) {
+          res.status(500).json({ 
+            message: 'Payment gateway authentication failed', 
+            error: 'Invalid API credentials'
+          });
+        } else if (apiError.response.status === 400) {
+          res.status(400).json({ 
+            message: 'Invalid payment request', 
+            error: apiError.response.data.detail || apiError.response.data.error || 'Bad request'
+          });
+        } else {
+          res.status(apiError.response.status).json({ 
+            message: 'Failed to initiate Khalti payment', 
+            error: apiError.response.data.detail || apiError.response.data.error || 'Unknown error'
+          });
+        }
+      } else if (apiError.code === 'ECONNABORTED' || apiError.message.includes('timeout')) {
+        // Request timed out
+        res.status(504).json({ 
+          message: 'Payment gateway timeout', 
+          error: 'Request to Khalti API timed out' 
+        });
+      } else if (apiError.code === 'ENOTFOUND' || apiError.code === 'EAI_AGAIN') {
+        // DNS or network connectivity issues
+        res.status(503).json({ 
+          message: 'Payment gateway unreachable', 
+          error: 'Network connectivity issue' 
         });
       } else {
+        // Other errors
         res.status(500).json({ 
           message: 'Failed to connect to Khalti API', 
-          error: apiError.message
+          error: 'Khalti service connection failed'
         });
       }
     }
