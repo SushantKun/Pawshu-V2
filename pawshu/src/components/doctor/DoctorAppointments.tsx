@@ -11,6 +11,7 @@ interface Appointment {
     firstName: string;
     lastName: string;
     specialization: string;
+    clinicAddress?: string;
   };
   user: {
     _id: string;
@@ -34,11 +35,41 @@ interface Appointment {
   };
   createdAt: string;
   cancellationReason?: string;
+  locationPreference: 'clinic' | 'home_visit';
+  address?: string;
 }
 
 interface GroupedAppointments {
   [date: string]: Appointment[];
 }
+
+// Add the createMockAppointment function above the component
+const createMockAppointment = (status: 'pending' | 'confirmed' | 'completed' | 'cancelled'): Appointment => ({
+  _id: `mock-${status}-${Date.now()}`,
+  doctor: {
+    _id: 'doctor1',
+    firstName: 'John',
+    lastName: 'Doe',
+    specialization: 'Veterinarian',
+    clinicAddress: '123 Clinic Street, Kathmandu'
+  },
+  user: {
+    _id: 'user1',
+    firstName: 'Jane',
+    lastName: 'Smith',
+    email: 'jane@example.com'
+  },
+  date: new Date().toISOString(),
+  timeSlot: '10:00 AM',
+  petName: 'Buddy',
+  petType: 'Dog',
+  reason: 'Routine checkup',
+  status,
+  notes: status === 'completed' ? 'Pet is in good health' : '',
+  createdAt: new Date().toISOString(),
+  locationPreference: 'clinic',
+  address: ''
+});
 
 const DoctorAppointments = () => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -118,7 +149,9 @@ const DoctorAppointments = () => {
             firstName: "Alice",
             lastName: "Johnson",
             email: "alice@example.com"
-          }
+          },
+          locationPreference: 'clinic',
+          address: ''
         },
         {
           _id: "appointment2",
@@ -141,7 +174,9 @@ const DoctorAppointments = () => {
             firstName: "Bob",
             lastName: "Williams",
             email: "bob@example.com"
-          }
+          },
+          locationPreference: 'clinic',
+          address: ''
         },
         {
           _id: "appointment3",
@@ -163,7 +198,9 @@ const DoctorAppointments = () => {
             firstName: "Carol",
             lastName: "Brown",
             email: "carol@example.com"
-          }
+          },
+          locationPreference: 'clinic',
+          address: ''
         }
       ];
       setAppointments(dummyAppointments);
@@ -317,35 +354,30 @@ const DoctorAppointments = () => {
 
     try {
       setLoading(true);
-      
-      await api.put(
-        `/appointments/${selectedAppointment._id}/status`,
-        { 
-          status: selectedAppointment.status,
-          notes 
-        }
-      );
-      
-      // Show success message
-      toast.success('Notes added successfully');
-      
-      // Update local state
-      setAppointments(prevAppointments => 
-        prevAppointments.map(appointment => 
-          appointment._id === selectedAppointment._id 
-            ? { ...appointment, notes } 
-            : appointment
-        )
-      );
-      
-      setShowNotesModal(false);
-      setSelectedAppointment(null);
-      setNotes('');
-      setError('');
-    } catch (err: any) {
+
+      const response = await api.put(`/appointments/${selectedAppointment._id}/notes`, {
+        notes
+      });
+
+      if (response.data) {
+        // Update the appointment in the local state
+        setAppointments(prevAppointments => 
+          prevAppointments.map(appt => 
+            appt._id === selectedAppointment._id 
+              ? { ...appt, notes } 
+              : appt
+          )
+        );
+        
+        setShowNotesModal(false);
+        setSelectedAppointment(null);
+        setNotes('');
+        
+        toast.success('Notes added successfully');
+      }
+    } catch (err) {
       console.error('Error adding notes:', err);
-      toast.error(err.response?.data?.message || 'Failed to add notes');
-      setError(err.response?.data?.message || 'Failed to add notes');
+      toast.error('Failed to add notes. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -447,25 +479,6 @@ const DoctorAppointments = () => {
     return matchesSearch;
   });
 
-  // Group appointments by date
-  const groupAppointmentsByDate = (appointments: Appointment[]): GroupedAppointments => {
-    return appointments.reduce((groups: GroupedAppointments, appointment) => {
-      const date = new Date(appointment.date).toLocaleDateString();
-      if (!groups[date]) {
-        groups[date] = [];
-      }
-      groups[date].push(appointment);
-      return groups;
-    }, {});
-  };
-
-  const groupedAppointments = groupAppointmentsByDate(filteredAppointments);
-  
-  // Sort dates in ascending order
-  const sortedDates = Object.keys(groupedAppointments).sort((a, b) => {
-    return new Date(a).getTime() - new Date(b).getTime();
-  });
-
   // Format date for display
   const formatDate = (dateString: string) => {
     const options: Intl.DateTimeFormatOptions = { 
@@ -476,6 +489,42 @@ const DoctorAppointments = () => {
     };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
+
+  // Group appointments by date
+  const groupAppointmentsByDate = (appointments: Appointment[]): GroupedAppointments => {
+    // If no appointments, return empty object
+    if (!appointments.length) return {};
+
+    // For testing, you can use the mock data
+    // appointments = [
+    //   createMockAppointment('pending'),
+    //   createMockAppointment('confirmed'),
+    //   createMockAppointment('completed')
+    // ];
+
+    const grouped: GroupedAppointments = {};
+
+    // Sort appointments by date (newest first)
+    appointments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Group by date
+    appointments.forEach(appointment => {
+      const date = formatDate(appointment.date);
+      if (!grouped[date]) {
+        grouped[date] = [];
+      }
+      grouped[date].push(appointment);
+    });
+
+    return grouped;
+  };
+
+  const groupedAppointments = groupAppointmentsByDate(filteredAppointments);
+  
+  // Sort dates in ascending order
+  const sortedDates = Object.keys(groupedAppointments).sort((a, b) => {
+    return new Date(a).getTime() - new Date(b).getTime();
+  });
 
   // Get status badge color
   const getStatusBadgeColor = (status: string) => {
@@ -825,6 +874,21 @@ const DoctorAppointments = () => {
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           Reason: {appointment.reason}
                         </p>
+                        
+                        {/* Add location preference details */}
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          <span className="font-medium">Location:</span> {appointment.locationPreference === 'clinic' 
+                            ? `Clinic Visit (${appointment.doctor.clinicAddress || 'No address provided'})` 
+                            : 'Home Visit'}
+                        </p>
+                        
+                        {/* Show address for home visits */}
+                        {appointment.locationPreference === 'home_visit' && appointment.address && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            <span className="font-medium">Patient Address:</span> {appointment.address}
+                          </p>
+                        )}
+                        
                         {appointment.notes && (
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                             <span className="font-medium">Notes:</span> {appointment.notes}

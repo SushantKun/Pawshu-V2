@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
-import { SearchIcon, FilterIcon } from '@heroicons/react/outline';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import type { ComponentType, SVGProps } from 'react';
 
 const PLACEHOLDER_IMAGE = '/placeholder.svg';
 
@@ -23,6 +24,10 @@ interface Doctor {
     url: string;
   };
 }
+
+// Type cast icon components
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
+const MagnifyingGlassIconComponent = MagnifyingGlassIcon as IconComponent;
 
 const BookAppointment = () => {
   const { user, loading: authLoading } = useAuth();
@@ -110,22 +115,24 @@ const BookAppointment = () => {
   const fetchDoctors = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/doctors');
-      const doctorsData = response.data;
+      const response = await api.get<Doctor[]>('/doctors');
+      setDoctors(response.data);
+      setFilteredDoctors(response.data.filter(doc => doc.isActive));
 
-      setDoctors(doctorsData);
-      setFilteredDoctors(doctorsData.filter((doc: Doctor) => doc.isActive));
-
-      // Extract unique specializations
-      const uniqueSpecializations = Array.from(
-        new Set(doctorsData.map((doc: Doctor) => doc.specialization))
-      );
-      setSpecializations(uniqueSpecializations);
-
+      // Extract unique specializations with proper typing
+      const specArray: string[] = [];
+      response.data.forEach(doc => {
+        if (doc.specialization && !specArray.includes(doc.specialization)) {
+          specArray.push(doc.specialization);
+        }
+      });
+      
+      setSpecializations(specArray);
+      
       setError('');
     } catch (err: any) {
-      console.error('Error fetching doctors:', err);
       setError(err.response?.data?.message || 'Failed to fetch doctors');
+      console.error('Error fetching doctors:', err);
     } finally {
       setLoading(false);
     }
@@ -182,6 +189,25 @@ const BookAppointment = () => {
     setSelectedDate('');
     setSelectedSlot('');
     setAvailableSlots([]);
+    
+    // Set location preferences based on doctor's settings
+    let doctorLocationOptions: string[] = [];
+    if (doctor.locationPreference === 'clinic') {
+      doctorLocationOptions = ['clinic'];
+      setLocationPreference('clinic');
+    } else if (doctor.locationPreference === 'home_visit') {
+      doctorLocationOptions = ['home_visit'];
+      setLocationPreference('home_visit');
+    } else if (doctor.locationPreference === 'both') {
+      doctorLocationOptions = ['clinic', 'home_visit'];
+      setLocationPreference('clinic'); // Default to clinic for doctors that support both
+    }
+    
+    setAppointmentInfo({
+      locationPreference: doctorLocationOptions[0] as 'clinic' | 'home_visit',
+      doctorLocationOptions
+    });
+    
     setBookingStep(2);
   };
 
@@ -196,7 +222,8 @@ const BookAppointment = () => {
 
   const handleSlotSelect = (slot: string) => {
     setSelectedSlot(slot);
-    setBookingStep(3);
+    // Remove automatic advancing to next step 
+    // setBookingStep(3);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -293,9 +320,7 @@ const BookAppointment = () => {
         {/* Search bar */}
         <div className="relative mb-4">
           <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-            </svg>
+            <MagnifyingGlassIconComponent className="w-5 h-5 text-gray-400" />
           </div>
           <input
             type="text"
@@ -592,39 +617,43 @@ const BookAppointment = () => {
         </div>
 
         {/* Location preference selection */}
-        {(selectedDoctor.locationPreference === 'both' || appointmentInfo.doctorLocationOptions.length > 1) && (
-          <div>
+        {selectedDoctor && selectedDoctor.locationPreference === 'both' && (
+          <div className="mt-6">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Location Preference
             </label>
             <div className="grid grid-cols-2 gap-3">
-              {(selectedDoctor.locationPreference === 'clinic' || selectedDoctor.locationPreference === 'both') && (
-                <button
-                  type="button"
-                  onClick={() => setLocationPreference('clinic')}
-                  className={`py-2 px-4 text-sm rounded-md border focus:outline-none ${
-                    locationPreference === 'clinic'
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  Visit Doctor's Clinic
-                </button>
-              )}
-              {(selectedDoctor.locationPreference === 'home_visit' || selectedDoctor.locationPreference === 'both') && (
-                <button
-                  type="button"
-                  onClick={() => setLocationPreference('home_visit')}
-                  className={`py-2 px-4 text-sm rounded-md border focus:outline-none ${
-                    locationPreference === 'home_visit'
-                      ? 'bg-blue-500 text-white border-blue-500'
-                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  Home Visit
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setLocationPreference('clinic')}
+                className={`py-2 px-4 text-sm rounded-md border focus:outline-none ${
+                  locationPreference === 'clinic'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                }`}
+              >
+                Visit Doctor's Clinic
+              </button>
+              <button
+                type="button"
+                onClick={() => setLocationPreference('home_visit')}
+                className={`py-2 px-4 text-sm rounded-md border focus:outline-none ${
+                  locationPreference === 'home_visit'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                }`}
+              >
+                Home Visit
+              </button>
             </div>
+          </div>
+        )}
+        
+        {selectedDoctor && selectedDoctor.locationPreference === 'home_visit' && (
+          <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              <span className="font-medium">Note:</span> This doctor only provides home visits. You will need to provide your address in the next step.
+            </p>
           </div>
         )}
 
@@ -687,8 +716,15 @@ const BookAppointment = () => {
             <h4 className="font-medium text-blue-800 dark:text-blue-300">Booking Details</h4>
             <p className="text-sm text-gray-700 dark:text-gray-300">Booking Fee: NPR {selectedDoctor.bookingFee}</p>
             <p className="text-sm text-gray-700 dark:text-gray-300">
-              Location: {locationPreference === 'clinic' ? 'Clinic Visit' : 'Home Visit'}
+              Location: {locationPreference === 'clinic' 
+                ? `Clinic Visit (${selectedDoctor.clinicAddress || 'No address provided'})` 
+                : 'Home Visit'}
             </p>
+            {locationPreference === 'home_visit' && (
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                Home Address: {address || 'Not provided yet'}
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -839,7 +875,7 @@ const BookAppointment = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 bg-gray-50 dark:bg-gray-900 pt-24">
       <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Book an Appointment</h1>
 
       {error && (

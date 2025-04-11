@@ -504,6 +504,61 @@ router.put('/:id/payment', verifyToken, (async (req: AuthRequest, res: Response)
   }
 }) as RequestHandler);
 
+// @route   PUT /api/appointments/:id/notes
+// @desc    Update appointment notes
+// @access  Private (Doctor if assigned, Admin)
+router.put('/:id/notes', verifyToken, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+    
+    const appointmentId = req.params.id;
+    const { notes } = req.body;
+    
+    if (!notes && notes !== '') {
+      return res.status(400).json({ message: 'Notes field is required' });
+    }
+    
+    const appointment = await Appointment.findById(appointmentId)
+      .populate('doctor', 'firstName lastName _id')
+      .populate('user', 'firstName lastName email');
+      
+    if (!appointment) {
+      return res.status(404).json({ message: 'Appointment not found' });
+    }
+    
+    // Type the populated fields correctly to avoid TypeScript errors
+    const populatedDoctor = appointment.doctor as unknown as { 
+      _id: Types.ObjectId;
+      firstName: string;
+      lastName: string;
+    };
+    
+    const appointmentDoctorId = populatedDoctor._id.toString();
+    const requestUserId = req.user._id.toString();
+    const isAdmin = req.user.isAdmin || false;
+    
+    // Check permissions - only doctor assigned to appointment or admin can add notes
+    if (!isAdmin && appointmentDoctorId !== requestUserId) {
+      return res.status(403).json({ 
+        message: 'Not authorized to update notes for this appointment'
+      });
+    }
+    
+    // Update notes
+    appointment.notes = notes;
+    
+    const updatedAppointment = await appointment.save();
+    console.log(`Successfully updated notes for appointment ${appointmentId}`);
+    
+    res.status(200).json(updatedAppointment);
+  } catch (error) {
+    console.error('Error updating appointment notes:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // eSewa payment initiation for appointments
 router.post('/esewa-payment', verifyToken, async (req: AuthRequest, res: Response) => {
   try {

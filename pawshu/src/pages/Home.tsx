@@ -106,7 +106,16 @@ const Home = () => {
             _t: new Date().getTime()
           }
         });
-        setCharities(response.data);
+        
+        // Map the charities and ensure progress calculations
+        const charities = response.data.map((charity: Charity) => ({
+          ...charity,
+          raised: charity.raised || 0, // Ensure raised is never undefined
+          // Ensure goal is never zero to avoid division by zero
+          goal: charity.goal || 1
+        }));
+        
+        setCharities(charities);
       } catch (err) {
         console.error('Error fetching charities:', err);
       }
@@ -658,7 +667,9 @@ const Home = () => {
                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
                       <div 
                         className="bg-green-600 h-2.5 rounded-full" 
-                        style={{ width: `${Math.min(100, (charity.raised / charity.goal) * 100)}%` }}
+                        style={{ 
+                          width: `${Math.min(100, charity.goal > 0 ? (charity.raised / charity.goal) * 100 : 0)}%` 
+                        }}
                       ></div>
                     </div>
                   </div>

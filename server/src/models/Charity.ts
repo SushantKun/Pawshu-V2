@@ -26,16 +26,55 @@ const charitySchema = new mongoose.Schema({
   },
   goal: {
     type: Number,
-    required: true
+    required: true,
+    min: 0
   },
   raised: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0,
+    validate: {
+      validator: function(value: number) {
+        return value >= 0;
+      },
+      message: 'Raised amount cannot be negative'
+    }
   },
   updatedAt: {
     type: Date,
     default: Date.now
   }
+});
+
+// Add a method to update raised amount
+charitySchema.methods.updateRaisedAmount = async function() {
+  const Donation = mongoose.model('Donation');
+  const totalRaised = await Donation.aggregate([
+    {
+      $match: {
+        charityId: this._id,
+        status: 'completed'
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: '$amount' }
+      }
+    }
+  ]);
+
+  this.raised = totalRaised[0]?.total || 0;
+  await this.save();
+  return this.raised;
+};
+
+// Add a pre-save hook to ensure raised amount doesn't exceed goal
+charitySchema.pre('save', function(next) {
+  if (this.raised > this.goal) {
+    this.raised = this.goal;
+  }
+  next();
 });
 
 export const Charity = mongoose.model('Charity', charitySchema);
@@ -50,7 +89,7 @@ export const initialCharities = [
       url: "https://placehold.co/300x300"
     },
     goal: 50000,
-    raised: 0 // 0% progress
+    raised: 0
   },
   {
     name: "Street Dog Welfare",
@@ -60,7 +99,7 @@ export const initialCharities = [
       url: "https://placehold.co/300x300"
     },
     goal: 25000,
-    raised: 0 // 0% progress
+    raised: 0
   },
   {
     name: "Cat Shelter",
@@ -70,6 +109,6 @@ export const initialCharities = [
       url: "https://placehold.co/300x300"
     },
     goal: 20000,
-    raised: 0 // 0% progress
+    raised: 0
   }
 ]; 

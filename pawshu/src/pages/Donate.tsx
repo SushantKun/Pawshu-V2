@@ -124,10 +124,19 @@ const Donate = () => {
     try {
       const response = await api.get<Charity[]>('/charities', {
         params: {
-          _t: new Date().getTime() // Cache busting
+          _t: new Date().getTime() // Cache busting to ensure we get the latest data
         }
       });
-      setCharities(response.data);
+      
+      // Map the charities and ensure progress calculations
+      const charities = response.data.map(charity => ({
+        ...charity,
+        raised: charity.raised || 0, // Ensure raised is never undefined
+        // Ensure goal is never zero to avoid division by zero
+        goal: charity.goal || 1
+      }));
+      
+      setCharities(charities);
     } catch (error) {
       console.error('Error fetching charities:', error);
       toast.error('Failed to load charities. Please try again later.');
@@ -772,13 +781,13 @@ const Donate = () => {
               <div className="flex justify-between mb-2">
                 <span className="text-sm text-gray-600 dark:text-gray-300">Progress</span>
                 <span className="text-sm font-medium text-gray-900 dark:text-white">
-                  {Math.round((selectedCharity.raised / selectedCharity.goal) * 100)}%
+                  {selectedCharity.goal > 0 ? Math.round((selectedCharity.raised / selectedCharity.goal) * 100) : 0}%
                 </span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                 <div
                   className="bg-blue-600 h-2 rounded-full"
-                  style={{ width: `${Math.min((selectedCharity.raised / selectedCharity.goal) * 100, 100)}%` }}
+                  style={{ width: `${selectedCharity.goal > 0 ? Math.min((selectedCharity.raised / selectedCharity.goal) * 100, 100) : 0}%` }}
                 ></div>
               </div>
               <div className="flex justify-between mt-2">
@@ -849,7 +858,7 @@ const Donate = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
               {charities.map((charity) => {
                 // Ensure each charity is properly typed
-                const typedCharity = charity as unknown as Charity;
+                const typedCharity = charity;
                 return (
                   <div 
                     key={typedCharity._id} 
@@ -876,19 +885,19 @@ const Donate = () => {
                             </div>
                             <div className="text-right">
                               <span className={`text-xs font-semibold inline-block py-1 px-2 rounded-full ${
-                                (typedCharity.raised / typedCharity.goal) >= 1 
+                                typedCharity.goal > 0 && (typedCharity.raised / typedCharity.goal) >= 1 
                                   ? 'bg-green-200 dark:bg-green-900/30 text-green-800 dark:text-green-300'
                                   : 'text-blue-600 dark:text-blue-400'
                               }`}>
-                                {Math.min(Math.round((typedCharity.raised / typedCharity.goal) * 100), 100)}%
+                                {typedCharity.goal > 0 ? Math.min(Math.round((typedCharity.raised / typedCharity.goal) * 100), 100) : 0}%
                               </span>
                             </div>
                           </div>
                           <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
                             <div
-                              style={{ width: `${Math.min((typedCharity.raised / typedCharity.goal) * 100, 100)}%` }}
+                              style={{ width: `${typedCharity.goal > 0 ? Math.min((typedCharity.raised / typedCharity.goal) * 100, 100) : 0}%` }}
                               className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${
-                                (typedCharity.raised / typedCharity.goal) >= 1 
+                                typedCharity.goal > 0 && (typedCharity.raised / typedCharity.goal) >= 1 
                                   ? 'bg-green-500'
                                   : 'bg-blue-500'
                               }`}
