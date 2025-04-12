@@ -73,6 +73,7 @@ interface UserProfile {
   };
   role: string;
   createdAt: string;
+  googleId?: string;
 }
 
 const Profile = () => {
@@ -114,6 +115,7 @@ const Profile = () => {
     newPassword: '',
     confirmPassword: ''
   });
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'success' | 'error' | ''>('');
   const [showNotification, setShowNotification] = useState(false);
@@ -173,6 +175,9 @@ const Profile = () => {
       if (data.avatar?.url) {
         setImagePreview(data.avatar.url);
       }
+      
+      // Check if user is authenticated with Google and doesn't have a password
+      setIsGoogleUser(!!data.googleId);
     } catch (err: any) {
       console.error('Error fetching profile:', err);
       setError(err.message || 'Failed to fetch profile');
@@ -438,10 +443,19 @@ const Profile = () => {
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate passwords
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      showCustomNotification('Please fill in all password fields', 'error');
-      return;
+    // For Google users without a password, we don't need the current password
+    if (!isGoogleUser) {
+      // Validate all password fields if not a Google user
+      if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+        showCustomNotification('Please fill in all password fields', 'error');
+        return;
+      }
+    } else {
+      // For Google users, only validate new password fields
+      if (!passwordData.newPassword || !passwordData.confirmPassword) {
+        showCustomNotification('Please fill in all required password fields', 'error');
+        return;
+      }
     }
     
     if (passwordData.newPassword !== passwordData.confirmPassword) {
@@ -457,7 +471,7 @@ const Profile = () => {
     try {
       setSaving(true);
       console.log('Updating password with data:', {
-        currentPassword: '******', // Masked for security
+        currentPassword: isGoogleUser ? 'Not required for Google accounts' : '******', // Masked for security
         newPassword: '******' // Masked for security
       });
       
@@ -466,7 +480,7 @@ const Profile = () => {
         newPassword: passwordData.newPassword
       });
       
-      showCustomNotification('Password updated successfully!', 'success');
+      showCustomNotification(isGoogleUser ? 'Password set successfully!' : 'Password updated successfully!', 'success');
       setPasswordData({
         currentPassword: '',
         newPassword: '',
@@ -949,21 +963,25 @@ const Profile = () => {
                     </form>
 
                     <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                      <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Change Password</h2>
+                      <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                        {isGoogleUser ? 'Set Password' : 'Change Password'}
+                      </h2>
                       <form onSubmit={handlePasswordUpdate} className="space-y-4">
-                        <div>
-                          <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Current Password
-                          </label>
-                          <input
-                            type="password"
-                            name="currentPassword"
-                            id="currentPassword"
-                            value={passwordData.currentPassword}
-                            onChange={handlePasswordChange}
-                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
-                          />
-                        </div>
+                        {!isGoogleUser && (
+                          <div>
+                            <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Current Password
+                            </label>
+                            <input
+                              type="password"
+                              name="currentPassword"
+                              id="currentPassword"
+                              value={passwordData.currentPassword}
+                              onChange={handlePasswordChange}
+                              className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                            />
+                          </div>
+                        )}
                         <div>
                           <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             New Password
@@ -996,7 +1014,7 @@ const Profile = () => {
                             disabled={saving}
                             className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                           >
-                            {saving ? 'Updating...' : 'Update Password'}
+                            {saving ? 'Processing...' : isGoogleUser ? 'Set Password' : 'Update Password'}
                           </button>
                         </div>
                       </form>

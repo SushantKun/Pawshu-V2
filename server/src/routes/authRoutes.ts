@@ -11,7 +11,15 @@ import {
   registerUser,
   loginUser,
   getCurrentUser,
-  updateUserProfile
+  updateUserProfile,
+  updateUserPassword,
+  refreshToken,
+  googleAuth,
+  setUserOffline,
+  pingUser,
+  handleBeacon,
+  logoutUser,
+  handleBrowserClose
 } from '../controllers/authController';
 import mongoose from 'mongoose';
 import { Response } from 'express';
@@ -22,10 +30,28 @@ const router = express.Router();
 // Public routes
 router.post('/register', registerUser);
 router.post('/login', loginUser);
+router.post('/google', googleAuth);
 
 // Protected routes
 router.get('/me', verifyToken, getCurrentUser);
 router.put('/profile', verifyToken, updateUserProfile);
+router.put('/profile/password', verifyToken, updateUserPassword);
+router.post('/refresh-token', verifyToken, refreshToken);
+
+// Set user as offline
+router.post('/set-offline', verifyToken, setUserOffline);
+
+// Handle ping to keep user online
+router.post('/ping', pingUser);
+
+// Beacon endpoint for browser close/navigate away events
+router.post('/set-offline-beacon', handleBeacon);
+
+// Special endpoint for handling browser close events - critical for offline detection
+router.post('/browser-closed', handleBrowserClose);
+
+// Logout
+router.post('/logout', logoutUser);
 
 router.get('/profile', verifyToken as any, async (req: AuthRequest, res: Response) => {
   try {

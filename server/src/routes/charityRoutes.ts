@@ -1,13 +1,31 @@
-import express, { Request, Response } from 'express';
-import { Charity } from '../models/Charity';
+import express, { Request, Response, RequestHandler } from 'express';
+import { Charity, ICharity } from '../models/Charity';
 import { verifyToken } from '../middleware/auth';
-import { RequestHandler } from 'express';
 
 const router = express.Router();
 
 // Get all charities
 router.get('/', (async (req: Request, res: Response) => {
   try {
+    // Add cache-busting timestamp query parameter
+    const shouldRefresh = req.query.refresh === 'true';
+    
+    // If refresh is requested, recalculate amounts from donations
+    if (shouldRefresh) {
+      console.log('Refreshing all charity progress from donations');
+      const charities = await Charity.find();
+      
+      // Refresh each charity's raised amount from donations
+      for (const charity of charities) {
+        await charity.refreshRaisedAmount();
+      }
+      
+      // Get the updated charities
+      const refreshedCharities = await Charity.find();
+      console.log('All charity progress refreshed');
+      return res.json(refreshedCharities);
+    }
+    
     const charities = await Charity.find();
     res.json(charities);
   } catch (error) {

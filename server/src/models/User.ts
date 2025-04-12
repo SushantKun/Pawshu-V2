@@ -28,8 +28,12 @@ export interface IUser extends Document {
   isAdmin?: boolean;
   isDoctor?: boolean;
   verified?: boolean;
+  googleId?: string; // Google ID for SSO
+  isEmailVerified?: boolean; // Flag to indicate if email is verified
   comparePassword(candidatePassword: string): Promise<boolean>;
   name: string; // Virtual property
+  lastActive: Date;
+  isOnline: boolean;
 }
 
 const UserSchema: Schema = new Schema(
@@ -41,7 +45,10 @@ const UserSchema: Schema = new Schema(
     },
     password: {
       type: String,
-      required: true
+      required: function(this: any) {
+        // Password is required only if googleId is not present
+        return !this.googleId;
+      }
     },
     role: {
       type: String,
@@ -109,6 +116,22 @@ const UserSchema: Schema = new Schema(
     verified: {
       type: Boolean,
       default: false
+    },
+    googleId: {
+      type: String,
+      sparse: true
+    },
+    isEmailVerified: {
+      type: Boolean,
+      default: false
+    },
+    lastActive: {
+      type: Date,
+      default: null
+    },
+    isOnline: {
+      type: Boolean,
+      default: false
     }
   },
   { 
@@ -129,6 +152,12 @@ UserSchema.virtual('name').get(function(this: IUser) {
 
 // Pre-save middleware to hash password
 UserSchema.pre<IUser>('save', async function(next) {
+  // Skip password hashing if the user has a googleId and no password
+  if (this.googleId && !this.password) {
+    return next();
+  }
+  
+  // Skip password hashing if password hasn't changed
   if (!this.isModified('password')) return next();
   
   try {

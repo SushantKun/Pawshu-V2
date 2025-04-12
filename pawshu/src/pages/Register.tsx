@@ -2,6 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import GoogleLogin from '../components/GoogleLogin';
+
+// Flag to hide Google OAuth while troubleshooting - keep in sync with Login.tsx
+const HIDE_GOOGLE_LOGIN = false;
 
 const Register = () => {
   const navigate = useNavigate();
@@ -192,6 +196,26 @@ const Register = () => {
             </button>
           </div>
         </form>
+
+        {/* Google login button - conditionally rendered */}
+        {!HIDE_GOOGLE_LOGIN && (
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                  Or sign up with
+                </span>
+              </div>
+            </div>
+            
+            <div className="mt-6">
+              <GoogleLogin />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

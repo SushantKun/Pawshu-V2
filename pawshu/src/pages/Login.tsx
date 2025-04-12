@@ -1,7 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import GoogleLogin from '../components/GoogleLogin';
+
+// Flag to hide Google OAuth while troubleshooting
+const HIDE_GOOGLE_LOGIN = false;
+
+// Local storage key for remembered email
+const REMEMBERED_EMAIL_KEY = 'pawshu_remembered_email';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -11,8 +18,18 @@ const Login = () => {
     email: '',
     password: '',
   });
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Load saved email and set remember me if it exists
+  useEffect(() => {
+    const savedEmail = localStorage.getItem(REMEMBERED_EMAIL_KEY);
+    if (savedEmail) {
+      setFormData(prev => ({ ...prev, email: savedEmail }));
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,11 +51,18 @@ const Login = () => {
         throw new Error(data.message || 'Login failed');
       }
 
+      // Save or remove email from local storage based on remember me
+      if (rememberMe) {
+        localStorage.setItem(REMEMBERED_EMAIL_KEY, formData.email);
+      } else {
+        localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      }
+
       // Log the response structure for debugging
       console.log('Login API response:', data);
 
-      // Pass both token and user data to login function
-      await login(data.token, data.user);
+      // Pass both token and user data to login function along with rememberMe setting
+      await login(data.token, data.user, rememberMe);
       navigate('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -48,10 +72,23 @@ const Login = () => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value, type, checked } = e.target;
+    
+    if (type === 'checkbox') {
+      if (name === 'remember-me') {
+        setRememberMe(checked);
+        
+        // If unchecking, remove saved email
+        if (!checked) {
+          localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+        }
+      }
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
   };
 
   return (
@@ -113,6 +150,8 @@ const Login = () => {
                 id="remember-me"
                 name="remember-me"
                 type="checkbox"
+                checked={rememberMe}
+                onChange={handleChange}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
               />
               <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">
@@ -137,6 +176,26 @@ const Login = () => {
             </button>
           </div>
         </form>
+
+        {/* Google login button - conditionally rendered */}
+        {!HIDE_GOOGLE_LOGIN && (
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+            
+            <div className="mt-6">
+              <GoogleLogin />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

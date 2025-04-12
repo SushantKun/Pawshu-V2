@@ -48,6 +48,22 @@ router.post('/', verifyToken, async (req: AuthRequest, res: Response, next: Next
       res.status(404).json({ message: 'Charity not found' });
       return;
     }
+    
+    // Check for recent duplicate donations (within last 5 seconds)
+    // This prevents double submissions from client-side
+    const fiveSecondsAgo = new Date(Date.now() - 5000);
+    const existingDonation = await Donation.findOne({
+      userId: req.user._id,
+      charityId: charityId,
+      amount: amount,
+      createdAt: { $gte: fiveSecondsAgo }
+    });
+    
+    if (existingDonation) {
+      console.log('Found duplicate donation within 5 seconds - returning existing donation:', existingDonation._id);
+      res.status(200).json(existingDonation);
+      return;
+    }
 
     const donation = new Donation({
       userId: req.user._id,
@@ -630,7 +646,10 @@ router.post('/card-payment', async (req: Request, res: Response) => {
 
     console.log('Charity found:', charity.name);
     
-    // Create donation record
+    // Create donation record with current timestamp
+    const currentDate = new Date();
+    console.log('Creating donation with timestamp:', currentDate.toISOString());
+    
     const donation = new Donation({
       userId: userId || 'anonymous',
       charityId,
@@ -638,7 +657,8 @@ router.post('/card-payment', async (req: Request, res: Response) => {
       amount,
       status: 'completed', // Auto-complete card payments for now
       paymentMethod: 'card',
-      date: new Date()
+      createdAt: currentDate, // Explicitly set creation date
+      updatedAt: currentDate // Also set updated date
     });
 
     console.log('Saving card donation:', donation);
@@ -650,10 +670,17 @@ router.post('/card-payment', async (req: Request, res: Response) => {
     await charity.save();
     console.log('Charity raised amount updated');
 
+    // Send the donation details with properly formatted timestamps
+    const donationObj = donation.toObject();
+    console.log('Donation object with dates:', {
+      createdAt: donationObj.createdAt,
+      createdAtString: donationObj.createdAt ? new Date(donationObj.createdAt).toISOString() : 'null'
+    });
+
     res.status(201).json({
       success: true,
       message: 'Donation successful',
-      donation
+      donation: donationObj
     });
   } catch (error) {
     console.error('Error processing card payment:', error);

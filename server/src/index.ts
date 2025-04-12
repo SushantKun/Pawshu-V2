@@ -28,6 +28,7 @@ import path from 'path';
 import fs from 'fs';
 import uploadRoutes from './routes/uploadRoutes';
 import chatRoutes from './routes/chatRoutes';
+import authRoutes from './routes/authRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -385,103 +386,22 @@ mongoose.connect(MONGODB_URI)
     console.error('MongoDB connection error:', error);
   });
 
-// Routes
-app.post('/api/auth/register', registerHandler as RequestHandler);
-app.post('/api/auth/login', loginHandler as RequestHandler);
+// Routes - keeping admin login for now as it might have custom implementation
+// Removing /api/auth/register and /api/auth/login as they're handled by authRoutes
 app.post('/api/auth/admin/login', adminLoginHandler as RequestHandler);
 
-// User profile endpoint
-app.get('/api/auth/profile', verifyToken, (async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
-    }
-
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Return the user object without the password
-    const userObj = user.toObject();
-    const { password, ...userWithoutPassword } = userObj;
-    
-    res.json(userWithoutPassword);
-  } catch (error) {
-    console.error('Error fetching user profile:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
-
-// User profile update endpoint
-app.put('/api/auth/profile', verifyToken, (async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
-    }
-
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Update fields - only allow certain fields to be updated
-    const allowedFields = ['firstName', 'lastName', 'phone', 'address', 'avatar'];
-    
-    allowedFields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        // Handle top level fields directly
-        (user as any)[field] = req.body[field];
-      }
-    });
-
-    await user.save();
-    
-    // Return the updated user object without the password
-    const userObj = user.toObject();
-    const { password, ...userWithoutPassword } = userObj;
-    
-    res.json(userWithoutPassword);
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
-
-// Password update endpoint
-app.put('/api/auth/profile/password', verifyToken, (async (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'Not authorized' });
-    }
-
-    const { currentPassword, newPassword } = req.body;
-    
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current password and new password are required' });
-    }
-
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Verify current password
-    const isMatch = await user.comparePassword(currentPassword);
-    if (!isMatch) {
-      return res.status(400).json({ message: 'Current password is incorrect' });
-    }
-
-    // Update password
-    user.password = newPassword;
-    await user.save();
-    
-    res.json({ message: 'Password updated successfully' });
-  } catch (error) {
-    console.error('Error updating password:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-}) as RequestHandler);
+// API routes
+app.use('/api/products', productRoutes);
+app.use('/api/doctors', doctorRoutes);
+app.use('/api/appointments', appointmentRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/donations', donationRoutes);
+app.use('/api/charities', charityRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/lost-found', lostFoundRoutes);
+app.use('/api/upload', verifyToken, uploadRoutes);
+app.use('/api/chats', chatRoutes);
+app.use('/api/auth', authRoutes);
 
 // Setup multer storage
 const storage = multer.diskStorage({
@@ -505,7 +425,7 @@ const upload = multer({
       return cb(null, true);
     }
     
-    cb(new Error('Only image files are allowed!'));
+    cb(new Error('Only image files are allowed!'), false);
   }
 });
 
@@ -513,18 +433,6 @@ const upload = multer({
 if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads');
 }
-
-// API routes
-app.use('/api/products', productRoutes);
-app.use('/api/doctors', doctorRoutes);
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/donations', donationRoutes);
-app.use('/api/charities', charityRoutes);
-app.use('/api/orders', orderRoutes);
-app.use('/api/lost-found', lostFoundRoutes);
-app.use('/api/upload', verifyToken, uploadRoutes);
-app.use('/api/chats', chatRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

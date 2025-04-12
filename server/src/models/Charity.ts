@@ -1,44 +1,48 @@
-import mongoose from 'mongoose';
+import mongoose, { Document, Schema, Model } from 'mongoose';
+
+// Define interface for Charity document with method
+export interface ICharity extends Document {
+  name: string;
+  description: string;
+  goal: number;
+  raised: number;
+  updatedAt: Date;
+  image?: {
+    public_id: string;
+    url: string;
+  };
+  refreshRaisedAmount: () => Promise<number>;
+}
 
 interface ImageObject {
   public_id: string;
   url: string;
 }
 
-const charitySchema = new mongoose.Schema({
+const charitySchema = new Schema({
   name: {
     type: String,
-    required: true
+    required: [true, 'Charity name is required'],
+    trim: true
   },
   description: {
     type: String,
-    required: true
+    required: [true, 'Charity description is required'],
+    trim: true
   },
   image: {
-    public_id: {
-      type: String,
-      required: true
-    },
-    url: {
-      type: String,
-      required: true
-    }
+    public_id: String,
+    url: String
   },
   goal: {
     type: Number,
-    required: true,
-    min: 0
+    required: [true, 'Charity goal amount is required'],
+    min: [0, 'Goal amount cannot be negative']
   },
   raised: {
     type: Number,
     default: 0,
-    min: 0,
-    validate: {
-      validator: function(value: number) {
-        return value >= 0;
-      },
-      message: 'Raised amount cannot be negative'
-    }
+    min: [0, 'Raised amount cannot be negative']
   },
   updatedAt: {
     type: Date,
@@ -77,7 +81,37 @@ charitySchema.pre('save', function(next) {
   next();
 });
 
-export const Charity = mongoose.model('Charity', charitySchema);
+// Add a method to update raised amount based on current donations
+charitySchema.methods.refreshRaisedAmount = async function(this: ICharity) {
+  try {
+    const Donation = mongoose.model('Donation');
+    const totalRaised = await Donation.aggregate([
+      {
+        $match: {
+          charityId: this._id,
+          status: 'completed'
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    console.log(`Refreshing charity ${this._id} raised amount:`, totalRaised[0]?.total || 0);
+    this.raised = totalRaised[0]?.total || 0;
+    await this.save();
+    return this.raised;
+  } catch (error) {
+    console.error('Error refreshing charity raised amount:', error);
+    return this.raised;
+  }
+};
+
+// Create Charity model with ICharity interface
+export const Charity: Model<ICharity> = mongoose.model<ICharity>('Charity', charitySchema);
 
 // Initial charities data
 export const initialCharities = [

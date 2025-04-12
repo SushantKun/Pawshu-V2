@@ -22,103 +22,103 @@ const router = express.Router();
 router.post('/doctors', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('POST /api/admin/doctors - Creating new doctor');
-    
+
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
-    
+
     // Extract doctor data from request body
-    const { 
-      firstName, 
-      lastName, 
-      email, 
-      password, 
-      specialization, 
-      experience, 
-      bio, 
+    const {
+      firstName,
+      lastName,
+      email,
+      password,
+      specialization,
+      experience,
+      bio,
       availability,
       locationPreference,
       clinicAddress,
       appointmentDuration,
-      profileImage 
+      profileImage
     } = req.body;
-    
+
     // Validate required fields
     if (!firstName || !lastName || !email || !password || !specialization) {
       return res.status(400).json({ message: 'Please provide all required fields' });
     }
-    
+
     // Check if doctor with email already exists
     const existingDoctor = await Doctor.findOne({ email });
     if (existingDoctor) {
       return res.status(400).json({ message: 'A doctor with this email already exists' });
     }
-    
+
     // Validate availability format if provided
     if (availability && Array.isArray(availability)) {
       // Check each availability string follows the format "Day startHour-endHour"
       for (const avail of availability) {
         if (typeof avail !== 'string') {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid availability format. Each entry must be a string.',
             example: 'Monday 9-12'
           });
         }
-        
+
         const parts = avail.split(' ');
         if (parts.length < 2) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid availability format. Format should be "Day startHour-endHour"',
             example: 'Monday 9-12'
           });
         }
-        
+
         const day = parts[0];
         const timeRange = parts[1];
-        
+
         const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         if (!validDays.includes(day)) {
-          return res.status(400).json({ 
-            message: `Invalid day: ${day}. Must be one of: ${validDays.join(', ')}` 
+          return res.status(400).json({
+            message: `Invalid day: ${day}. Must be one of: ${validDays.join(', ')}`
           });
         }
-        
+
         if (!timeRange.includes('-')) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid time range format. Format should be "startHour-endHour"',
             example: '9-12'
           });
         }
-        
+
         const [startHourStr, endHourStr] = timeRange.split('-');
         const startHour = parseInt(startHourStr);
         const endHour = parseInt(endHourStr);
-        
+
         // Validate that the values are actually numbers
         if (isNaN(startHour) || isNaN(endHour)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid time range format. Hours must be numbers.',
             example: '9-12',
             received: timeRange
           });
         }
-        
+
         if (startHour < 0 || startHour > 23 || endHour < 1 || endHour > 24) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid hours in time range. Hours must be between 0-23.',
             example: '9-12'
           });
         }
-        
+
         if (startHour >= endHour) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Start hour must be before end hour',
             example: '9-12'
           });
         }
       }
     }
-    
+
     // Create new doctor with all the provided fields
     const doctorData: Partial<IDoctor> = {
       firstName,
@@ -134,9 +134,9 @@ router.post('/doctors', adminAuth as RequestHandler, (async (req: AuthRequest, r
       appointmentDuration: appointmentDuration || 30,
       isActive: true
     };
-    
+
     console.log(`Creating new doctor with email: ${email}`);
-    
+
     // Handle profile image if provided
     if (profileImage && typeof profileImage === 'string' && profileImage.startsWith('data:image/')) {
       try {
@@ -150,21 +150,21 @@ router.post('/doctors', adminAuth as RequestHandler, (async (req: AuthRequest, r
         // Continue with doctor creation even if image upload fails
       }
     }
-    
+
     const newDoctor = new Doctor(doctorData);
     await newDoctor.save();
-    
+
     // Remove password from response
     const doctorResponse = newDoctor.toObject();
     const { password: _, ...doctorWithoutPassword } = doctorResponse;
-    
+
     console.log(`Doctor created successfully with ID: ${newDoctor._id}`);
     res.status(201).json(doctorWithoutPassword);
   } catch (error) {
     console.error('Error creating doctor:', error);
-    res.status(500).json({ 
-      message: 'Server error', 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    res.status(500).json({
+      message: 'Server error',
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 }) as RequestHandler);
@@ -179,7 +179,7 @@ router.get('/doctors', adminAuth as RequestHandler, (async (req: AuthRequest, re
     res.json(doctors);
   } catch (error) {
     console.error('Error fetching doctors:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -193,15 +193,15 @@ router.get('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest
   try {
     console.log(`GET /api/admin/doctors/${req.params.id} - Fetching doctor by ID`);
     const doctor = await Doctor.findById(req.params.id).select('-password');
-    
+
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
-    
+
     res.json(doctor);
   } catch (error) {
     console.error('Error fetching doctor:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -214,20 +214,20 @@ router.get('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest
 router.put('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('PUT /api/admin/doctors/:id - Updating doctor');
-    
+
     // Check if the request is authenticated as admin (this is redundant since adminAuth middleware already does this)
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized' });
     }
-    
+
     const doctorId = req.params.id;
     const updateData = req.body;
-    
+
     // Validate doctor ID
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       return res.status(400).json({ message: 'Invalid doctor ID format' });
     }
-    
+
     // Find doctor
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) {
@@ -240,117 +240,117 @@ router.put('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequest
       // Check each availability string follows the format "Day startHour-endHour"
       for (const avail of updateData.availability) {
         if (typeof avail !== 'string') {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid availability format. Each entry must be a string.',
             example: 'Monday 9-12',
             received: typeof avail
           });
         }
-        
+
         const parts = avail.split(' ');
         if (parts.length < 2) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid availability format. Format should be "Day startHour-endHour"',
             example: 'Monday 9-12',
             received: avail
           });
         }
-        
+
         const day = parts[0];
         const timeRange = parts[1];
-        
+
         const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         if (!validDays.includes(day)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: `Invalid day: ${day}. Must be one of: ${validDays.join(', ')}`,
             received: avail
           });
         }
-        
+
         if (!timeRange.includes('-')) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid time range format. Format should be "startHour-endHour"',
             example: '9-12',
             received: timeRange
           });
         }
-        
+
         const [startHourStr, endHourStr] = timeRange.split('-');
-        
+
         // Make sure both parts exist
         if (!startHourStr || !endHourStr) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid time range format. Both start and end hour must be provided.',
             example: '9-12',
             received: timeRange
           });
         }
-        
+
         const startHour = parseInt(startHourStr);
         const endHour = parseInt(endHourStr);
-        
+
         // Validate that the values are actually numbers
         if (isNaN(startHour) || isNaN(endHour)) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid time range format. Hours must be numbers.',
             example: '9-12',
             received: timeRange
           });
         }
-        
+
         if (startHour < 0 || startHour > 23 || endHour < 1 || endHour > 24) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Invalid hours in time range. Hours must be between 0-23.',
             example: '9-12',
             received: timeRange
           });
         }
-        
+
         if (startHour >= endHour) {
-          return res.status(400).json({ 
+          return res.status(400).json({
             message: 'Start hour must be before end hour',
             example: '9-12',
             received: timeRange
           });
         }
       }
-      
+
       console.log('Availability validation passed successfully');
     }
-    
+
     // Update doctor with provided fields (except password which is handled separately)
-    const fieldsToUpdate = {...updateData};
+    const fieldsToUpdate = { ...updateData };
     delete fieldsToUpdate.password; // Remove password from the general update
-    
+
     console.log(`Updating doctor ${doctorId} with data:`, {
       ...fieldsToUpdate,
-      password: updateData.password ? '[PASSWORD FIELD PRESENT]' : '[NO PASSWORD]' 
+      password: updateData.password ? '[PASSWORD FIELD PRESENT]' : '[NO PASSWORD]'
     });
-    
+
     // Update fields
     Object.keys(fieldsToUpdate).forEach(key => {
       if (key !== '_id') { // Skip the _id field
         (doctor as any)[key] = fieldsToUpdate[key];
       }
     });
-    
+
     // Handle password update if provided
     if (updateData.password) {
       // Password will be automatically hashed by the pre-save hook in the model
       doctor.password = updateData.password;
     }
-    
+
     await doctor.save();
-    
+
     // Return updated doctor without password
     const updatedDoctor = await Doctor.findById(doctorId).select('-password');
-    
+
     console.log(`Doctor ${doctorId} updated successfully`);
     res.json(updatedDoctor);
   } catch (error) {
     console.error('Error updating doctor:', error);
-    res.status(500).json({ 
-      message: 'Server error', 
+    res.status(500).json({
+      message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -363,18 +363,18 @@ router.delete('/doctors/:id', adminAuth as RequestHandler, (async (req: AuthRequ
   try {
     console.log(`DELETE /api/admin/doctors/${req.params.id} - Deleting doctor`);
     const doctor = await Doctor.findById(req.params.id);
-    
+
     if (!doctor) {
       return res.status(404).json({ message: 'Doctor not found' });
     }
-    
+
     await Doctor.deleteOne({ _id: req.params.id });
     console.log('Doctor deleted successfully:', req.params.id);
-    
+
     res.json({ message: 'Doctor deleted successfully' });
   } catch (error) {
     console.error('Error deleting doctor:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -391,7 +391,7 @@ router.get('/check-status', adminAuth as RequestHandler, (async (req: AuthReques
     });
   } catch (error) {
     console.error('Error checking admin status:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -402,26 +402,26 @@ router.get('/check-status', adminAuth as RequestHandler, (async (req: AuthReques
 router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/admin/dashboard-stats - Fetching real MongoDB dashboard statistics');
-    
+
     // Helper function to get count by status
     function getCountByStatus(counts: any[], status: string): number {
       const statusItem = counts.find(item => item._id === status);
       return statusItem ? statusItem.count : 0;
     }
-    
+
     // Check MongoDB connection
     if (mongoose.connection.readyState !== 1) {
       console.error('MongoDB connection is not ready. State:', mongoose.connection.readyState);
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: 'Database connection is not available',
         mongodbUri: process.env.MONGODB_URI ? 'URI defined' : 'URI not defined'
       });
     }
-    
+
     // Get real counts from MongoDB
     const userCount = await User.countDocuments();
     const doctorCount = await Doctor.countDocuments();
-    
+
     // Get appointment stats
     const appointmentCounts = await Appointment.aggregate([
       {
@@ -431,7 +431,7 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
         }
       }
     ]);
-    
+
     const appointmentStats = {
       total: await Appointment.countDocuments(),
       pending: getCountByStatus(appointmentCounts, 'pending'),
@@ -439,10 +439,10 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
       completed: getCountByStatus(appointmentCounts, 'completed'),
       cancelled: getCountByStatus(appointmentCounts, 'cancelled')
     };
-    
+
     // Get charity stats
     const charityCount = await Charity.countDocuments();
-    
+
     // Get donation stats
     const donationStats = await Donation.aggregate([
       {
@@ -455,12 +455,12 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
         }
       }
     ]).then(result => result[0] || { totalAmount: 0, count: 0, maxAmount: 0, minAmount: 0 });
-    
+
     // Calculate average donation amount
-    donationStats.avgAmount = donationStats.count > 0 
-      ? Math.round(donationStats.totalAmount / donationStats.count) 
+    donationStats.avgAmount = donationStats.count > 0
+      ? Math.round(donationStats.totalAmount / donationStats.count)
       : 0;
-    
+
     // Get order stats
     const orderStats = await Order.aggregate([
       {
@@ -471,33 +471,33 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
         }
       }
     ]).then(result => result[0] || { total: 0, revenue: 0 });
-    
+
     // Get recent orders
     const recentOrders = await Order.find()
       .populate('userId', 'firstName lastName name email')
       .sort({ createdAt: -1 })
       .limit(5);
-    
+
     // Get recent appointments
     const recentAppointments = await Appointment.find()
       .populate('user', 'firstName lastName name email')
       .populate('doctor', 'firstName lastName specialization')
       .sort({ createdAt: -1 })
       .limit(5);
-      
+
     // Get recent users
     const recentUsers = await User.find()
       .select('name email createdAt')
       .sort({ createdAt: -1 })
       .limit(5);
-    
+
     // Get recent donations
     const recentDonations = await Donation.find()
       .populate('userId', 'name')
       .populate('charityId', 'name')
       .sort({ createdAt: -1 })
       .limit(5);
-      
+
     // Format recent donations for response
     const formattedDonations = recentDonations.map(donation => ({
       _id: donation._id,
@@ -507,7 +507,7 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
       date: donation.createdAt,
       status: donation.status
     }));
-    
+
     // Build the dashboard data response with real MongoDB data
     const dashboardData = {
       counts: {
@@ -537,7 +537,7 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
     res.json(dashboardData);
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Error providing dashboard statistics',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -548,11 +548,11 @@ router.get('/dashboard-stats', adminAuth as RequestHandler, (async (req: AuthReq
 router.get('/chart-stats', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/admin/chart-stats - Fetching real chart statistics');
-    
+
     // Check MongoDB connection
     if (mongoose.connection.readyState !== 1) {
       console.error('MongoDB connection is not ready. State:', mongoose.connection.readyState);
-      return res.status(500).json({ 
+      return res.status(500).json({
         message: 'Database connection is not available',
         mongodbUri: process.env.MONGODB_URI ? 'URI defined' : 'URI not defined'
       });
@@ -651,7 +651,7 @@ router.get('/chart-stats', adminAuth as RequestHandler, (async (req: AuthRequest
     res.json(chartData);
   } catch (error) {
     console.error('Error fetching chart stats:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Error providing chart statistics',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -659,51 +659,51 @@ router.get('/chart-stats', adminAuth as RequestHandler, (async (req: AuthRequest
 }) as RequestHandler);
 
 // Helper functions to generate dummy data
-function generateSampleTimeSeries(months: number, min: number, max: number, valueKey = 'amount'): Array<{date: string, [key: string]: string | number}> {
-  const data: Array<{date: string, [key: string]: string | number}> = [];
+function generateSampleTimeSeries(months: number, min: number, max: number, valueKey = 'amount'): Array<{ date: string, [key: string]: string | number }> {
+  const data: Array<{ date: string, [key: string]: string | number }> = [];
   const now = new Date();
-  
+
   for (let i = months - 1; i >= 0; i--) {
     const date = new Date();
     date.setMonth(now.getMonth() - i);
-    
-    const item: {date: string, [key: string]: string | number} = {
+
+    const item: { date: string, [key: string]: string | number } = {
       date: `${date.getFullYear()}-${date.getMonth() + 1}`
     };
     item[valueKey] = Math.floor(Math.random() * (max - min + 1)) + min;
-    
+
     data.push(item);
   }
-  
+
   return data;
 }
 
-function generateSampleMonthlyData(months: number, min: number, max: number, valueKey = 'count', totalMin = min, totalMax = max): Array<{_id: {year: number, month: number}, [key: string]: any}> {
-  const data: Array<{_id: {year: number, month: number}, [key: string]: any}> = [];
+function generateSampleMonthlyData(months: number, min: number, max: number, valueKey = 'count', totalMin = min, totalMax = max): Array<{ _id: { year: number, month: number }, [key: string]: any }> {
+  const data: Array<{ _id: { year: number, month: number }, [key: string]: any }> = [];
   const now = new Date();
-  
+
   for (let i = months - 1; i >= 0; i--) {
     const date = new Date();
     date.setMonth(now.getMonth() - i);
-    
-    const item: {_id: {year: number, month: number}, [key: string]: any} = {
+
+    const item: { _id: { year: number, month: number }, [key: string]: any } = {
       _id: {
         year: date.getFullYear(),
         month: date.getMonth() + 1
       }
     };
-    
+
     item[valueKey] = Math.floor(Math.random() * (max - min + 1)) + min;
-    
+
     if (valueKey !== 'totalAmount') {
       item.total = Math.floor(Math.random() * (totalMax - totalMin + 1)) + totalMin;
     } else {
       item.count = Math.floor(Math.random() * (max - min + 1)) + min;
     }
-    
+
     data.push(item);
   }
-  
+
   return data;
 }
 
@@ -716,14 +716,14 @@ function generateSampleMonthlyAppointments(months: number) {
     completed: number;
     cancelled: number;
   };
-  
+
   const data: AppointmentEntry[] = [];
   const now = new Date();
-  
+
   for (let i = months - 1; i >= 0; i--) {
     const date = new Date();
     date.setMonth(now.getMonth() - i);
-    
+
     data.push({
       _id: {
         year: date.getFullYear(),
@@ -736,7 +736,7 @@ function generateSampleMonthlyAppointments(months: number) {
       cancelled: Math.floor(Math.random() * 3)
     });
   }
-  
+
   return data;
 }
 
@@ -749,20 +749,20 @@ function generateSampleOrders(count: number) {
     total: number;
     status: string;
   };
-  
+
   const orders: OrderEntry[] = [];
-  
+
   for (let i = 0; i < count; i++) {
     orders.push({
-      _id: `order${i+1}`,
+      _id: `order${i + 1}`,
       user: {
-        name: `Customer ${i+1}`
+        name: `Customer ${i + 1}`
       },
       total: Math.floor(Math.random() * 1000) + 500,
       status: ['pending', 'processing', 'shipped', 'delivered'][Math.floor(Math.random() * 4)]
     });
   }
-  
+
   return orders;
 }
 
@@ -775,20 +775,20 @@ function generateSampleDonations(count: number) {
     date: string;
     status: string;
   };
-  
+
   const donations: DonationEntry[] = [];
-  
+
   for (let i = 0; i < count; i++) {
     donations.push({
-      _id: `donation${i+1}`,
-      userName: `Donor ${i+1}`,
+      _id: `donation${i + 1}`,
+      userName: `Donor ${i + 1}`,
       charityName: `Charity ${Math.floor(Math.random() * 3) + 1}`,
       amount: Math.floor(Math.random() * 5000) + 500,
       date: new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString(),
       status: 'completed'
     });
   }
-  
+
   return donations;
 }
 
@@ -796,7 +796,7 @@ function generateSampleAppointments(count: number) {
   type AppointmentEntry = {
     _id: string;
     user: { name: string };
-    doctor: { 
+    doctor: {
       firstName: string;
       lastName: string;
       specialization: string;
@@ -804,14 +804,14 @@ function generateSampleAppointments(count: number) {
     date: string;
     status: string;
   };
-  
+
   const appointments: AppointmentEntry[] = [];
-  
+
   for (let i = 0; i < count; i++) {
     appointments.push({
-      _id: `appointment${i+1}`,
-      user: { name: `Pet Owner ${i+1}` },
-      doctor: { 
+      _id: `appointment${i + 1}`,
+      user: { name: `Pet Owner ${i + 1}` },
+      doctor: {
         firstName: `Dr. ${['John', 'Jane', 'Mike', 'Sarah', 'David'][Math.floor(Math.random() * 5)]}`,
         lastName: `${['Smith', 'Johnson', 'Williams', 'Brown', 'Jones'][Math.floor(Math.random() * 5)]}`,
         specialization: ['Cardiology', 'Surgery', 'Dermatology', 'Neurology', 'General'][Math.floor(Math.random() * 5)]
@@ -820,7 +820,7 @@ function generateSampleAppointments(count: number) {
       status: ['pending', 'confirmed', 'cancelled', 'completed'][Math.floor(Math.random() * 4)]
     });
   }
-  
+
   return appointments;
 }
 
@@ -831,18 +831,18 @@ function generateSampleUsers(count: number) {
     email: string;
     createdAt: string;
   };
-  
+
   const users: UserEntry[] = [];
-  
+
   for (let i = 0; i < count; i++) {
     users.push({
-      _id: `user${i+1}`,
-      name: `User ${i+1}`,
-      email: `user${i+1}@example.com`,
+      _id: `user${i + 1}`,
+      name: `User ${i + 1}`,
+      email: `user${i + 1}@example.com`,
       createdAt: new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString()
     });
   }
-  
+
   return users;
 }
 
@@ -1056,11 +1056,13 @@ router.get('/detailed-stats', adminAuth as RequestHandler, (async (req: AuthRequ
           totalActiveUsers: {
             $sum: {
               $cond: [
-                { $or: [
-                  { $gt: [{ $size: '$appointments' }, 0] },
-                  { $gt: [{ $size: '$donations' }, 0] },
-                  { $gt: [{ $size: '$orders' }, 0] }
-                ]},
+                {
+                  $or: [
+                    { $gt: [{ $size: '$appointments' }, 0] },
+                    { $gt: [{ $size: '$donations' }, 0] },
+                    { $gt: [{ $size: '$orders' }, 0] }
+                  ]
+                },
                 1,
                 0
               ]
@@ -1108,7 +1110,7 @@ router.get('/detailed-stats', adminAuth as RequestHandler, (async (req: AuthRequ
     res.json(detailedStats);
   } catch (error) {
     console.error('Error fetching detailed statistics:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: 'Server error',
       error: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -1130,7 +1132,7 @@ router.get('/charities', adminAuth as RequestHandler, (async (req: AuthRequest, 
 router.post('/charities', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, description, goal, image } = req.body;
-    
+
     // Upload image to Cloudinary if provided
     let imageData: { public_id: string; url: string; } | null = null;
     if (image && typeof image === 'string' && image.startsWith('data:image/')) {
@@ -1146,7 +1148,7 @@ router.post('/charities', adminAuth as RequestHandler, (async (req: AuthRequest,
         return;
       }
     }
-    
+
     const charity = new Charity({
       name,
       description,
@@ -1178,7 +1180,7 @@ router.put('/charities/:id', adminAuth as RequestHandler, (async (req: AuthReque
     charity.name = name;
     charity.description = description;
     charity.goal = goal;
-    
+
     // Upload new image to Cloudinary if provided
     if (image && typeof image === 'string' && image.startsWith('data:image/')) {
       try {
@@ -1194,7 +1196,7 @@ router.put('/charities/:id', adminAuth as RequestHandler, (async (req: AuthReque
         return;
       }
     }
-    
+
     charity.updatedAt = new Date();
 
     await charity.save();
@@ -1210,7 +1212,7 @@ router.delete('/charities/:id', adminAuth as RequestHandler, (async (req: AuthRe
   try {
     const { id } = req.params;
     const charity = await Charity.findByIdAndDelete(id);
-    
+
     if (!charity) {
       res.status(404).json({ message: 'Charity not found' });
       return;
@@ -1230,13 +1232,39 @@ router.get('/users', adminAuth as RequestHandler, (async (req: AuthRequest, res:
   try {
     console.log('GET /api/admin/users - Fetching all users');
     const users = await User.find().select('-password');
-    res.json(users);
+
+    // Format the response to include online status information
+    const formattedUsers = users.map(user => {
+      const userData = user.toObject();
+
+      // CRITICAL FIX: Use ONLY activity timestamp with a much shorter timeout period
+      const lastActiveTime = user.lastActive ? new Date(user.lastActive).getTime() : 0;
+      const currentTime = new Date().getTime();
+      const secondsSinceActive = Math.floor((currentTime - lastActiveTime) / 1000);
+
+      // Consider a user online ONLY if they've been active in the last 7 seconds
+      // This provides much faster detection of browser closures
+      const isRecentlyActive = secondsSinceActive < 7; // 7 second max inactivity threshold
+      const isActuallyOnline = isRecentlyActive; // Only rely on recent activity
+
+      console.log(
+        `User ${user.email}: ` +
+        `lastActive=${user.lastActive ? new Date(user.lastActive).toISOString() : 'never'}, ` +
+        `secondsSinceActive=${secondsSinceActive}, ` +
+        `ONLINE STATUS=${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`
+      );
+
+      return {
+        ...userData,
+        isOnline: isActuallyOnline,
+        lastActiveSecs: secondsSinceActive
+      };
+    });
+
+    res.json(formattedUsers);
   } catch (error) {
     console.error('Error fetching users:', error);
-    res.status(500).json({ 
-      message: 'Server error',
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 }) as RequestHandler);
 
@@ -1313,7 +1341,7 @@ router.get('/test', (req: Request, res: Response) => {
 router.get('/test-auth', adminAuth as RequestHandler, (async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /api/admin/test-auth - Test auth endpoint');
-    
+
     return res.json({
       status: 'success',
       message: 'Admin authentication successful',
@@ -1361,17 +1389,17 @@ router.get('/health', (req: Request, res: Response) => {
 router.get('/orders', adminAuth as RequestHandler, async (req: AuthRequest, res: Response) => {
   try {
     console.log('Admin fetching all orders');
-    
+
     // Check MongoDB connection
     if (!mongoose.connection.readyState) {
       console.error('MongoDB connection is not ready');
       return res.status(500).json({ message: 'Database connection error' });
     }
-    
+
     const orders = await Order.find()
       .populate('userId', 'firstName lastName name email')
       .sort({ createdAt: -1 });
-    
+
     console.log(`Fetched ${orders.length} orders for admin`);
     res.json(orders);
   } catch (error) {

@@ -218,6 +218,20 @@ const EsewaRedirect = () => {
   );
 };
 
+// Component to conditionally render the ChatButton
+const ConditionalChatButton = () => {
+  const location = useLocation();
+  const path = location.pathname;
+  
+  // Hide chat button on admin and doctor routes, and login/register pages
+  if (path.startsWith('/admin') || path.startsWith('/doctor') || 
+      ['/login', '/register'].includes(path)) {
+    return null;
+  }
+  
+  return <ChatButton />;
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -435,8 +449,8 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
 
-            {/* Add the ChatButton component globally */}
-            <ChatButton />
+            {/* Replace the global ChatButton with the conditional one */}
+            <ConditionalChatButton />
           </Router>
         </CartProvider>
       </ThemeProvider>

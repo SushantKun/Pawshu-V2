@@ -69,6 +69,7 @@ const Checkout = () => {
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa' | 'khalti'>('card');
   const [esewaFormData, setEsewaFormData] = useState<EsewaFormData | null>(null);
   const [showEsewaPayment, setShowEsewaPayment] = useState(false);
+  const [khaltiServiceError, setKhaltiServiceError] = useState(false);
 
   // Calculate total directly from items without any additional fees
   const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -88,6 +89,10 @@ const Checkout = () => {
 
   const handlePaymentMethodChange = (method: 'card' | 'esewa' | 'khalti') => {
     setPaymentMethod(method);
+    // Reset Khalti service error when switching payment methods
+    if (method !== 'khalti') {
+      setKhaltiServiceError(false);
+    }
   };
 
   const initiateEsewaPayment = async (orderId: string) => {
@@ -268,33 +273,14 @@ const Checkout = () => {
           
           // Handle different error status codes appropriately
           if (error.response.status === 503 || error.response.status === 504) {
+            setKhaltiServiceError(true);
             toast.error('Khalti payment service is currently unavailable or not responding. Please try eSewa or card payment instead.', {
               style: { minWidth: '300px' }
             });
             
-            // In development mode, try force updating the payment to simulate success
-            if (process.env.NODE_ENV === 'development') {
-              try {
-                console.log('Development mode: Force updating payment after Khalti service unavailable');
-                const updateResponse = await axios.put(
-                  `http://localhost:5000/api/orders/fix-payment/${orderId}`,
-                  {},
-                  {
-                  headers: { 'Authorization': `Bearer ${token}` }
-                  }
-                );
-                console.log('Dev mode force update response:', updateResponse.data);
-                
-                // Redirect to success page
-                toast.success('Dev mode: Payment marked as successful');
-                setTimeout(() => {
-                  navigate(`/checkout/success?orderId=${orderId}`);
-                }, 2000);
-                return;
-              } catch (devError) {
-                console.error('Dev mode force update failed:', devError);
-              }
-            }
+            // Remove auto-redirect on 503 errors
+            setIsProcessing(false);
+            return; // Exit early to prevent success page navigation
           } else {
             // Extract the most useful error message
             const errorMessage = 
@@ -485,23 +471,30 @@ const Checkout = () => {
           toast.dismiss(processingToast);
           console.error('Khalti payment failed:', khaltiError);
           
-          // If Khalti payment fails, show error and suggest eSewa as fallback
-          toast.error('Khalti payment failed. Would you like to try eSewa instead?');
-          
-          // Add a button to try eSewa as a fallback
-          const tryEsewa = window.confirm('Would you like to try eSewa payment instead?');
-          if (tryEsewa) {
-            setPaymentMethod('esewa');
-            try {
-              const fallbackToast = toast.loading('Switching to eSewa payment...');
-              await initiateEsewaPayment(orderId);
-              toast.dismiss(fallbackToast);
-            } catch (esewaError) {
-              toast.error('eSewa payment also failed. Please try again later or use card payment.');
+          // Don't show the "try eSewa instead" prompt if the payment was attempted but failed with a 503
+          if (khaltiError instanceof AxiosError && 
+              khaltiError.response?.status === 503) {
+            // Service unavailable error already handled in initiateKhaltiPayment function
+            setIsProcessing(false);
+          } else {
+            // For other errors, show eSewa fallback option
+            toast.error('Khalti payment failed. Would you like to try eSewa instead?');
+            
+            // Add a button to try eSewa as a fallback
+            const tryEsewa = window.confirm('Would you like to try eSewa payment instead?');
+            if (tryEsewa) {
+              setPaymentMethod('esewa');
+              try {
+                const fallbackToast = toast.loading('Switching to eSewa payment...');
+                await initiateEsewaPayment(orderId);
+                toast.dismiss(fallbackToast);
+              } catch (esewaError) {
+                toast.error('eSewa payment also failed. Please try again later or use card payment.');
+                setIsProcessing(false);
+              }
+            } else {
               setIsProcessing(false);
             }
-          } else {
-            setIsProcessing(false);
           }
         }
       }
@@ -743,9 +736,16 @@ const Checkout = () => {
                         onChange={() => handlePaymentMethodChange('khalti')}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500"
                       />
-                      <label htmlFor="khalti" className="ml-3 flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-                        Pay with Khalti
-                      </label>
+                      <div className="ml-3">
+                        <label htmlFor="khalti" className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                          Pay with Khalti
+                        </label>
+                        {khaltiServiceError && (
+                          <div className="mt-1 text-xs text-red-600 dark:text-red-400">
+                            ⚠️ Service currently unavailable. Please use another payment method.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -799,6 +799,18 @@ const Checkout = () => {
                 
                 {paymentMethod === 'khalti' && (
                   <div className="space-y-6">
+                    {khaltiServiceError && (
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
+                        <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium mb-2">
+                          ⚠️ Khalti Payment Service Unavailable
+                        </p>
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                          The Khalti payment service is currently unavailable. We recommend using eSewa or card payment instead. 
+                          If you proceed with Khalti, you may encounter errors.
+                        </p>
+                      </div>
+                    )}
+                    
                     <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
                       <p className="text-sm text-gray-600 dark:text-gray-300">
                         You will be redirected to Khalti to complete your payment. Once the payment is successful, you will be redirected back to this site.

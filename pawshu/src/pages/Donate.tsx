@@ -14,7 +14,7 @@ const XMarkIconComponent = XMarkIcon as IconComponent;
 const CreditCardIconComponent = CreditCardIcon as IconComponent;
 const ArrowLeftIconComponent = ArrowLeftIcon as IconComponent;
 
-// Properly defining the Charity interface
+// Define the Charity interface for type safety
 interface Charity {
   _id: string;
   name: string;
@@ -47,13 +47,14 @@ const Donate = () => {
   const navigate = useNavigate();
   const [charities, setCharities] = useState<Charity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selectedCharity, setSelectedCharity] = useState<Charity | null>(null);
-  const [customAmount, setCustomAmount] = useState<string>('');
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
+  const [customAmount, setCustomAmount] = useState<string>('');
+  const [step, setStep] = useState<'select' | 'amount' | 'payment'>('select');
   const [isProcessing, setIsProcessing] = useState(false);
   const [donationComplete, setDonationComplete] = useState(false);
   const [donationDetails, setDonationDetails] = useState<any>(null);
-  const [step, setStep] = useState<'select' | 'payment'>('select');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'esewa' | 'khalti'>('esewa');
   const [esewaFormData, setEsewaFormData] = useState<any>(null);
   const [showEsewaPayment, setShowEsewaPayment] = useState(false);
@@ -61,6 +62,13 @@ const Donate = () => {
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
+  const [khaltiServiceError, setKhaltiServiceError] = useState(false);
+  const [esewaServiceError, setEsewaServiceError] = useState(false);
+
+  // Log changes to khaltiServiceError state
+  useEffect(() => {
+    console.log('khaltiServiceError changed:', khaltiServiceError);
+  }, [khaltiServiceError]);
 
   // Fetch charities data
   useEffect(() => {
@@ -124,7 +132,8 @@ const Donate = () => {
     try {
       const response = await api.get<Charity[]>('/charities', {
         params: {
-          _t: new Date().getTime() // Cache busting to ensure we get the latest data
+          _t: new Date().getTime(), // Cache busting to ensure we get the latest data
+          refresh: true // Request server to refresh charity progress from donations
         }
       });
       
@@ -178,6 +187,13 @@ const Donate = () => {
 
   const handlePaymentMethodChange = (method: 'card' | 'esewa' | 'khalti') => {
     setPaymentMethod(method);
+    // Reset service error states when switching payment methods
+    if (method !== 'khalti') {
+      setKhaltiServiceError(false);
+    }
+    if (method !== 'esewa') {
+      setEsewaServiceError(false);
+    }
   };
 
   const initiateDirectEsewaPayment = async (charityId: string, amount: number) => {
@@ -248,9 +264,17 @@ const Donate = () => {
         toast.error('Failed to initialize eSewa payment. Please try again.');
         setIsProcessing(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initiating eSewa payment:', error);
-      toast.error('Failed to initialize payment. Please try again.');
+      
+      // Check for service unavailable error (503 or 504)
+      if (error.response && (error.response.status === 503 || error.response.status === 504)) {
+        setEsewaServiceError(true);
+        toast.error('eSewa payment service is currently unavailable or not responding. Please try card payment or Khalti instead.');
+      } else {
+        toast.error('Failed to initialize payment. Please try again.');
+      }
+      
       setIsProcessing(false);
     }
   };
@@ -258,6 +282,7 @@ const Donate = () => {
   const initiateKhaltiPayment = async (charityId: string, amount: number) => {
     try {
       setIsProcessing(true);
+      console.log('Starting Khalti payment process');
       
       // Check if there's already a pending donation in storage
       const existingDonation = sessionStorage.getItem('pendingDonation');
@@ -323,9 +348,18 @@ const Donate = () => {
         toast.error('Failed to initialize Khalti payment. Please try again.');
         setIsProcessing(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initiating Khalti payment:', error);
-      toast.error('Failed to initialize payment. Please try again.');
+      
+      // Check for service unavailable error (503 or 504)
+      if (error.response && (error.response.status === 503 || error.response.status === 504)) {
+        console.log('Setting khaltiServiceError to true due to', error.response.status, 'error');
+        setKhaltiServiceError(true);
+        toast.error('Khalti payment service is currently unavailable or not responding. Please try eSewa or card payment instead.');
+      } else {
+        toast.error('Failed to initialize Khalti payment. Please try again.');
+      }
+      
       setIsProcessing(false);
     }
   };
@@ -402,41 +436,53 @@ const Donate = () => {
     setIsProcessing(true);
     console.log("Processing card payment");
     
-    // Use any type to bypass TypeScript checks
-    const charity: any = selectedCharity;
+    // Ensure charity is properly typed
+    const charity = selectedCharity;
     
-    if (!charity) {
+    if (!charity || !charity._id) {
       toast.error('Invalid charity selection');
       setIsProcessing(false);
       return;
     }
     
-    // Prepare donation data using any type
+    // Get amount from either selected amount or custom amount
     const amount = selectedAmount || parseInt(customAmount);
+    
+    // Prepare donation data with proper fields for the API
     const donationData = {
       charityId: charity._id,
       charityName: charity.name,
       amount,
       status: 'completed',
-      paymentMethod: 'card'
+      paymentMethod: 'card',
+      cardDetails: {
+        cardNumber,
+        cardExpiry,
+        cardCvv
+      }
     };
     
-    console.log("Processing donation with data:", donationData);
+    console.log("Processing donation with data:", {...donationData, cardDetails: "REDACTED"});
     
-    api.post('/donations', donationData)
+    // Use the proper API client
+    api.post('/donations/card-payment', donationData)
       .then(response => {
         console.log("Donation successful:", response.data);
-        setDonationDetails(response.data);
-        setDonationComplete(true);
-        setShowCardForm(false);
-        
-        showSuccessNotification(
-          NOTIFICATIONS.DONATION.title,
-          `Thank you for your donation of NPR ${amount.toLocaleString()} to ${charity.name}!`
-        );
-        
-        // Refresh charities to show updated progress
-        fetchCharities();
+        if (response.data.donation) {
+          setDonationDetails(response.data.donation);
+          setDonationComplete(true);
+          setShowCardForm(false);
+          
+          showSuccessNotification(
+            NOTIFICATIONS.DONATION.title,
+            `Thank you for your donation of NPR ${amount.toLocaleString()} to ${charity.name}!`
+          );
+          
+          // Refresh charities to show updated progress
+          fetchCharities();
+        } else {
+          toast.error('Donation response was invalid. Please try again.');
+        }
       })
       .catch(error => {
         console.error('Error processing card payment:', error);
@@ -628,7 +674,23 @@ const Donate = () => {
                 <h3 className="text-lg font-semibold mb-2">Donation Details</h3>
                 <p><span className="font-medium">Amount:</span> NPR {donationDetails.amount.toLocaleString()}</p>
                 <p><span className="font-medium">Charity:</span> {donationDetails.charityName}</p>
-                <p><span className="font-medium">Date:</span> {new Date(donationDetails.createdAt).toLocaleDateString()}</p>
+                <p><span className="font-medium">Date:</span> {
+                  (() => {
+                    // Try different date formats and fallback to current date
+                    try {
+                      if (donationDetails.createdAt) {
+                        return new Date(donationDetails.createdAt).toLocaleDateString();
+                      } else if (donationDetails.date) {
+                        return new Date(donationDetails.date).toLocaleDateString();
+                      } else {
+                        return new Date().toLocaleDateString();
+                      }
+                    } catch (error) {
+                      console.error('Error formatting date:', error);
+                      return new Date().toLocaleDateString();
+                    }
+                  })()
+                }</p>
                 <p><span className="font-medium">Status:</span> <span className="text-green-500">Completed</span></p>
               </div>
             )}
@@ -705,7 +767,14 @@ const Donate = () => {
                       target.style.display = 'none';
                     }}
                   />
-                  <span>eSewa</span>
+                  <div className="flex flex-col items-start">
+                    <span>eSewa</span>
+                    {esewaServiceError && (
+                      <span className="text-xs text-red-600 dark:text-red-400 whitespace-nowrap">
+                        ⚠️ Service unavailable
+                      </span>
+                    )}
+                  </div>
                 </button>
                 
                 <button
@@ -727,9 +796,69 @@ const Donate = () => {
                       target.style.display = 'none';
                     }}
                   />
-                  <span>Khalti</span>
+                  <div className="flex flex-col items-start">
+                    <span>Khalti</span>
+                    {khaltiServiceError && (
+                      <span className="text-xs text-red-600 dark:text-red-400 whitespace-nowrap font-bold">
+                        ⚠️ Service unavailable
+                      </span>
+                    )}
+                  </div>
                 </button>
               </div>
+              
+              {/* Add payment information panels */}
+              {paymentMethod === 'card' && (
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md mt-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Your card will be charged immediately and your donation will be processed securely.
+                  </p>
+                </div>
+              )}
+              
+              {paymentMethod === 'esewa' && (
+                <div className="space-y-4 mt-4">
+                  {esewaServiceError && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium mb-2">
+                        ⚠️ eSewa Payment Service Unavailable
+                      </p>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                        The eSewa payment service is currently unavailable. We recommend using Khalti or card payment instead. 
+                        If you proceed with eSewa, you may encounter errors.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      You will be redirected to eSewa to complete your payment. Once the payment is successful, you will be redirected back to this site.
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {paymentMethod === 'khalti' && (
+                <div className="space-y-4 mt-4">
+                  {khaltiServiceError ? (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-md">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium mb-2">
+                        ⚠️ Khalti Payment Service Unavailable
+                      </p>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                        The Khalti payment service is currently unavailable. We recommend using eSewa or card payment instead. 
+                        If you proceed with Khalti, you may encounter errors.
+                      </p>
+                    </div>
+                  ) : null}
+                  
+                  <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      You will be redirected to Khalti to complete your payment. Once the payment is successful, you will be redirected back to this site.
+                    </p>
+                  </div>
+                </div>
+              )}
               
               <div className="mt-6">
                 <button
@@ -856,59 +985,55 @@ const Donate = () => {
           <>
             {/* Charities Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-              {charities.map((charity) => {
-                // Ensure each charity is properly typed
-                const typedCharity = charity;
-                return (
-                  <div 
-                    key={typedCharity._id} 
-                    className={`bg-gray-100 dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden cursor-pointer transform transition-transform hover:scale-105 ${
-                      selectedCharity && selectedCharity._id === typedCharity._id ? 'ring-2 ring-blue-500' : ''
-                    }`}
-                    onClick={() => setSelectedCharity(typedCharity)}
-                  >
-                    <img
-                      src={typedCharity.image.url}
-                      alt={typedCharity.name}
-                      className="w-full h-[300px] object-cover"
-                    />
-                    <div className="p-6">
-                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{typedCharity.name}</h3>
-                      <p className="mt-2 text-gray-600 dark:text-gray-300">{typedCharity.description}</p>
-                      <div className="mt-4">
-                        <div className="relative pt-1">
-                          <div className="flex mb-2 items-center justify-between">
-                            <div>
-                              <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200 dark:bg-blue-900/30">
-                                Progress
-                              </span>
-                            </div>
-                            <div className="text-right">
-                              <span className={`text-xs font-semibold inline-block py-1 px-2 rounded-full ${
-                                typedCharity.goal > 0 && (typedCharity.raised / typedCharity.goal) >= 1 
-                                  ? 'bg-green-200 dark:bg-green-900/30 text-green-800 dark:text-green-300'
-                                  : 'text-blue-600 dark:text-blue-400'
-                              }`}>
-                                {typedCharity.goal > 0 ? Math.min(Math.round((typedCharity.raised / typedCharity.goal) * 100), 100) : 0}%
-                              </span>
-                            </div>
+              {charities.map((charity: Charity) => (
+                <div 
+                  key={charity._id} 
+                  className={`bg-gray-100 dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden cursor-pointer transform transition-transform hover:scale-105 ${
+                    selectedCharity && selectedCharity._id === charity._id ? 'ring-2 ring-blue-500' : ''
+                  }`}
+                  onClick={() => setSelectedCharity(charity)}
+                >
+                  <img
+                    src={charity.image.url}
+                    alt={charity.name}
+                    className="w-full h-[300px] object-cover"
+                  />
+                  <div className="p-6">
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{charity.name}</h3>
+                    <p className="mt-2 text-gray-600 dark:text-gray-300">{charity.description}</p>
+                    <div className="mt-4">
+                      <div className="relative pt-1">
+                        <div className="flex mb-2 items-center justify-between">
+                          <div>
+                            <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200 dark:bg-blue-900/30">
+                              Progress
+                            </span>
                           </div>
-                          <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
-                            <div
-                              style={{ width: `${typedCharity.goal > 0 ? Math.min((typedCharity.raised / typedCharity.goal) * 100, 100) : 0}%` }}
-                              className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${
-                                typedCharity.goal > 0 && (typedCharity.raised / typedCharity.goal) >= 1 
-                                  ? 'bg-green-500'
-                                  : 'bg-blue-500'
-                              }`}
-                            />
+                          <div className="text-right">
+                            <span className={`text-xs font-semibold inline-block py-1 px-2 rounded-full ${
+                              charity.goal > 0 && (charity.raised / charity.goal) >= 1 
+                                ? 'bg-green-200 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                : 'text-blue-600 dark:text-blue-400'
+                            }`}>
+                              {charity.goal > 0 ? Math.min(Math.round((charity.raised / charity.goal) * 100), 100) : 0}%
+                            </span>
                           </div>
+                        </div>
+                        <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                          <div
+                            style={{ width: `${charity.goal > 0 ? Math.min((charity.raised / charity.goal) * 100, 100) : 0}%` }}
+                            className={`shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center ${
+                              charity.goal > 0 && (charity.raised / charity.goal) >= 1 
+                                ? 'bg-green-500'
+                                : 'bg-blue-500'
+                            }`}
+                          />
                         </div>
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </>
         )}

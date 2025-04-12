@@ -54,6 +54,7 @@ const ChatInterface: React.FC<{
   const [isTyping, setIsTyping] = useState(false);
   const [socketInstance, setSocketInstance] = useState<any>(null);
   const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [recipientIsOnline, setRecipientIsOnline] = useState(false);
   
   // Store user ID in localStorage for consistent reference
   useEffect(() => {
@@ -66,20 +67,30 @@ const ChatInterface: React.FC<{
   useEffect(() => {
     if (!user) return;
 
+    console.log('Initializing socket connection for user:', user._id);
+    const token = localStorage.getItem('token');
+    console.log('Auth token available:', !!token);
+    
     const socket = io('http://localhost:5000', {
       auth: {
-        token: localStorage.getItem('token')
+        token: token
       }
     });
 
     socket.on('connect', () => {
-      console.log('Connected to socket server');
+      console.log('Connected to socket server with socket id:', socket.id);
       if (chatId) {
-        socket.emit('join_chat', { chatId });
+        console.log('Joining chat room:', chatId, 'as user:', user._id);
+        socket.emit('join_chat', { chatId, userId: user._id });
       }
     });
 
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
     socket.on('typing', (data: { chatId: string, userId: string }) => {
+      console.log('Typing event received:', data);
       if (data.chatId === chatId && data.userId !== user._id) {
         setIsTyping(true);
         
@@ -98,17 +109,54 @@ const ChatInterface: React.FC<{
     });
 
     socket.on('stop_typing', (data: { chatId: string, userId: string }) => {
+      console.log('Stop typing event received:', data);
       if (data.chatId === chatId && data.userId !== user._id) {
         setIsTyping(false);
+      }
+    });
+    
+    // Handle user online status changes
+    socket.on('user_status_changed', (data: { userId: string, isOnline: boolean }) => {
+      console.log('User status changed:', data);
+      if (data.userId === recipientId) {
+        setRecipientIsOnline(data.isOnline);
+      }
+    });
+    
+    // Handle when a user comes online in the chat
+    socket.on('user_online', (data: { userId: string, chatId: string }) => {
+      console.log('User came online in chat:', data);
+      if (data.userId === recipientId && data.chatId === chatId) {
+        setRecipientIsOnline(true);
       }
     });
 
     setSocketInstance(socket);
 
+    // Check recipient online status when mounting component
+    const checkRecipientStatus = async () => {
+      if (recipientId) {
+        try {
+          const response = await axios.get(`http://localhost:5000/api/users/${recipientId}/online-status`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          console.log('Recipient online status:', response.data);
+          setRecipientIsOnline(response.data.isOnline);
+        } catch (error) {
+          console.error('Error checking recipient online status:', error);
+        }
+      }
+    };
+    
+    checkRecipientStatus();
+
     return () => {
+      console.log('Disconnecting socket for user:', user._id);
       socket.disconnect();
     };
-  }, [user, chatId]);
+  }, [user, chatId, recipientId]);
   
   // Update chat active status based on report status changes
   useEffect(() => {
@@ -539,7 +587,9 @@ const ChatInterface: React.FC<{
           ) : isTyping ? (
             <span className="text-xs text-green-200">typing...</span>
           ) : (
-            <span className="text-xs text-blue-200">Online</span>
+            <span className={`text-xs ${recipientIsOnline ? 'text-green-200' : 'text-gray-300'}`}>
+              {recipientIsOnline ? 'Online' : 'Offline'}
+            </span>
           )}
         </div>
         <button className="ml-auto text-white">

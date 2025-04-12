@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  PencilIcon, 
-  TrashIcon, 
+import {
+  PencilIcon,
+  TrashIcon,
   PlusIcon,
   MagnifyingGlassIcon,
-  FunnelIcon
+  FunnelIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
 import axios from 'axios';
@@ -16,6 +17,7 @@ const TrashIconComponent = TrashIcon as IconComponent;
 const PlusIconComponent = PlusIcon as IconComponent;
 const MagnifyingGlassIconComponent = MagnifyingGlassIcon as IconComponent;
 const FunnelIconComponent = FunnelIcon as IconComponent;
+const ArrowPathIconComponent = ArrowPathIcon as IconComponent;
 
 interface User {
   _id: string;
@@ -25,6 +27,8 @@ interface User {
   createdAt: string;
   lastLogin?: string;
   status?: 'active' | 'inactive';
+  lastActive?: string;
+  isOnline?: boolean;
 }
 
 interface UserFormData {
@@ -61,16 +65,20 @@ const AdminUsers = () => {
         setLoading(false);
         return;
       }
-      
+
       console.log('Fetching users with token:', token ? 'Token present' : 'No token');
       const response = await axios.get(`${API_URL}/admin/users`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-      
+
       if (response.data) {
         console.log('Users fetched successfully:', response.data.length);
+        // Debug online status
+        response.data.forEach((user: User) => {
+          console.log(`User ${user.name} (${user.email}): isOnline=${user.isOnline}, lastActive=${user.lastActive}`);
+        });
         setUsers(response.data);
         setError('');
       } else {
@@ -95,6 +103,14 @@ const AdminUsers = () => {
 
   useEffect(() => {
     fetchUsers();
+    
+    // Set up a periodic refresh for online status
+    const statusInterval = setInterval(() => {
+      console.log('Refreshing user status...');
+      fetchUsers();
+    }, 3000); // Refresh every 3 seconds for more responsive online status updates
+    
+    return () => clearInterval(statusInterval);
   }, [fetchUsers]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -151,7 +167,7 @@ const AdminUsers = () => {
         setLoading(false);
         return;
       }
-      
+
       await axios.post(`${API_URL}/admin/users`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -172,7 +188,7 @@ const AdminUsers = () => {
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('adminToken');
@@ -181,14 +197,14 @@ const AdminUsers = () => {
         setLoading(false);
         return;
       }
-      
+
       const updateData = {
         name: formData.name,
         email: formData.email,
         role: formData.role,
         ...(formData.password ? { password: formData.password } : {})
       };
-      
+
       await axios.put(`${API_URL}/admin/users/${selectedUser._id}`, updateData, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -208,7 +224,7 @@ const AdminUsers = () => {
 
   const handleDeleteUser = async (userId: string) => {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('adminToken');
@@ -217,7 +233,7 @@ const AdminUsers = () => {
         setLoading(false);
         return;
       }
-      
+
       await axios.delete(`${API_URL}/admin/users/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`
@@ -233,14 +249,20 @@ const AdminUsers = () => {
     }
   };
 
+  // Add an explicit refresh button click handler
+  const handleRefreshClick = () => {
+    console.log('Manual refresh requested');
+    fetchUsers();
+  };
+
   // Filter users based on search term and role filter
   const filteredUsers = users.filter(user => {
-    const matchesSearch = 
+    const matchesSearch =
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    
+
     return matchesSearch && matchesRole;
   });
 
@@ -248,13 +270,23 @@ const AdminUsers = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
-        <button
-          onClick={openAddModal}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-        >
-          <PlusIconComponent className="h-5 w-5 mr-2" />
-          Add New User
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={handleRefreshClick}
+            className="flex items-center px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+            disabled={loading}
+          >
+            <ArrowPathIconComponent className={`h-5 w-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+          <button
+            onClick={openAddModal}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+          >
+            <PlusIconComponent className="h-5 w-5 mr-2" />
+            Add New User
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -295,7 +327,7 @@ const AdminUsers = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Role</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Online Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created At</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
             </tr>
@@ -307,12 +339,11 @@ const AdminUsers = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{user.email}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{user.role}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    user.status === 'active' 
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                      : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                  }`}>
-                    {user.status || 'active'}
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.isOnline
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                    }`}>
+                    {user.isOnline ? 'Online' : 'Offline'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">

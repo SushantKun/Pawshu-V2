@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { 
-  ArrowRightIcon, 
-  ShoppingBagIcon, 
-  HeartIcon, 
+import {
+  ArrowRightIcon,
+  ShoppingBagIcon,
+  HeartIcon,
   UserGroupIcon,
-  ChevronDownIcon 
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import type { ComponentType, SVGProps } from 'react';
 import './Home.css';
@@ -91,7 +91,6 @@ const Home = () => {
     const fetchDoctors = async () => {
       try {
         const response = await axios.get(`${API_URL}/doctors`);
-        console.log('Doctor data from API:', response.data);
         setDoctors(response.data.slice(0, 4)); // Get first 4 doctors
       } catch (err) {
         console.error('Error fetching doctors:', err);
@@ -106,7 +105,7 @@ const Home = () => {
             _t: new Date().getTime()
           }
         });
-        
+
         // Map the charities and ensure progress calculations
         const charities = response.data.map((charity: Charity) => ({
           ...charity,
@@ -114,7 +113,7 @@ const Home = () => {
           // Ensure goal is never zero to avoid division by zero
           goal: charity.goal || 1
         }));
-        
+
         setCharities(charities);
       } catch (err) {
         console.error('Error fetching charities:', err);
@@ -131,7 +130,7 @@ const Home = () => {
     const interval = setInterval(() => {
       setCurrentHeroImage((prev) => (prev + 1) % heroImages.length);
     }, 3000); // Change image every 3 seconds
-    
+
     return () => clearInterval(interval);
   }, []);
 
@@ -143,10 +142,10 @@ const Home = () => {
   };
 
   const getProductImage = (product: Product): string => {
-    if (product.images && 
-        product.images.length > 0 && 
-        product.images[0].url && 
-        !imageErrors[product._id]) {
+    if (product.images &&
+      product.images.length > 0 &&
+      product.images[0].url &&
+      !imageErrors[product._id]) {
       return product.images[0].url;
     }
     return PlaceholderImage;
@@ -173,8 +172,8 @@ const Home = () => {
               Discover premium products, quality healthcare, and essential services for your furry friends.
             </p>
             <div className="flex justify-center lg:justify-start">
-              <Link 
-                to="/products" 
+              <Link
+                to="/products"
                 className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200 inline-flex items-center"
               >
                 Shop Now
@@ -192,12 +191,12 @@ const Home = () => {
                   const position = (index - currentHeroImage + heroImages.length) % heroImages.length;
                   // Calculate the z-index to ensure proper stacking
                   const zIndex = position === 0 ? heroImages.length : heroImages.length - position;
-                  
+
                   // Define transformations based on position
                   let transform = '';
                   let opacity = 1;
                   let scale = 1;
-                  
+
                   if (position === 0) {
                     // Current image - lifted up and forward
                     transform = 'translateX(0) translateZ(100px) translateY(-20px) rotateX(5deg)';
@@ -229,13 +228,13 @@ const Home = () => {
                         transformStyle: 'preserve-3d',
                         backfaceVisibility: 'hidden',
                         transform: `${transform} scale(${scale})`,
-                        boxShadow: position === 0 
-                          ? '0 20px 40px rgba(0,0,0,0.3)' 
+                        boxShadow: position === 0
+                          ? '0 20px 40px rgba(0,0,0,0.3)'
                           : '0 10px 20px rgba(0,0,0,0.2)',
                       }}
                     >
-                      <img 
-                        src={img} 
+                      <img
+                        src={img}
                         alt={`Hero ${index + 1}`}
                         className="w-full h-full object-cover object-center"
                         onError={(e) => {
@@ -245,26 +244,24 @@ const Home = () => {
                         }}
                       />
                       {/* Add a subtle gradient overlay */}
-                      <div className={`absolute inset-0 ${
-                        position === 0 
-                          ? 'bg-gradient-to-r from-black/10 to-transparent' 
+                      <div className={`absolute inset-0 ${position === 0
+                          ? 'bg-gradient-to-r from-black/10 to-transparent'
                           : 'bg-gradient-to-r from-black/30 to-transparent'
-                      }`}></div>
+                        }`}></div>
                     </div>
                   );
                 })}
               </div>
-              
+
               {/* Navigation dots */}
               <div className="flex justify-center gap-2 mt-8">
                 {heroImages.map((_, index) => (
                   <button
                     key={index}
-                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                      index === currentHeroImage 
-                        ? 'bg-white scale-125' 
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentHeroImage
+                        ? 'bg-white scale-125'
                         : 'bg-white/50 hover:bg-white/75'
-                    }`}
+                      }`}
                     onClick={() => setCurrentHeroImage(index)}
                   />
                 ))}
@@ -291,12 +288,12 @@ const Home = () => {
                   const position = (index - ((currentHeroImage + 3) % heroImages.length) + heroImages.length) % heroImages.length;
                   // Calculate the z-index to ensure proper stacking
                   const zIndex = position === 0 ? heroImages.length : heroImages.length - position;
-                  
+
                   // Define transformations based on position
                   let transform = '';
                   let opacity = 1;
                   let scale = 1;
-                  
+
                   if (position === 0) {
                     // Current image - lifted up and forward
                     transform = 'translateX(0) translateZ(100px) translateY(-20px) rotateX(5deg)';
@@ -328,13 +325,13 @@ const Home = () => {
                         transformStyle: 'preserve-3d',
                         backfaceVisibility: 'hidden',
                         transform: `${transform} scale(${scale})`,
-                        boxShadow: position === 0 
-                          ? '0 20px 40px rgba(0,0,0,0.3)' 
+                        boxShadow: position === 0
+                          ? '0 20px 40px rgba(0,0,0,0.3)'
                           : '0 10px 20px rgba(0,0,0,0.2)',
                       }}
                     >
-                      <img 
-                        src={img} 
+                      <img
+                        src={img}
                         alt={`Second Hero ${index + 1}`}
                         className="w-full h-full object-cover object-center"
                         onError={(e) => {
@@ -344,26 +341,24 @@ const Home = () => {
                         }}
                       />
                       {/* Add a subtle gradient overlay */}
-                      <div className={`absolute inset-0 ${
-                        position === 0 
+                      <div className={`absolute inset-0 ${position === 0
                           ? 'bg-gradient-to-l from-black/10 to-transparent' // Flip gradient direction 
                           : 'bg-gradient-to-l from-black/30 to-transparent'
-                      }`}></div>
+                        }`}></div>
                     </div>
                   );
                 })}
               </div>
-              
+
               {/* Navigation dots */}
               <div className="flex justify-center gap-2 mt-8">
                 {heroImages.map((_, index) => (
                   <button
                     key={index}
-                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                      (index + 3) % heroImages.length === currentHeroImage
-                        ? 'bg-white scale-125' 
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${(index + 3) % heroImages.length === currentHeroImage
+                        ? 'bg-white scale-125'
                         : 'bg-white/50 hover:bg-white/75'
-                    }`}
+                      }`}
                     onClick={() => setCurrentHeroImage((index + 3) % heroImages.length)}
                   />
                 ))}
@@ -380,8 +375,8 @@ const Home = () => {
               Book veterinary services, help find lost pets, and support animal welfare through donations.
             </p>
             <div className="flex justify-center lg:justify-start">
-              <Link 
-                to="/booking" 
+              <Link
+                to="/booking"
                 className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200 inline-flex items-center"
               >
                 Book Appointment
@@ -403,14 +398,14 @@ const Home = () => {
               Help reunite lost pets with their owners and support animal welfare organizations.
             </p>
             <div className="flex flex-wrap justify-center lg:justify-start gap-4">
-              <Link 
-                to="/lost-found" 
+              <Link
+                to="/lost-found"
                 className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200"
               >
                 Lost & Found
               </Link>
-              <Link 
-                to="/donate" 
+              <Link
+                to="/donate"
                 className="px-6 py-3 bg-white text-indigo-600 rounded-md font-medium hover:bg-gray-100 transition-colors duration-200"
               >
                 Donate
@@ -427,12 +422,12 @@ const Home = () => {
                   const position = (index - ((currentHeroImage + 6) % heroImages.length) + heroImages.length) % heroImages.length;
                   // Calculate the z-index to ensure proper stacking
                   const zIndex = position === 0 ? heroImages.length : heroImages.length - position;
-                  
+
                   // Define transformations based on position
                   let transform = '';
                   let opacity = 1;
                   let scale = 1;
-                  
+
                   if (position === 0) {
                     // Current image - lifted up and forward
                     transform = 'translateX(0) translateZ(100px) translateY(-20px) rotateX(5deg)';
@@ -464,13 +459,13 @@ const Home = () => {
                         transformStyle: 'preserve-3d',
                         backfaceVisibility: 'hidden',
                         transform: `${transform} scale(${scale})`,
-                        boxShadow: position === 0 
-                          ? '0 20px 40px rgba(0,0,0,0.3)' 
+                        boxShadow: position === 0
+                          ? '0 20px 40px rgba(0,0,0,0.3)'
                           : '0 10px 20px rgba(0,0,0,0.2)',
                       }}
                     >
-                      <img 
-                        src={img} 
+                      <img
+                        src={img}
                         alt={`Third Hero ${index + 1}`}
                         className="w-full h-full object-cover object-center"
                         onError={(e) => {
@@ -480,26 +475,24 @@ const Home = () => {
                         }}
                       />
                       {/* Add a subtle gradient overlay */}
-                      <div className={`absolute inset-0 ${
-                        position === 0 
-                          ? 'bg-gradient-to-r from-black/10 to-transparent' 
+                      <div className={`absolute inset-0 ${position === 0
+                          ? 'bg-gradient-to-r from-black/10 to-transparent'
                           : 'bg-gradient-to-r from-black/30 to-transparent'
-                      }`}></div>
+                        }`}></div>
                     </div>
                   );
                 })}
               </div>
-              
+
               {/* Navigation dots */}
               <div className="flex justify-center gap-2 mt-8">
                 {heroImages.map((_, index) => (
                   <button
                     key={index}
-                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                      (index + 6) % heroImages.length === currentHeroImage
-                        ? 'bg-white scale-125' 
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${(index + 6) % heroImages.length === currentHeroImage
+                        ? 'bg-white scale-125'
                         : 'bg-white/50 hover:bg-white/75'
-                    }`}
+                      }`}
                     onClick={() => setCurrentHeroImage((index + 6) % heroImages.length)}
                   />
                 ))}
@@ -514,15 +507,15 @@ const Home = () => {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Featured Products</h2>
-            <Link 
-              to="/products" 
+            <Link
+              to="/products"
               className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 inline-flex items-center font-medium"
             >
               View All
               <ArrowRightIconComponent className="w-4 h-4 ml-1" />
             </Link>
           </div>
-          
+
           {loading ? (
             <div className="flex justify-center items-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 dark:border-blue-400"></div>
@@ -536,9 +529,9 @@ const Home = () => {
               {featuredProducts.map(product => (
                 <div key={product._id} className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden transition-transform duration-300 hover:scale-105">
                   <div className="h-56 overflow-hidden">
-                    <img 
-                      src={getProductImage(product)} 
-                      alt={product.name} 
+                    <img
+                      src={getProductImage(product)}
+                      alt={product.name}
                       className="w-full h-full object-cover"
                       onError={() => handleImageError(product._id)}
                     />
@@ -546,8 +539,8 @@ const Home = () => {
                   <div className="p-4">
                     <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">{product.name}</h3>
                     <p className="text-gray-600 dark:text-gray-300 mb-4">NPR {product.price.toLocaleString('ne-NP')}</p>
-                    <Link 
-                      to="/products" 
+                    <Link
+                      to="/products"
                       className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors duration-200"
                     >
                       View Product
@@ -565,35 +558,32 @@ const Home = () => {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Our Veterinarians</h2>
-            <Link 
-              to="/doctors" 
+            <Link
+              to="/doctors"
               className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 inline-flex items-center font-medium"
             >
               View All
               <ArrowRightIconComponent className="w-4 h-4 ml-1" />
             </Link>
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {doctors.map(doctor => {
-              console.log('Rendering doctor:', doctor._id, doctor);
-              
               // Try different possible image sources
-              const imageUrl = typeof doctor.profile === 'object' && doctor.profile?.url ? 
-                              doctor.profile.url : 
-                              doctor.profileImage?.url || 
-                              (typeof doctor.profile === 'string' ? doctor.profile : null) || 
-                              PlaceholderImage;
-                               
+              const imageUrl = typeof doctor.profile === 'object' && doctor.profile?.url ?
+                doctor.profile.url :
+                doctor.profileImage?.url ||
+                (typeof doctor.profile === 'string' ? doctor.profile : null) ||
+                PlaceholderImage;
+
               return (
                 <div key={doctor._id} className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden transition-transform duration-300 hover:scale-105">
                   <div className="h-56 overflow-hidden bg-gray-200 dark:bg-gray-600">
-                    <img 
+                    <img
                       src={imageUrl}
-                      alt={`Dr. ${doctor.firstName} ${doctor.lastName}`} 
+                      alt={`Dr. ${doctor.firstName} ${doctor.lastName}`}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        console.log(`Image error for doctor ${doctor._id}:`, e);
                         const target = e.target as HTMLImageElement;
                         target.onerror = null;
                         target.src = PlaceholderImage;
@@ -607,8 +597,8 @@ const Home = () => {
                       <p className="text-gray-600 dark:text-gray-300 mb-2">{doctor.experience} years experience</p>
                     )}
                     <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">{doctor.bio}</p>
-                    <Link 
-                      to={`/booking?doctor=${doctor._id}`} 
+                    <Link
+                      to={`/booking?doctor=${doctor._id}`}
                       className="block w-full text-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors duration-200"
                     >
                       Book Appointment
@@ -626,22 +616,22 @@ const Home = () => {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Support Our Causes</h2>
-            <Link 
-              to="/donate" 
+            <Link
+              to="/donate"
               className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 inline-flex items-center font-medium"
             >
               View All
               <ArrowRightIconComponent className="w-4 h-4 ml-1" />
             </Link>
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {charities.map(charity => (
               <div key={charity._id} className="bg-white dark:bg-gray-700 rounded-lg shadow-md overflow-hidden transition-transform duration-300 hover:scale-105">
                 <div className="h-56 overflow-hidden">
-                  <img 
-                    src={charity.image?.url || PlaceholderImage} 
-                    alt={charity.name} 
+                  <img
+                    src={charity.image?.url || PlaceholderImage}
+                    alt={charity.name}
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
@@ -653,7 +643,7 @@ const Home = () => {
                 <div className="p-4">
                   <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-white">{charity.name}</h3>
                   <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-2">{charity.description}</p>
-                  
+
                   {/* Progress bar */}
                   <div className="mb-4">
                     <div className="flex justify-between mb-1">
@@ -665,17 +655,17 @@ const Home = () => {
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
-                      <div 
-                        className="bg-green-600 h-2.5 rounded-full" 
-                        style={{ 
-                          width: `${Math.min(100, charity.goal > 0 ? (charity.raised / charity.goal) * 100 : 0)}%` 
+                      <div
+                        className="bg-green-600 h-2.5 rounded-full"
+                        style={{
+                          width: `${Math.min(100, charity.goal > 0 ? (charity.raised / charity.goal) * 100 : 0)}%`
                         }}
                       ></div>
                     </div>
                   </div>
-                  
-                  <Link 
-                    to="/donate" 
+
+                  <Link
+                    to="/donate"
                     className="block w-full text-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors duration-200"
                   >
                     Donate Now
@@ -691,7 +681,7 @@ const Home = () => {
       <section className="py-16">
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-12">Why Choose Us?</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="p-6 bg-white dark:bg-gray-700 rounded-lg shadow-md text-center transition-transform duration-300 hover:scale-105">
               <div className="bg-blue-100 dark:bg-blue-900/30 inline-block p-3 rounded-full mb-4">
@@ -702,7 +692,7 @@ const Home = () => {
                 Carefully curated selection of high-quality pet products for all your needs.
               </p>
             </div>
-            
+
             <div className="p-6 bg-white dark:bg-gray-700 rounded-lg shadow-md text-center transition-transform duration-300 hover:scale-105">
               <div className="bg-blue-100 dark:bg-blue-900/30 inline-block p-3 rounded-full mb-4">
                 <HeartIconComponent className="h-8 w-8 text-blue-600 dark:text-blue-400" />
@@ -712,7 +702,7 @@ const Home = () => {
                 Professional veterinarians and pet specialists dedicated to your pet's wellbeing.
               </p>
             </div>
-            
+
             <div className="p-6 bg-white dark:bg-gray-700 rounded-lg shadow-md text-center transition-transform duration-300 hover:scale-105">
               <div className="bg-blue-100 dark:bg-blue-900/30 inline-block p-3 rounded-full mb-4">
                 <UserGroupIconComponent className="h-8 w-8 text-blue-600 dark:text-blue-400" />

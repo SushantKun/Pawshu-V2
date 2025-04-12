@@ -160,8 +160,24 @@ const CardPaymentForm: React.FC<CardPaymentFormProps> = ({
           <div className="mb-6 p-4 bg-gray-200 dark:bg-gray-700 rounded-lg">
             <h3 className="text-lg font-semibold mb-2">Donation Details</h3>
             <p><span className="font-medium">Amount:</span> NPR {displayData.amount.toLocaleString()}</p>
-            <p><span className="font-medium">Charity:</span> {displayData.charityName}</p>
-            <p><span className="font-medium">Date:</span> {new Date(displayData.createdAt).toLocaleDateString()}</p>
+            <p><span className="font-medium">Charity:</span> {displayData.charityName || charity.name}</p>
+            <p><span className="font-medium">Date:</span> {
+              (() => {
+                // Try different date formats and fallback to current date
+                try {
+                  if (displayData.createdAt) {
+                    return new Date(displayData.createdAt).toLocaleDateString();
+                  } else if (displayData.date) {
+                    return new Date(displayData.date).toLocaleDateString();
+                  } else {
+                    return new Date().toLocaleDateString();
+                  }
+                } catch (error) {
+                  console.error('Error formatting date:', error);
+                  return new Date().toLocaleDateString();
+                }
+              })()
+            }</p>
             <p><span className="font-medium">Status:</span> <span className="text-green-500">Completed</span></p>
             {displayData._id && (
               <p><span className="font-medium">Reference ID:</span> {displayData._id.substring(0, 8)}...</p>

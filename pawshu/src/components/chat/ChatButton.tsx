@@ -32,7 +32,7 @@ const storeCurrentUserId = (id: string) => {
 interface Message {
   _id: string;
   id?: string;
-  sender: string | { _id: string; [key: string]: any };
+  sender: string | { _id: string;[key: string]: any };
   content: string;
   timestamp: Date;
   chatId?: string;
@@ -74,14 +74,14 @@ let globalSetIsChatOpen: ((isOpen: boolean) => void) | null = null;
 
 // Core function to determine if a message is from the current user
 // This handles both string IDs and populated sender objects
-const isMessageFromCurrentUser = (sender: string | { _id: string; [key: string]: any }, currentUserId?: string): boolean => {
+const isMessageFromCurrentUser = (sender: string | { _id: string;[key: string]: any }, currentUserId?: string): boolean => {
   if (!currentUserId) return false;
 
   // Handle when sender is a populated object (with _id field)
   if (typeof sender === 'object' && sender !== null && '_id' in sender) {
     return sender._id === currentUserId;
   }
-  
+
   // Handle when sender is just a string ID
   return sender === currentUserId;
 };
@@ -144,7 +144,7 @@ const ChatButton: React.FC = () => {
           try {
             // Ensure we're using the string representation of the reportId
             let reportIdStr: string;
-            
+
             // Handle the case where reportId might be populated as an object
             if (typeof chat.reportId === 'object' && chat.reportId !== null) {
               // If it's an object with _id property
@@ -153,7 +153,7 @@ const ChatButton: React.FC = () => {
               // If it's already a string or can be converted to string
               reportIdStr = String(chat.reportId);
             }
-              
+
             const reportResponse = await api.get(`/api/lost-found/${reportIdStr}`);
             if (reportResponse.data && reportResponse.data.status) {
               // Only set isActive to false if the report is explicitly resolved
@@ -190,31 +190,36 @@ const ChatButton: React.FC = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Connect to socket when component mounts
+  // Set up socket connection
   useEffect(() => {
     if (!user) return;
 
-    // Initialize socket connection
+    const token = localStorage.getItem('token');
     const newSocket = io('http://localhost:5000', {
       auth: {
-        token: localStorage.getItem('token')
+        token: token
       }
     });
-    
+
+    // Set up keep-alive ping to maintain online status
+    const keepAlivePing = setInterval(() => {
+      if (newSocket.connected) {
+        newSocket.emit('ping', { userId: user._id });
+      }
+    }, 30000); // Send a ping every 30 seconds
+
     newSocket.on('connect', () => {
-      console.log('Connected to socket server with ID:', newSocket.id);
+      // Socket connected
     });
-    
-    newSocket.on('disconnect', () => {
-      console.log('Disconnected from socket server');
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
     });
-    
+
     // Listen for incoming messages globally
     newSocket.on('receive_message', (message: any) => {
-      console.log('Received message through socket:', message);
-      
       if (!user) return;
-      
+
       // Format the message to match our Message interface
       const formattedMessage: Message = {
         _id: message._id || message.id || Date.now().toString(),
@@ -223,7 +228,7 @@ const ChatButton: React.FC = () => {
         timestamp: new Date(message.timestamp || Date.now()),
         chatId: message.chatId
       };
-      
+
       // Auto-open chat if it's the active chat
       // Compare using the isMessageFromCurrentUser helper
       if (!isMessageFromCurrentUser(message.sender, user._id)) {
@@ -233,9 +238,8 @@ const ChatButton: React.FC = () => {
           // If chat is not active, show a notification
           toast.custom((t) => (
             <div
-              className={`${
-                t.visible ? 'animate-enter' : 'animate-leave'
-              } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
+              className={`${t.visible ? 'animate-enter' : 'animate-leave'
+                } max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}
             >
               <div className="flex-1 w-0 p-4" onClick={() => {
                 setActiveChat(message.chatId as string);
@@ -248,8 +252,8 @@ const ChatButton: React.FC = () => {
                       New message
                     </p>
                     <p className="mt-1 text-sm text-gray-500">
-                      {message.content.length > 30 
-                        ? message.content.substring(0, 30) + '...' 
+                      {message.content.length > 30
+                        ? message.content.substring(0, 30) + '...'
                         : message.content}
                     </p>
                   </div>
@@ -260,24 +264,20 @@ const ChatButton: React.FC = () => {
         }
       }
     });
-    
+
     // Listen for message status updates
     newSocket.on('message_status_updated', (data: { messageId: string, status: string }) => {
-      console.log('Message status updated:', data);
-      
       // Update the message status in our local state
-      setMessages(prev => prev.map(msg => 
+      setMessages(prev => prev.map(msg =>
         msg._id === data.messageId ? { ...msg, status: data.status as any } : msg
       ));
     });
-    
+
     // Listen for report status changes to refresh chat data
     newSocket.on('report_status_changed', async (data: { reportId: string, status: 'open' | 'resolved' | 'closed' }) => {
-      console.log('Report status changed, refreshing chats:', data);
-      
       // Update chat list to reflect new status
       await fetchChats();
-      
+
       // If this is the current active chat, refresh the resolved status
       if (activeChat) {
         const chat = chats.find(c => c._id === activeChat);
@@ -296,12 +296,12 @@ const ChatButton: React.FC = () => {
             });
             return updatedChats;
           });
-          
+
           // Check if the current user is the report owner (to show reopen button)
           if (data.reportId) {
             checkReportOwnership(data.reportId);
           }
-          
+
           // If the status changed to resolved, show a message
           if (data.status === 'resolved') {
             toast.error('This report has been marked as resolved. Messaging has been disabled.');
@@ -309,69 +309,57 @@ const ChatButton: React.FC = () => {
         }
       }
     });
-    
+
     // Listen for error events
     newSocket.on('error', (error) => {
       toast.error(error.message || 'An error occurred');
     });
-    
+
     // Improve typing indicator handling
     newSocket.on('typing', (data: { chatId: string, userId: string }) => {
-      console.log('Received typing event:', data);
       if (data.userId !== user?._id && data.chatId === activeChat) {
-        console.log('User is typing:', data.userId);
         setTypingUsers(prev => {
           if (!prev.includes(data.userId)) {
-            console.log('Adding user to typing list:', data.userId);
             return [...prev, data.userId];
           }
           return prev;
         });
       }
     });
-    
+
     newSocket.on('stop_typing', (data: { chatId: string, userId: string }) => {
-      console.log('Received stop_typing event:', data);
       if (data.chatId === activeChat) {
-        console.log('User stopped typing:', data.userId);
-        setTypingUsers(prev => {
-          console.log('Current typing users:', prev);
-          const filtered = prev.filter(id => id !== data.userId);
-          console.log('New typing users:', filtered);
-          return filtered;
-        });
+        setTypingUsers(prev => prev.filter(id => id !== data.userId));
       }
     });
 
     // Handle initial typing users when joining a chat
     newSocket.on('typing_users', (data: { chatId: string, users: string[] }) => {
-      console.log('Received typing_users event:', data);
       if (data.chatId === activeChat) {
-        console.log('Setting initial typing users:', data.users);
         setTypingUsers(data.users.filter(userId => user && userId !== user._id));
       }
     });
 
     // Handle updated typing users list
     newSocket.on('typing_users_updated', (data: { chatId: string, users: string[] }) => {
-      console.log('Received typing_users_updated event:', data);
       if (data.chatId === activeChat) {
-        console.log('Updating typing users list:', data.users);
         setTypingUsers(data.users.filter(userId => user && userId !== user._id));
       }
     });
 
     setSocket(newSocket);
-    
+
     // Cleanup on unmount
     return () => {
-      console.log('Cleaning up socket connection');
       newSocket.disconnect();
-      
+
       // Clean up typing timeouts
       Object.values(typingTimeoutRef.current).forEach(timeout => {
         clearTimeout(timeout);
       });
+
+      // Clear keep-alive ping
+      clearInterval(keepAlivePing);
     };
   }, [user, activeChat, chats]);
 
@@ -379,16 +367,12 @@ const ChatButton: React.FC = () => {
   useEffect(() => {
     if (activeChat && user) {
       fetchMessages(activeChat);
-      
+
       // Join the chat room
       if (socket) {
-        console.log('Joining chat room:', activeChat);
-        socket.emit('join_chat', { 
-          chatId: activeChat,
-          userId: user._id
-        });
+        joinChatRoom(activeChat);
       }
-      
+
       // Get recipient info
       const chat = chats.find(c => c._id === activeChat);
       if (chat) {
@@ -396,13 +380,13 @@ const ChatButton: React.FC = () => {
         if (recipient) {
           setActiveChatData({
             recipientId: recipient._id,
-            recipientName: recipient.firstName && recipient.lastName 
-              ? `${recipient.firstName} ${recipient.lastName}` 
+            recipientName: recipient.firstName && recipient.lastName
+              ? `${recipient.firstName} ${recipient.lastName}`
               : recipient.email?.split('@')[0] || 'User',
             // Report details would be retrieved separately if needed
           });
         }
-        
+
         // If chat has a report, check if the current user is the report owner
         if (chat.reportId) {
           checkReportOwnership(chat.reportId);
@@ -418,7 +402,7 @@ const ChatButton: React.FC = () => {
     try {
       // Ensure we have a string ID to work with
       let reportIdStr: string;
-      
+
       // Handle the case where reportId might be an object
       if (typeof reportId === 'object' && reportId !== null) {
         // If it's an object with _id property
@@ -427,7 +411,7 @@ const ChatButton: React.FC = () => {
         // If it's already a string or can be converted to string
         reportIdStr = String(reportId);
       }
-      
+
       const response = await api.get(`/api/lost-found/${reportIdStr}`);
       if (response.data && response.data.userId && user) {
         setReportOwnership({
@@ -446,22 +430,22 @@ const ChatButton: React.FC = () => {
   // Handle reopening the report
   const handleReopenReport = async () => {
     if (!reportOwnership.reportId || !reportOwnership.isReportOwner) return;
-    
+
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
+
       const response = await api.put(
-        `/api/lost-found/${reportOwnership.reportId}/status`, 
+        `/api/lost-found/${reportOwnership.reportId}/status`,
         { status: 'open' },
         {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         }
       );
-      
+
       if (response.status === 200) {
         toast.success('Report reopened successfully');
         // Refresh chats to get updated status
@@ -480,9 +464,8 @@ const ChatButton: React.FC = () => {
   const fetchMessages = async (chatId: string) => {
     try {
       setLoading(true);
-      console.log('Fetching messages for chat:', chatId);
       const response = await api.get(`/api/chats/${chatId}/messages`);
-      
+
       if (Array.isArray(response.data)) {
         // Preserve the original sender data (could be object or string ID)
         // This will ensure we can correctly identify the sender
@@ -493,19 +476,13 @@ const ChatButton: React.FC = () => {
           timestamp: new Date(msg.timestamp || Date.now()),
           chatId: chatId
         }));
-        
-        console.log('Received messages from API:', formattedMessages.length);
-        // Log the first message to debug sender format
-        if (formattedMessages.length > 0) {
-          console.log('Sample message sender:', formattedMessages[0].sender);
-        }
-        
+
         setMessages(formattedMessages);
       } else {
         console.error('Expected array of messages but got:', response.data);
         setMessages([]);
       }
-      
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -517,43 +494,40 @@ const ChatButton: React.FC = () => {
   // Modify input change handler to emit typing events
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewMessage(e.target.value);
-    
+
     if (activeChat && socket && user) {
       // If user starts typing, emit typing event
       if (e.target.value.trim() !== '') {
         // Emit typing event only if not already typing or if typing timeout has expired
         if (!typingTimeoutRef.current[user._id]) {
-          console.log('Emitting typing event');
           socket.emit('typing', {
             chatId: activeChat,
             userId: user._id
           });
         }
-        
+
         // Clear any existing timeout for this user
         if (typingTimeoutRef.current[user._id]) {
           clearTimeout(typingTimeoutRef.current[user._id]);
         }
-        
+
         // Set timeout to stop typing after 3 seconds of inactivity
         typingTimeoutRef.current[user._id] = setTimeout(() => {
-          console.log('Emitting stop_typing event after timeout');
           socket.emit('stop_typing', {
             chatId: activeChat,
             userId: user._id
           });
-          
+
           // Clear the timeout reference after it executes
           delete typingTimeoutRef.current[user._id];
         }, 3000);
       } else {
         // If input is empty, stop typing immediately
-        console.log('Emitting stop_typing event immediately');
         socket.emit('stop_typing', {
           chatId: activeChat,
           userId: user._id
         });
-        
+
         // Clear any existing timeout
         if (typingTimeoutRef.current[user._id]) {
           clearTimeout(typingTimeoutRef.current[user._id]);
@@ -565,14 +539,14 @@ const ChatButton: React.FC = () => {
 
   const handleSendMessage = () => {
     if (!newMessage.trim() || !socket || !activeChat || !user) return;
-    
+
     // Check global disabled flag first
     if ((window as any).CHAT_DISABLED_FOR_REPORT === activeChat) {
       toast.error('This report has been resolved. Messages cannot be sent.');
       setNewMessage('');
       return;
     }
-    
+
     // Check if chat is active (not resolved) from our local state first
     if (isReportResolved()) {
       toast.error('This report has been resolved. Messages cannot be sent.');
@@ -582,7 +556,7 @@ const ChatButton: React.FC = () => {
 
     // Create the message to send
     const messageContent = newMessage.trim();
-    
+
     // Add message to local state immediately for better UX
     const tempMessage: Message = {
       _id: Date.now().toString(),
@@ -590,30 +564,29 @@ const ChatButton: React.FC = () => {
       content: messageContent,
       timestamp: new Date()
     };
-    
+
     // Clear the input field
     setNewMessage('');
-    
+
     // Attempt to send via socket
-    console.log('Sending message to chat:', activeChat);
     socket.emit('send_message', {
       chatId: activeChat,
       content: messageContent,
       sender: user._id,
       timestamp: new Date()
     });
-    
+
     // Optimistically add to local state
     setMessages(prev => [...prev, tempMessage]);
-    
+
     // Also post to backend API to ensure persistence
     api.post(`/api/chats/${activeChat}/message`, { content: messageContent })
       .then(response => {
-        console.log('Message saved to server:', response.data);
+        // Message successfully saved
       })
       .catch(error => {
         console.error('Error sending message to server:', error);
-        
+
         // Check if this is a resolved report error
         if (error.response?.data?.message?.includes('resolved')) {
           toast.error('This report has been resolved. Messages cannot be sent.');
@@ -622,7 +595,7 @@ const ChatButton: React.FC = () => {
         } else {
           toast.error('Failed to send message');
         }
-        
+
         // Remove the optimistically added message
         setMessages(prev => prev.filter(msg => msg._id !== tempMessage._id));
       });
@@ -641,10 +614,10 @@ const ChatButton: React.FC = () => {
       toast.error('Please log in to start a chat');
       return;
     }
-    
+
     try {
       setLoading(true);
-      
+
       // If this is a chat related to a report, check if the report is resolved
       if (reportDetails?.reportId) {
         const reportResponse = await api.get(`/api/lost-found/${reportDetails.reportId}`);
@@ -654,29 +627,27 @@ const ChatButton: React.FC = () => {
           return;
         }
       }
-      
+
       // Check if chat already exists with this participant 
       // and for this specific report if reportId is provided
-      const existingChat = chats.find(chat => 
-        chat.participants.some(p => p._id === recipientId) && 
+      const existingChat = chats.find(chat =>
+        chat.participants.some(p => p._id === recipientId) &&
         (reportDetails?.reportId ? chat.reportId === reportDetails.reportId : true)
       );
-      
+
       if (existingChat) {
-        console.log('Found existing chat:', existingChat);
-        
         // Even if chat exists, double-check if report is resolved
         if (existingChat.reportStatus === 'resolved') {
           toast.error('This report has been resolved. Messaging has been disabled.');
           setLoading(false);
           return;
         }
-        
+
         // For existing chats with isActive === false, refresh from server to confirm
         if (existingChat.isActive === false) {
           // Refresh the report status first
           await fetchChats();
-          
+
           // Re-check after refresh
           const refreshedChat = chats.find(c => c._id === existingChat._id);
           if (refreshedChat?.isActive === false || refreshedChat?.reportStatus === 'resolved') {
@@ -685,7 +656,7 @@ const ChatButton: React.FC = () => {
             return;
           }
         }
-        
+
         // If we got here, chat is valid and active
         setActiveChat(existingChat._id);
         setActiveChatData({
@@ -697,37 +668,37 @@ const ChatButton: React.FC = () => {
         setLoading(false);
         return;
       }
-      
+
       // Create new chat
       console.log('Creating new chat with:', recipientId, reportDetails);
       const response = await api.post('/api/chats', {
         participantId: recipientId,
         reportId: reportDetails?.reportId
       });
-      
+
       if (!response.data || response.status >= 400) {
         throw new Error(response.data?.message || 'Failed to create chat');
       }
-      
+
       const newChatId = response.data._id;
       console.log('New chat created with ID:', newChatId);
-      
+
       setActiveChat(newChatId);
       setActiveChatData({
         recipientId,
         recipientName,
         reportDetails
       });
-      
+
       // Refresh chats list
       await fetchChats();
-      
+
       // Open chat window
       setIsChatOpen(true);
       toast.success('Chat started successfully');
     } catch (error: any) {
       console.error('Error starting chat:', error);
-      
+
       // More specific error message for resolved reports
       if (error.response?.data?.message?.includes('resolved')) {
         toast.error('This report has been resolved. Messaging has been disabled.');
@@ -760,7 +731,7 @@ const ChatButton: React.FC = () => {
       // Force disable any message inputs
       const textareas = document.querySelectorAll('.chat-window textarea');
       const buttons = document.querySelectorAll('.chat-window button');
-      
+
       textareas.forEach(textarea => {
         const element = textarea as HTMLTextAreaElement;
         element.disabled = true;
@@ -769,7 +740,7 @@ const ChatButton: React.FC = () => {
         element.style.cursor = 'not-allowed';
         element.style.backgroundColor = '#4b5563';
       });
-      
+
       // Disable send buttons except for ones within the reopen button area
       buttons.forEach(button => {
         if (!button.closest('.reopen-button-area')) {
@@ -781,7 +752,7 @@ const ChatButton: React.FC = () => {
           }
         }
       });
-      
+
       // Set a global flag to prevent any message sending
       (window as any).CHAT_DISABLED_FOR_REPORT = activeChat;
     } else {
@@ -793,7 +764,7 @@ const ChatButton: React.FC = () => {
   // Add a function to fetch recipient profile information
   const fetchRecipientProfile = async (recipientId: string) => {
     if (!recipientId) return null;
-    
+
     try {
       // Try the chat/users endpoint first (from our added endpoint)
       const response = await api.get(`/api/chats/users/${recipientId}`);
@@ -809,7 +780,7 @@ const ChatButton: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching recipient profile:', error);
-      
+
       // Check if we have active chat data with recipient name
       if (activeChatData?.recipientName) {
         // Return a basic profile with available information
@@ -823,7 +794,7 @@ const ChatButton: React.FC = () => {
           avatar: undefined
         };
       }
-      
+
       // Try to find recipient info from the chat participants
       if (activeChat) {
         const chat = chats.find(c => c._id === activeChat);
@@ -832,8 +803,8 @@ const ChatButton: React.FC = () => {
           if (recipient) {
             return {
               _id: recipientId,
-              name: recipient.firstName && recipient.lastName 
-                ? `${recipient.firstName} ${recipient.lastName}` 
+              name: recipient.firstName && recipient.lastName
+                ? `${recipient.firstName} ${recipient.lastName}`
                 : recipient.email?.split('@')[0] || 'User',
               firstName: recipient.firstName || '',
               lastName: recipient.lastName || '',
@@ -844,7 +815,7 @@ const ChatButton: React.FC = () => {
         }
       }
     }
-    
+
     // If all else fails, return a generic profile
     return {
       _id: recipientId,
@@ -875,6 +846,16 @@ const ChatButton: React.FC = () => {
     }
   }, [typingUsers]);
 
+  // Function to join a chat room
+  const joinChatRoom = (chatId: string) => {
+    if (socket && chatId && user) {
+      socket.emit('join_chat', {
+        chatId,
+        userId: user._id
+      });
+    }
+  };
+
   return (
     <>
       <button
@@ -884,7 +865,7 @@ const ChatButton: React.FC = () => {
       >
         {isChatOpen ? <FaTimesCircle size={24} /> : <FaComment size={24} />}
       </button>
-      
+
       {isChatOpen && (
         <div className="fixed bottom-24 right-6 z-50 animate-fade-in">
           <div className="w-96 h-[500px] flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -913,10 +894,10 @@ const ChatButton: React.FC = () => {
                       </div>
                       <div>
                         <h2 className="text-lg font-semibold text-white">
-                          {recipientProfile ? 
-                            (recipientProfile.firstName && recipientProfile.lastName ? 
-                              `${recipientProfile.firstName} ${recipientProfile.lastName}` : 
-                              (recipientProfile.name || activeChatData?.recipientName)) : 
+                          {recipientProfile ?
+                            (recipientProfile.firstName && recipientProfile.lastName ?
+                              `${recipientProfile.firstName} ${recipientProfile.lastName}` :
+                              (recipientProfile.name || activeChatData?.recipientName)) :
                             activeChatData?.recipientName}
                         </h2>
                         {typingUsers.length > 0 ? (
@@ -931,7 +912,7 @@ const ChatButton: React.FC = () => {
                   )}
                 </div>
                 {activeChat && (
-                  <button 
+                  <button
                     onClick={() => setActiveChat(null)}
                     className="text-white hover:text-blue-200 transition-colors"
                   >
@@ -964,19 +945,18 @@ const ChatButton: React.FC = () => {
                   <div className="space-y-1">
                     {chats.map((chat) => {
                       const recipient = chat.participants.find(p => p._id !== user?._id);
-                      const recipientName = recipient 
-                        ? (recipient.firstName && recipient.lastName 
-                            ? `${recipient.firstName} ${recipient.lastName}` 
-                            : recipient.email?.split('@')[0] || 'User')
+                      const recipientName = recipient
+                        ? (recipient.firstName && recipient.lastName
+                          ? `${recipient.firstName} ${recipient.lastName}`
+                          : recipient.email?.split('@')[0] || 'User')
                         : 'Unknown';
-                      
+
                       return (
-                        <div 
-                          key={chat._id} 
+                        <div
+                          key={chat._id}
                           onClick={() => setActiveChat(chat._id)}
-                          className={`p-3 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-md cursor-pointer transition-colors flex items-center ${
-                            chat.reportStatus === 'resolved' ? 'opacity-70' : ''
-                          }`}
+                          className={`p-3 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-md cursor-pointer transition-colors flex items-center ${chat.reportStatus === 'resolved' ? 'opacity-70' : ''
+                            }`}
                         >
                           <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold mr-3">
                             {recipientName.charAt(0).toUpperCase()}
@@ -1028,10 +1008,10 @@ const ChatButton: React.FC = () => {
                     {messages.map((message, index) => {
                       // Direct comparison instead of relying on isSentByMe flag
                       const isFromMe = isMessageFromCurrentUser(message.sender, user?._id);
-                      const showDate = index === 0 || 
-                        new Date(message.timestamp).toDateString() !== 
+                      const showDate = index === 0 ||
+                        new Date(message.timestamp).toDateString() !==
                         new Date(messages[index - 1].timestamp).toDateString();
-                      
+
                       return (
                         <React.Fragment key={message._id || message.id}>
                           {showDate && (
@@ -1046,19 +1026,18 @@ const ChatButton: React.FC = () => {
                             </div>
                           )}
                           <div className={`message ${isFromMe ? 'this-user' : 'other-user'}`}>
-                            <div 
-                              className={`max-w-[75%] p-3 rounded-lg ${
-                                isFromMe
-                                  ? 'bg-blue-600 text-white rounded-br-none float-right' 
+                            <div
+                              className={`max-w-[75%] p-3 rounded-lg ${isFromMe
+                                  ? 'bg-blue-600 text-white rounded-br-none float-right'
                                   : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-bl-none float-left'
-                              }`}
+                                }`}
                             >
                               <p className="break-words">{message.content}</p>
                               <div className="text-xs mt-1 opacity-70 flex justify-end items-center gap-1">
                                 <span>
-                                  {new Date(message.timestamp).toLocaleTimeString([], { 
-                                    hour: '2-digit', 
-                                    minute: '2-digit' 
+                                  {new Date(message.timestamp).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
                                   })}
                                 </span>
                                 {isFromMe && message.status && (
@@ -1113,10 +1092,10 @@ const ChatButton: React.FC = () => {
                     <div className="bg-green-500 text-white p-4 rounded-md text-center">
                       <p className="font-medium">This issue has been resolved. Thank you for your help!</p>
                       <p className="text-sm mt-1">Messaging for this report has been disabled.</p>
-                      
+
                       {/* Option to reopen for report owner */}
                       {reportOwnership.isReportOwner && (
-                        <button 
+                        <button
                           onClick={handleReopenReport}
                           className="mt-3 bg-white text-green-600 px-4 py-2 rounded-md font-medium hover:bg-gray-100 transition-colors"
                         >
@@ -1140,11 +1119,10 @@ const ChatButton: React.FC = () => {
                         onClick={handleSendMessage}
                         disabled={!newMessage.trim() || isReportResolved()}
                         role="send"
-                        className={`p-2 rounded-full ${
-                          !newMessage.trim() || isReportResolved() 
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                        className={`p-2 rounded-full ${!newMessage.trim() || isReportResolved()
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             : 'bg-green-500 text-white hover:bg-green-600'
-                        }`}
+                          }`}
                       >
                         <FaPaperPlane />
                       </button>

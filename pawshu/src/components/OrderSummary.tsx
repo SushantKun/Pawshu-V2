@@ -1,1 +1,0 @@
-// If file exists, add a new button for force-updating payment status in development mode 

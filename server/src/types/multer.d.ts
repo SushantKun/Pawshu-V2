@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { FileFilterCallback } from 'multer';
 
 export interface MulterFile {
   fieldname: string;
@@ -21,7 +22,7 @@ declare global {
 }
 
 declare module 'multer' {
-  interface FileFilterCallback {
+  export interface FileFilterCallback {
     (error: Error | null, acceptFile: boolean): void;
   }
 
@@ -55,8 +56,8 @@ declare module 'multer' {
 
 declare module 'express' {
   interface Request {
-    file?: MulterFile;
-    files?: MulterFile[] | null;
+    file?: Express.Multer.File;
+    files?: Express.Multer.File[];
   }
 
   interface RequestHandler<P = any, ResBody = any, ReqBody = any, ReqQuery = any> {
@@ -66,7 +67,9 @@ declare module 'express' {
 
 declare module 'express-serve-static-core' {
   interface Request {
-    file?: MulterFile;
-    files?: MulterFile[] | null;
+    file?: Express.Multer.File;
+    files?: Express.Multer.File[];
   }
-} 
+}
+
+export {}; 

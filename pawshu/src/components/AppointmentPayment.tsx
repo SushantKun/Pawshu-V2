@@ -46,9 +46,18 @@ const AppointmentPayment: React.FC<AppointmentPaymentProps> = ({ appointment, on
   const [isProcessing, setIsProcessing] = useState(false);
   const [esewaFormData, setEsewaFormData] = useState<EsewaFormData | null>(null);
   const [showEsewaPayment, setShowEsewaPayment] = useState(false);
+  const [khaltiServiceError, setKhaltiServiceError] = useState(false);
+  const [esewaServiceError, setEsewaServiceError] = useState(false);
 
   const handlePaymentMethodChange = (method: 'card' | 'esewa' | 'khalti') => {
     setPaymentMethod(method);
+    // Reset service error states when switching payment methods
+    if (method !== 'khalti') {
+      setKhaltiServiceError(false);
+    }
+    if (method !== 'esewa') {
+      setEsewaServiceError(false);
+    }
   };
 
   const initiateEsewaPayment = async () => {
@@ -90,8 +99,16 @@ const AppointmentPayment: React.FC<AppointmentPaymentProps> = ({ appointment, on
       }
     } catch (error: any) {
       console.error('Error initiating eSewa payment:', error);
-      const errorMessage = error.response?.data?.message || 'Failed to initiate eSewa payment';
-      toast.error(errorMessage);
+      
+      // Check for service unavailable error (503 or 504)
+      if (error.response && (error.response.status === 503 || error.response.status === 504)) {
+        setEsewaServiceError(true);
+        toast.error('eSewa payment service is currently unavailable or not responding. Please try card payment or Khalti instead.');
+      } else {
+        const errorMessage = error.response?.data?.message || 'Failed to initiate eSewa payment';
+        toast.error(errorMessage);
+      }
+      
       setIsProcessing(false);
     }
   };
@@ -126,9 +143,17 @@ const AppointmentPayment: React.FC<AppointmentPaymentProps> = ({ appointment, on
         toast.error('Failed to initiate Khalti payment');
         setIsProcessing(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error initiating Khalti payment:', error);
-      toast.error('Failed to initiate Khalti payment');
+      
+      // Check for service unavailable error (503 or 504)
+      if (error.response && (error.response.status === 503 || error.response.status === 504)) {
+        setKhaltiServiceError(true);
+        toast.error('Khalti payment service is currently unavailable or not responding. Please try eSewa or card payment instead.');
+      } else {
+        toast.error('Failed to initiate Khalti payment');
+      }
+      
       setIsProcessing(false);
     }
   };
@@ -324,6 +349,11 @@ const AppointmentPayment: React.FC<AppointmentPaymentProps> = ({ appointment, on
               }}
             />
             <span className="text-sm">eSewa</span>
+            {esewaServiceError && (
+              <div className="text-xs text-red-600 dark:text-red-400 mt-1">
+                ⚠️ Service unavailable
+              </div>
+            )}
           </div>
           
           <div
@@ -345,6 +375,11 @@ const AppointmentPayment: React.FC<AppointmentPaymentProps> = ({ appointment, on
               }}
             />
             <span className="text-sm">Khalti</span>
+            {khaltiServiceError && (
+              <div className="text-xs text-red-600 dark:text-red-400 mt-1">
+                ⚠️ Service unavailable
+              </div>
+            )}
           </div>
         </div>
       </div>

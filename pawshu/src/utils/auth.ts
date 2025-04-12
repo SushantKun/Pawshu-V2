@@ -44,6 +44,30 @@ export const isTokenExpired = (token: string | null): boolean => {
 };
 
 /**
+ * Checks if a token should be refreshed (if it will expire within the next day)
+ * @param token The JWT token to check
+ * @returns True if token should be refreshed, false otherwise
+ */
+export const shouldRefreshToken = (token: string | null): boolean => {
+  if (!token) return false;
+  
+  try {
+    const decoded = decodeToken(token);
+    if (!decoded.exp) return false;
+    
+    const expirationTime = decoded.exp * 1000; // Convert to milliseconds
+    const now = Date.now();
+    const oneDayInMs = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    
+    // Return true if token will expire within the next day
+    return expirationTime - now < oneDayInMs;
+  } catch (error) {
+    console.error('Error checking token refresh:', error);
+    return false;
+  }
+};
+
+/**
  * Type definitions for different user roles
  */
 export const USER_ROLES = {
