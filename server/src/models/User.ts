@@ -34,6 +34,8 @@ export interface IUser extends Document {
   name: string; // Virtual property
   lastActive: Date;
   isOnline: boolean;
+  lastAuthMethod?: string; // Track last authentication method (google, password, etc.)
+  uniqueSessionId?: string; // Track unique session ID to prevent multiple sessions showing online
 }
 
 const UserSchema: Schema = new Schema(
@@ -132,6 +134,15 @@ const UserSchema: Schema = new Schema(
     isOnline: {
       type: Boolean,
       default: false
+    },
+    lastAuthMethod: {
+      type: String,
+      enum: ['password', 'google'],
+      default: 'password'
+    },
+    uniqueSessionId: {
+      type: String,
+      default: null
     }
   },
   { 

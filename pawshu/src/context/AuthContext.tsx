@@ -30,6 +30,7 @@ interface User {
     isDoctor?: boolean;
     verified?: boolean;
   };
+  sessionId?: string; // Added sessionId property
   // Virtual property returned from MongoDB (computed from firstName and lastName)
 }
 
@@ -85,7 +86,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return {
         _id: payload._id,
         email: payload.email,
-        role: payload.role
+        role: payload.role,
+        sessionId: payload.sessionId // Include sessionId from token
       };
     } catch (error) {
       console.error('Error decoding token:', error);
@@ -231,10 +233,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        // Send ping with user ID to update lastActive timestamp
+        // Get session ID from token if not in user object
+        let sessionId = user.sessionId;
+        if (!sessionId) {
+          try {
+            const [, payload] = token.split('.');
+            if (payload) {
+              const decodedPayload = JSON.parse(atob(payload));
+              sessionId = decodedPayload.sessionId;
+            }
+          } catch (e) {
+            console.error('Error extracting sessionId for ping:', e);
+          }
+        }
+
+        // Send ping with user ID and session ID to update lastActive timestamp
         await axios.post(
           'http://localhost:5000/api/auth/ping',
-          { userId: user._id },
+          { 
+            userId: user._id,
+            sessionId: sessionId
+          },
           {
             headers: {
               'Content-Type': 'application/json',
@@ -246,7 +265,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Only log pings once every minute for debugging
         const now = new Date();
         if (now.getSeconds() < 5) {
-          console.log(`[Heartbeat] Online status ping sent for user ${user._id}`);
+          console.log(`[Heartbeat] Online status ping sent for user ${user._id} (Session: ${sessionId || 'unknown'})`);
         }
       } catch (error) {
         console.error('Error sending ping:', error);
@@ -266,31 +285,147 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (user && user._id) {
         console.log('Browser/tab closing, marking user as offline via beacon');
         
-        // Create a proper blob for sendBeacon
+        // Check if this is a Google auth user by examining the token
+        const token = localStorage.getItem('token');
+        let isGoogleUser = false;
+        let sessionId = user.sessionId;
+        
+        if (token) {
+          try {
+            // Try to decode token without verification 
+            const [, payload] = token.split('.');
+            if (payload) {
+              const decodedPayload = JSON.parse(atob(payload));
+              isGoogleUser = decodedPayload.authMethod === 'google';
+              sessionId = decodedPayload.sessionId || sessionId;
+              console.log(`User ${user._id} is ${isGoogleUser ? 'a Google' : 'a regular'} user - sending appropriate beacon (Session: ${sessionId || 'unknown'})`);
+            }
+          } catch (e) {
+            console.error('Error checking for Google user:', e);
+          }
+        }
+        
+        // Google users: Send an early direct offline marker using fetch with keepalive
+        // This needs to happen BEFORE the beacon attempts for Google users
+        if (isGoogleUser && token) {
+          try {
+            // Create a dedicated endpoint request that's more reliable
+            console.log('CRITICAL: Sending early fetch for Google user');
+            fetch('http://localhost:5000/api/auth/set-offline', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ 
+                userId: user._id,
+                authMethod: 'google',
+                sessionId: sessionId,
+                forceOffline: true,
+                source: 'early-google'
+              }),
+              keepalive: true
+            }).catch(() => {}); // Ignore errors, just try our best
+            
+            // Also try the extreme priority endpoint
+            fetch('http://localhost:5000/api/auth/browser-closed', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ 
+                userId: user._id,
+                authMethod: 'google',
+                sessionId: sessionId,
+                forceOffline: true,
+                source: 'early-google-extreme',
+                timestamp: new Date().toISOString()
+              }),
+              keepalive: true
+            }).catch(() => {}); // Ignore errors, just try our best
+          } catch (earlyError) {
+            // Nothing more we can do in the early attempt
+          }
+        }
+        
+        // Create a proper blob for sendBeacon with user info
         const blob = new Blob(
-          [JSON.stringify({ userId: user._id })], 
+          [JSON.stringify({ 
+            userId: user._id,
+            authMethod: isGoogleUser ? 'google' : 'password',
+            sessionId: sessionId,
+            timestamp: new Date().toISOString(),
+            forceOffline: true,
+            source: 'beacon'
+          })], 
           { type: 'application/json' }
         );
         
-        // Try sendBeacon first (most reliable for page unload)
+        // Try all possible methods for maximum reliability
+        // First use the critical browser-closed endpoint
+        const closedBeacon = navigator.sendBeacon(
+          'http://localhost:5000/api/auth/browser-closed',
+          blob
+        );
+        
+        if (closedBeacon) {
+          console.log('Successfully sent browser-closed beacon');
+        } else {
+          console.warn('Failed to send browser-closed beacon');
+        }
+        
+        // Also try the beacon endpoint as backup
         const beaconSuccess = navigator.sendBeacon(
           'http://localhost:5000/api/auth/set-offline-beacon',
           blob
         );
         
-        // Fallback method in case sendBeacon isn't supported or fails
-        if (!beaconSuccess) {
-          console.log('SendBeacon failed, using sync XHR as fallback');
-          const token = localStorage.getItem('token');
-          if (token) {
+        if (beaconSuccess) {
+          console.log('Successfully sent offline beacon');
+        } else {
+          console.warn('Failed to send offline beacon');
+        }
+        
+        // IMPORTANT: Use synchronous XHR fallback for ALL users now, not just Google users
+        // This helps ensure all users are properly marked offline
+        console.log('Using sync XHR as critical fallback for all users to ensure offline status');
+        if (token) {
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'http://localhost:5000/api/auth/set-offline', false); // synchronous
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.send(JSON.stringify({ 
+              userId: user._id,
+              authMethod: isGoogleUser ? 'google' : 'password',
+              sessionId: sessionId,
+              forceOffline: true,
+              source: 'xhr'
+            }));
+            console.log('XHR fallback completed');
+          } catch (error) {
+            console.error('Error in XHR fallback:', error);
+            
+            // Last resort attempt for both Google and regular users
             try {
-              const xhr = new XMLHttpRequest();
-              xhr.open('POST', 'http://localhost:5000/api/auth/set-offline', false); // synchronous
-              xhr.setRequestHeader('Content-Type', 'application/json');
-              xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-              xhr.send(JSON.stringify({ userId: user._id }));
-            } catch (error) {
-              console.error('Error in XHR fallback:', error);
+              // Try a final fetch with keepalive
+              fetch('http://localhost:5000/api/auth/set-offline', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ 
+                  userId: user._id,
+                  authMethod: isGoogleUser ? 'google' : 'password',
+                  sessionId: sessionId,
+                  forceOffline: true,
+                  source: 'fetch-fallback'
+                }),
+                keepalive: true
+              }).catch(() => {}); // Ignore errors, just try our best
+            } catch (e) {
+              // Nothing more we can do
             }
           }
         }
@@ -346,9 +481,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Use passed userData from login response if available, otherwise decode from token
       if (userData) {
+        // Ensure the user is marked as online on the client side
+        const onlineUser = {
+          ...userData,
+          isOnline: true,
+          lastActive: new Date()
+        };
+        
         // Store the complete user object for future sessions
-        localStorage.setItem('user', JSON.stringify(userData));
-        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(onlineUser));
+        setUser(onlineUser);
+        
+        // Send a ping immediately to ensure server knows user is online
+        try {
+          await axios.post(
+            'http://localhost:5000/api/auth/ping',
+            { userId: userData._id },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+              }
+            }
+          );
+          console.log(`Initial ping sent for user ${userData._id}`);
+        } catch (pingError) {
+          console.error('Error sending initial ping:', pingError);
+        }
       } else {
         const decodedUser = decodeToken(token);
         if (!decodedUser) {
@@ -377,10 +536,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.log('Logging out user');
           const token = localStorage.getItem('token');
           
+          // Get session ID from token if not in user object
+          let sessionId = user.sessionId;
+          if (!sessionId && token) {
+            try {
+              const [, payload] = token.split('.');
+              if (payload) {
+                const decodedPayload = JSON.parse(atob(payload));
+                sessionId = decodedPayload.sessionId;
+              }
+            } catch (e) {
+              console.error('Error extracting sessionId for logout:', e);
+            }
+          }
+          
           // Make sure user is marked as offline
           await axios.post(
             'http://localhost:5000/api/auth/set-offline',
-            { userId: user._id },
+            { 
+              userId: user._id,
+              sessionId: sessionId,
+              forceOffline: true,
+              source: 'explicit-logout'
+            },
             {
               headers: {
                 'Content-Type': 'application/json',
@@ -388,7 +566,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               }
             }
           );
-          console.log('User marked as offline');
+          console.log('User marked as offline during logout');
         } catch (error) {
           console.error('Error marking user as offline:', error);
         }

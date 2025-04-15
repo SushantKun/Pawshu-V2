@@ -118,6 +118,7 @@ io.on('connection', (socket) => {
   // Extract user info from auth token
   const token = socket.handshake.auth.token;
   let userId: string | null = null;
+  let sessionId: string | null = null;
 
   // If token exists, extract user ID and update user status
   if (token) {
@@ -125,33 +126,55 @@ io.on('connection', (socket) => {
       // Extract user ID from JWT token
       const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret');
       userId = decoded.id || decoded._id;
+      sessionId = decoded.sessionId;
 
       if (userId) {
-        console.log(`User ${userId} is now online`);
+        console.log(`User ${userId} is now online (Session: ${sessionId || 'unknown'})`);
 
-        // Update user's online status and last active time
-        mongoose.connection.collection('users').updateOne(
-          { _id: new mongoose.Types.ObjectId(userId) },
-          {
-            $set: {
-              isOnline: true,
-              lastActive: new Date()
+        // Only update if this is the most recent session for this user
+        if (sessionId) {
+          // Update user's online status and last active time if this is the current session
+          mongoose.connection.collection('users').updateOne(
+            { 
+              _id: new mongoose.Types.ObjectId(userId),
+              // Only update if this is the current session or no session exists
+              $or: [
+                { uniqueSessionId: sessionId },
+                { uniqueSessionId: { $exists: false } },
+                { uniqueSessionId: null }
+              ]
+            },
+            {
+              $set: {
+                isOnline: true,
+                lastActive: new Date(),
+                uniqueSessionId: sessionId // Always ensure sessionId is set
+              }
             }
-          }
-        ).then(result => {
-          console.log(`User ${userId} online status update result:`, result.modifiedCount > 0 ? 'updated' : 'not updated');
-        }).catch(err => {
-          console.error(`Failed to update online status for user ${userId}:`, err);
-        });
+          ).then(result => {
+            console.log(`User ${userId} online status update result:`, result.modifiedCount > 0 ? 'updated' : 'not updated');
+            
+            // If not updated, this is likely an old session, so don't associate it with this socket
+            if (result.modifiedCount === 0) {
+              console.log(`⚠️ Session ${sessionId} is not current for user ${userId} - not associating with socket`);
+              return;
+            }
+            
+            // Store user ID and session ID in socket data for later use
+            socket.data.userId = userId;
+            socket.data.sessionId = sessionId;
 
-        // Store user ID in socket data for later use
-        socket.data.userId = userId;
-
-        // Broadcast user's online status to all connected clients
-        socket.broadcast.emit('user_status_changed', {
-          userId,
-          isOnline: true
-        });
+            // Broadcast user's online status to all connected clients
+            socket.broadcast.emit('user_status_changed', {
+              userId,
+              isOnline: true
+            });
+          }).catch(err => {
+            console.error(`Failed to update online status for user ${userId}:`, err);
+          });
+        } else {
+          console.log(`⚠️ No session ID in token for user ${userId}`);
+        }
       } else {
         console.log('Token decoded but no userId found:', decoded);
       }
@@ -168,6 +191,7 @@ io.on('connection', (socket) => {
 
           // Attempt to extract ID even without verification (for debugging only)
           userId = decodedPayload.id || decodedPayload._id;
+          sessionId = decodedPayload.sessionId;
           if (userId) {
             console.log(`Found user ID ${userId} in token payload, but verification failed`);
           }
@@ -184,8 +208,26 @@ io.on('connection', (socket) => {
   // Handle keep-alive pings
   socket.on('ping', (data: { userId: string }) => {
     const pingUserId = data.userId || socket.data.userId;
-    if (pingUserId) {
+    const pingSessionId = socket.data.sessionId;
+    
+    if (pingUserId && pingSessionId) {
       // Update user's last active time - without excessive logging
+      // Only update if this is still the current session
+      mongoose.connection.collection('users').updateOne(
+        { 
+          _id: new mongoose.Types.ObjectId(pingUserId),
+          uniqueSessionId: pingSessionId
+        },
+        {
+          $set: {
+            isOnline: true,
+            lastActive: new Date()
+          }
+        }
+      );
+    } else if (pingUserId) {
+      // For backward compatibility with clients that don't have sessionId
+      // This will be less reliable but will work for older clients
       mongoose.connection.collection('users').updateOne(
         { _id: new mongoose.Types.ObjectId(pingUserId) },
         {
@@ -315,8 +357,9 @@ io.on('connection', (socket) => {
   socket.on('disconnect', async () => {
     console.log('⚠️ Socket disconnected:', socket.id);
 
-    // Get the user ID associated with this socket
+    // Get the user ID and session ID associated with this socket
     const disconnectedUserId = socket.data?.userId;
+    const disconnectedSessionId = socket.data?.sessionId;
     
     if (!disconnectedUserId) {
       console.log('Socket disconnected but no user ID was associated with it');
@@ -326,27 +369,76 @@ io.on('connection', (socket) => {
     console.log(`⚠️⚠️⚠️ CRITICAL: User ${disconnectedUserId} socket disconnected - marking as OFFLINE`);
     
     try {
-      // CRITICAL FIX: Use findOneAndUpdate with atomic operation for guaranteed success
-      const db = mongoose.connection.db;
-      const usersCollection = db.collection('users');
+      // First check if this is a Google user for special handling
+      const userDoc = await mongoose.connection.collection('users').findOne({ 
+        _id: new mongoose.Types.ObjectId(disconnectedUserId) 
+      });
       
-      // Use a simple, direct operation with error handling
-      const updateResult = await usersCollection.findOneAndUpdate(
-        { _id: new mongoose.Types.ObjectId(disconnectedUserId) },
-        { $set: { isOnline: false, lastActive: new Date() } },
-        { returnDocument: 'after' }
-      );
+      const isGoogleUser = userDoc?.lastAuthMethod === 'google';
+      if (isGoogleUser) {
+        console.log(`⚠️⚠️⚠️ HIGHEST PRIORITY: Google user ${disconnectedUserId} socket disconnected!`);
+      }
       
-      if (updateResult.value) {
-        console.log(`💥 SUCCESS: User ${updateResult.value.email || disconnectedUserId} marked as OFFLINE`);
+      // Only update if this is still the current session ID
+      if (disconnectedSessionId && userDoc?.uniqueSessionId === disconnectedSessionId) {
+        console.log(`Verified session ${disconnectedSessionId} is current for user ${disconnectedUserId}`);
+            
+        // CRITICAL FIX: Use findOneAndUpdate with atomic operation for guaranteed success
+        const db = mongoose.connection.db;
+        const usersCollection = db.collection('users');
         
-        // Broadcast to all clients
-        io.emit('user_status_changed', {
-          userId: disconnectedUserId,
-          isOnline: false
-        });
+        // Use a simple, direct operation with error handling
+        const updateResult = await usersCollection.findOneAndUpdate(
+          { 
+            _id: new mongoose.Types.ObjectId(disconnectedUserId),
+            uniqueSessionId: disconnectedSessionId
+          },
+          { $set: { isOnline: false, lastActive: new Date() } },
+          { returnDocument: 'after' }
+        );
+        
+        if (updateResult.value) {
+          console.log(`💥 SUCCESS: User ${updateResult.value.email || disconnectedUserId} marked as OFFLINE`);
+          
+          // Broadcast to all clients
+          io.emit('user_status_changed', {
+            userId: disconnectedUserId,
+            isOnline: false
+          });
+        } else {
+          console.log(`⚠️ Failed to update offline status - user ${disconnectedUserId} with session ${disconnectedSessionId} not found or not current`);
+          
+          // For Google users, try one more time with a slight delay to handle race conditions
+          if (isGoogleUser) {
+            console.log(`RETRY: Will attempt a delayed update for Google user ${disconnectedUserId}`);
+            setTimeout(async () => {
+              try {
+                const retryResult = await usersCollection.findOneAndUpdate(
+                  { 
+                    _id: new mongoose.Types.ObjectId(disconnectedUserId),
+                    uniqueSessionId: disconnectedSessionId
+                  },
+                  { $set: { isOnline: false, lastActive: new Date() } },
+                  { returnDocument: 'after' }
+                );
+                
+                if (retryResult.value) {
+                  console.log(`RETRY SUCCESS: Google user ${retryResult.value.email || disconnectedUserId} marked as OFFLINE`);
+                  
+                  // Broadcast to all clients
+                  io.emit('user_status_changed', {
+                    userId: disconnectedUserId,
+                    isOnline: false
+                  });
+                }
+              } catch (retryError) {
+                console.error(`RETRY FAILED: Google user ${disconnectedUserId} could not be marked offline`, retryError);
+              }
+            }, 500);
+          }
+        }
       } else {
-        console.log(`⚠️ Failed to update offline status - user ${disconnectedUserId} not found`);
+        console.log(`Session ${disconnectedSessionId} is not current for user ${disconnectedUserId}, not marking offline`);
       }
     } catch (error) {
       console.error(`❌ CRITICAL ERROR in socket disconnect handler:`, error);
@@ -363,26 +455,88 @@ setInterval(async () => {
   if (mongoose.connection.readyState === 1) { // Only run if connected to MongoDB
     try {
       const User = mongoose.model('User');
-      const sevenSecondsAgo = new Date(Date.now() - 7000); // 7 seconds ago
+      const oneSecondAgo = new Date(Date.now() - 1000); // 1 second ago - ultra aggressive for Google users
+      const fiveSecondsAgo = new Date(Date.now() - 5000); // 5 seconds ago for regular users
       
-      // Find users who haven't been active in the last 7 seconds and set them as offline
-      const result = await User.updateMany(
-        { 
-          lastActive: { $lt: sevenSecondsAgo }
-        },
-        { 
-          $set: { isOnline: false }
+      // HIGHEST PRIORITY: Check for Google users FIRST before any other operation
+      // This ensures they're processed even if the server is under load
+      try {
+        // Find any Google users that need to be marked offline
+        const googleUsers = await User.find({
+          lastAuthMethod: 'google',
+          lastActive: { $lt: oneSecondAgo },
+          isOnline: true
+        }, '_id email uniqueSessionId');
+        
+        // Log and update each Google user individually to ensure maximum reliability
+        for (const user of googleUsers) {
+          console.log(`CRITICAL: Google user ${user._id} (${user.email}) inactive for >1s, marking OFFLINE`);
+          
+          // Direct database access for maximum reliability
+          const result = await mongoose.connection.db.collection('users').updateOne(
+            { _id: user._id },
+            { $set: { isOnline: false, lastActive: new Date() } }
+          );
+          
+          if (result.modifiedCount > 0) {
+            console.log(`SUCCESS: Google user ${user._id} marked offline`);
+            
+            // Broadcast status change to all clients
+            io.emit('user_status_changed', {
+              userId: user._id.toString(),
+              isOnline: false
+            });
+          }
         }
-      );
+      } catch (googleError) {
+        console.error('Error in Google user cleanup:', googleError);
+      }
       
-      if (result.modifiedCount > 0) {
-        console.log(`Cleanup job: Marked ${result.modifiedCount} inactive users as offline (inactive >7s)`);
+      // Now handle regular users with standard approach
+      try {
+        const inactiveRegularUsers = await User.find({
+          $or: [
+            { lastAuthMethod: { $ne: 'google' } },
+            { lastAuthMethod: { $exists: false } }
+          ],
+          lastActive: { $lt: fiveSecondsAgo },
+          isOnline: true
+        }, '_id email');
+        
+        if (inactiveRegularUsers.length > 0) {
+          console.log(`Found ${inactiveRegularUsers.length} inactive regular users to mark offline`);
+          
+          // Update in bulk
+          const regularUserIds = inactiveRegularUsers.map(user => user._id);
+          const regularUsersResult = await User.updateMany(
+            { 
+              _id: { $in: regularUserIds }
+            },
+            { 
+              $set: { isOnline: false }
+            }
+          );
+          
+          if (regularUsersResult.modifiedCount > 0) {
+            console.log(`Cleanup job: Marked ${regularUsersResult.modifiedCount} inactive regular users as offline (inactive >5s)`);
+            
+            // Broadcast status changes
+            for (const user of inactiveRegularUsers) {
+              io.emit('user_status_changed', {
+                userId: user._id.toString(),
+                isOnline: false
+              });
+            }
+          }
+        }
+      } catch (regularError) {
+        console.error('Error in regular user cleanup:', regularError);
       }
     } catch (error) {
       console.error('Error in cleanup job:', error);
     }
   }
-}, 3000); // Run every 3 seconds
+}, 500); // Run twice per second for ultra-fast response
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pawshu')

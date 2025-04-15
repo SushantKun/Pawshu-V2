@@ -735,12 +735,36 @@ const Profile = () => {
                   src={imagePreview || profile?.avatar?.url || 'https://placehold.co/150x150'}
                   alt={getDisplayName(profile)}
                   className="w-32 h-32 rounded-full object-cover border-4 border-white dark:border-gray-700 shadow-sm"
+                  onError={(e) => {
+                    console.log('Profile image failed to load:', e);
+                    
+                    // Check if we have a valid URL but it failed to load
+                    const url = profile?.avatar?.url;
+                    if (url && (url.startsWith('http') || url.startsWith('https'))) {
+                      console.log('Trying to load profile image with CORS proxy for Google images');
+                      
+                      // For Google profile pictures that might have CORS issues
+                      if (url.includes('googleusercontent.com')) {
+                        // Use a placeholder with user initials
+                        e.currentTarget.src = 'https://placehold.co/150x150?text=' + 
+                          encodeURIComponent(getDisplayName(profile).substring(0, 2).toUpperCase());
+                      } else {
+                        // For other image failures, use a generic user placeholder
+                        e.currentTarget.src = 'https://placehold.co/150x150?text=User';
+                      }
+                    } else {
+                      // Fallback to placeholder if image URL is invalid
+                      e.currentTarget.src = 'https://placehold.co/150x150?text=' + 
+                        encodeURIComponent(getDisplayName(profile).substring(0, 2).toUpperCase());
+                    }
+                  }}
                 />
                 <button 
                   onClick={() => {
                     document.getElementById('avatar-upload')?.click();
                   }}
                   className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-500 transition-colors"
+                  aria-label="Change profile picture"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
@@ -775,15 +799,21 @@ const Profile = () => {
                           }
                         });
                         
+                        if (!uploadResponse.data || !uploadResponse.data.url) {
+                          throw new Error('Invalid response from upload server');
+                        }
+                        
                         const avatarData = {
                           public_id: uploadResponse.data.public_id,
                           url: uploadResponse.data.url
                         };
                         
-                        // Update just the avatar
+                        // Log the avatar data for debugging
+                        console.log('Avatar data from upload:', avatarData);
+                        
+                        // Update just the avatar - works for both Google and regular users
                         console.log('Updating profile with new avatar:', avatarData);
                         const response = await api.put('/auth/profile', {
-                          ...profile,
                           avatar: avatarData
                         });
                         

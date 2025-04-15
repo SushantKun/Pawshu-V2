@@ -1242,22 +1242,35 @@ router.get('/users', adminAuth as RequestHandler, (async (req: AuthRequest, res:
       const currentTime = new Date().getTime();
       const secondsSinceActive = Math.floor((currentTime - lastActiveTime) / 1000);
 
-      // Consider a user online ONLY if they've been active in the last 7 seconds
-      // This provides much faster detection of browser closures
-      const isRecentlyActive = secondsSinceActive < 7; // 7 second max inactivity threshold
-      const isActuallyOnline = isRecentlyActive; // Only rely on recent activity
+      // Consider a user online ONLY if they've been active in the last 15 seconds
+      // Google users might have less frequent pings
+      const isRecentlyActive = secondsSinceActive < 15; // 15 second max inactivity threshold
+      
+      // If the user has explicitly been set to offline, respect that status
+      // Otherwise check if they're marked as online AND recently active
+      const isExplicitlyOnline = user.isOnline === true;
+      const isActuallyOnline = isExplicitlyOnline && isRecentlyActive;
+      
+      // Special handling for Google users who might have different connection patterns
+      const isGoogleUser = !!user.googleId;
+      const finalOnlineStatus = isGoogleUser 
+        ? (isExplicitlyOnline || isRecentlyActive) // More lenient for Google users
+        : isActuallyOnline;
 
       console.log(
         `User ${user.email}: ` +
         `lastActive=${user.lastActive ? new Date(user.lastActive).toISOString() : 'never'}, ` +
         `secondsSinceActive=${secondsSinceActive}, ` +
-        `ONLINE STATUS=${isActuallyOnline ? 'ONLINE' : 'OFFLINE'}`
+        `isOnline flag=${user.isOnline}, ` + 
+        `isGoogleUser=${isGoogleUser}, ` +
+        `ONLINE STATUS=${finalOnlineStatus ? 'ONLINE' : 'OFFLINE'}`
       );
 
       return {
         ...userData,
-        isOnline: isActuallyOnline,
-        lastActiveSecs: secondsSinceActive
+        isOnline: finalOnlineStatus,
+        lastActiveSecs: secondsSinceActive,
+        isGoogleUser: isGoogleUser
       };
     });
 

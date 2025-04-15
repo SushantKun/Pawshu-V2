@@ -35,7 +35,7 @@ if (isCloudinaryConfigured) {
   } else {
     // Fallback to hardcoded values if parsing fails
     cloudinary.config({
-      cloud_name: 'duaa2t6lc',
+      cloud_name: 'dnary',
       api_key: '898283184416469',
       api_secret: 'puZIzcZeNoM8FR_O1_lQQZgnBqs'
     });

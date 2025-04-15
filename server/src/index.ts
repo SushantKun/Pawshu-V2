@@ -35,9 +35,9 @@ dotenv.config();
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dlxqvj9jp',
-  api_key: process.env.CLOUDINARY_API_KEY || '941742512285696',
-  api_secret: process.env.CLOUDINARY_API_SECRET || 'cPfxg3Y49IqtyJFao0ZSF5aLC_U'
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'duaa2t6lc',
+  api_key: process.env.CLOUDINARY_API_KEY || '898283184416469',
+  api_secret: process.env.CLOUDINARY_API_SECRET || 'puZIzcZeNoM8FR_O1_lQQZgnBqs'
 });
 
 console.log('Cloudinary configuration:', {
@@ -104,8 +104,10 @@ app.use(express.json({ limit: '50mb' })); // Increased limit for image uploads
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(fileUpload({
   useTempFiles: true,
-  tempFileDir: '/tmp/',
+  tempFileDir: process.platform === 'win32' ? './tmp/' : '/tmp/',
+  createParentPath: true,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+  debug: process.env.NODE_ENV !== 'production' // Enable debug in non-production
 }));
 
 // Configure Cloudinary
