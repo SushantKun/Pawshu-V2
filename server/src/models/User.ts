@@ -30,6 +30,12 @@ export interface IUser extends Document {
   verified?: boolean;
   googleId?: string; // Google ID for SSO
   isEmailVerified?: boolean; // Flag to indicate if email is verified
+  emailVerificationToken?: string; // Token for email verification
+  emailVerificationExpires?: Date; // Expiration time for verification token
+  verificationCode?: string; // 6-digit code for email verification
+  verificationCodeExpires?: Date; // Expiration time for verification code
+  resetToken?: string; // Token for password reset
+  resetTokenExpiry?: Date; // Expiration time for password reset token
   comparePassword(candidatePassword: string): Promise<boolean>;
   name: string; // Virtual property
   lastActive: Date;
@@ -43,7 +49,15 @@ const UserSchema: Schema = new Schema(
     email: {
       type: String,
       required: true,
-      unique: true
+      unique: true,
+      validate: {
+        validator: function(this: any, v: string) {
+          // Only validate email format for non-Google users
+          if (this.googleId) return true;
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        },
+        message: 'Please provide a valid email address'
+      }
     },
     password: {
       type: String,
@@ -126,6 +140,30 @@ const UserSchema: Schema = new Schema(
     isEmailVerified: {
       type: Boolean,
       default: false
+    },
+    emailVerificationToken: {
+      type: String,
+      default: null
+    },
+    emailVerificationExpires: {
+      type: Date,
+      default: null
+    },
+    verificationCode: {
+      type: String,
+      default: null
+    },
+    verificationCodeExpires: {
+      type: Date,
+      default: null
+    },
+    resetToken: {
+      type: String,
+      default: null
+    },
+    resetTokenExpiry: {
+      type: Date,
+      default: null
     },
     lastActive: {
       type: Date,

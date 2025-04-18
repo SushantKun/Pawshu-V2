@@ -38,6 +38,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import NotificationsPage from './pages/Notifications';
 import Chat from './pages/Chat';
 import { ChatButton } from './components/Chat/ChatButton';
+import EmailVerification from './pages/EmailVerification';
+import ResetPassword from './pages/ResetPassword';
+import StatusTest from './pages/StatusTest';
 
 // Protected route component for admin routes
 const ProtectedAdminRoute = ({ children }: { children: JSX.Element }) => {
@@ -445,6 +448,23 @@ function App() {
                     <RetryPayment />
                   </UserLayout>
                 </ProtectedRoute>
+              } />
+              <Route path="/status-test" element={
+                <ProtectedRoute>
+                  <UserLayout>
+                    <StatusTest />
+                  </UserLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/verify-email" element={
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                  <EmailVerification />
+                </div>
+              } />
+              <Route path="/reset-password" element={
+                <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+                  <ResetPassword />
+                </div>
               } />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

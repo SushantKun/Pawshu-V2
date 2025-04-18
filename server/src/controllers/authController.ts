@@ -12,9 +12,21 @@ import { AuthRequest } from '../types/auth';
 import { OAuth2Client } from 'google-auth-library';
 import mongoose from 'mongoose';
 import { v2 as cloudinary } from 'cloudinary';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
+import * as emailUtils from '../utils/emailUtils';
 
 // Initialize Google OAuth client
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Create email transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  }
+});
 
 /**
  * Generate a unique session ID
@@ -30,57 +42,329 @@ const generateSessionId = (): string => {
  */
 export const registerUser = async (req: Request, res: Response) => {
   try {
-    const { firstName, lastName, email, password } = req.body;
+    const { email, password, firstName, lastName, phone, address, verificationType = 'link' } = req.body;
 
     // Validate required fields
-    if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({ message: 'Please provide all required fields' });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // Validate email format
+    if (!emailUtils.isValidEmail(email)) {
+      return res.status(400).json({ message: 'Please provide a valid email address' });
+    }
+
+    // Require Gmail addresses only
+    if (!emailUtils.isGmailAddress(email)) {
+      return res.status(400).json({ 
+        message: 'Only Gmail addresses are accepted for registration. Please use a Gmail address or sign in with Google.'
+      });
+    }
+
+    // Password strength validation
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ message: 'User with this email already exists' });
+      // If user exists but isn't verified, we can allow them to request a new verification
+      if (existingUser.isEmailVerified === false) {
+        return res.status(400).json({ 
+          message: 'An account with this email already exists but has not been verified',
+          requiresVerification: true,
+          email: email
+        });
+      }
+      
+      // If user has a Google account, suggest using Google sign-in
+      if (existingUser.googleId) {
+        return res.status(400).json({ 
+          message: 'An account with this email already exists. Please sign in with Google instead.',
+          useGoogle: true
+        });
+      }
+      
+      return res.status(400).json({ message: 'An account with this email already exists' });
     }
 
-    // Create new user
+    let verificationSent = false;
+    
+    // Generate a unique session ID for this registration
+    const sessionId = generateSessionId();
+    
+    // Create new user with appropriate verification method and online status tracking
     const newUser = new User({
+      email,
+      password,
       firstName,
       lastName,
-      email,
-      password
+      phone,
+      address,
+      isEmailVerified: false,
+      isOnline: false, // Start as offline until email is verified
+      lastActive: new Date(),
+      lastAuthMethod: 'password',
+      uniqueSessionId: sessionId,
+      status: 'active'
     });
 
-    // Save user to database (password will be hashed by the pre-save hook)
+    if (verificationType === 'link') {
+      // Generate verification token and link
+      const { token, expires } = emailUtils.generateVerificationToken();
+      newUser.emailVerificationToken = token;
+      newUser.emailVerificationExpires = expires;
+      
+      // Send verification email with link
+      verificationSent = await emailUtils.sendVerificationEmail(email, token);
+    } else {
+      // Generate verification code
+      const code = emailUtils.generateVerificationCode();
+      const codeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      
+      newUser.verificationCode = code;
+      newUser.verificationCodeExpires = codeExpires;
+      
+      // Send verification email with code
+      verificationSent = await emailUtils.sendVerificationCode(email, code);
+    }
+    
+    if (!verificationSent) {
+      return res.status(500).json({ message: 'Failed to send verification email. Please try again.' });
+    }
+
     await newUser.save();
 
-    // Create JWT token
-    const token = jwt.sign(
-      {
-        _id: newUser._id,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
+    res.status(201).json({ 
+      message: `Registration successful. Please check your email to verify your account.${verificationType === 'code' ? ' We have sent a 6-digit verification code.' : ''}`,
+      verificationType,
+      user: {
+        id: newUser._id,
         email: newUser.email,
-        role: 'user'
-      },
-      process.env.JWT_SECRET || 'defaultsecret',
-      { expiresIn: '1d' }
-    );
-
-    // Return token and user info (excluding password)
-    const userResponse = newUser.toObject();
-    const { password: _, ...userWithoutPassword } = userResponse;
-
-    res.status(201).json({
-      token,
-      user: userWithoutPassword
+        firstName: newUser.firstName,
+        lastName: newUser.lastName
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({
-      message: 'Server error',
-      error: error instanceof Error ? error.message : 'Unknown error'
+    res.status(500).json({ message: 'Registration failed', error: error instanceof Error ? error.message : 'Unknown error' });
+  }
+};
+
+/**
+ * Verify email with token
+ * @route GET /api/auth/verify-email/:token
+ */
+export const verifyEmail = async (req: Request, res: Response) => {
+  try {
+    const { token: verificationToken } = req.params;
+
+    // Check if user exists with this token
+    const user = await User.findOne({
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: { $gt: new Date() }
     });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired verification token' });
+    }
+
+    // Check if another user with the same email is already online
+    // If so, mark them as offline to prevent duplicate online status
+    await User.updateMany(
+      { email: user.email, isOnline: true },
+      { 
+        $set: { 
+          isOnline: false,
+          lastActive: new Date()
+        } 
+      }
+    );
+
+    // Generate a unique session ID for this verification
+    const sessionId = generateSessionId();
+
+    // Update user status
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    user.isOnline = true;
+    user.lastActive = new Date();
+    user.uniqueSessionId = sessionId;
+    await user.save();
+
+    // Generate JWT token for automatic login after verification
+    const jwtToken = jwt.sign(
+      {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        authMethod: 'password',
+        sessionId: sessionId
+      },
+      process.env.JWT_SECRET || 'defaultsecret',
+      { expiresIn: '7d' }
+    );
+
+    res.status(200).json({ 
+      message: 'Email verified successfully',
+      success: true,
+      token: jwtToken,
+      user: {
+        _id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        isOnline: user.isOnline,
+        lastActive: user.lastActive
+      }
+    });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).json({ message: 'Email verification failed' });
+  }
+};
+
+/**
+ * Verify email with code
+ * @route POST /api/auth/verify-email-code
+ */
+export const verifyEmailWithCode = async (req: Request, res: Response) => {
+  try {
+    const { email, code } = req.body;
+    
+    if (!email || !code) {
+      return res.status(400).json({ message: 'Email and verification code are required' });
+    }
+
+    // Check if another user with the same email is already online
+    // If so, mark them as offline to prevent duplicate online status
+    await User.updateMany(
+      { email, isOnline: true },
+      { 
+        $set: { 
+          isOnline: false,
+          lastActive: new Date()
+        } 
+      }
+    );
+
+    const user = await User.findOne({
+      email,
+      verificationCode: code,
+      verificationCodeExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired verification code' });
+    }
+
+    // Generate a unique session ID for this verification
+    const sessionId = generateSessionId();
+
+    // Update user status
+    user.isEmailVerified = true;
+    user.verificationCode = undefined;
+    user.verificationCodeExpires = undefined;
+    user.isOnline = true;
+    user.lastActive = new Date();
+    user.uniqueSessionId = sessionId;
+    await user.save();
+
+    // Generate JWT token for automatic login after verification
+    const token = jwt.sign(
+      {
+        _id: user._id,
+        email: user.email,
+        role: user.role,
+        authMethod: 'password',
+        sessionId: sessionId
+      },
+      process.env.JWT_SECRET || 'defaultsecret',
+      { expiresIn: '7d' }
+    );
+
+    res.status(200).json({ 
+      message: 'Email verified successfully',
+      success: true,
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        isOnline: user.isOnline,
+        lastActive: user.lastActive
+      }
+    });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).json({ message: 'Email verification failed' });
+  }
+};
+
+/**
+ * Resend verification email
+ * @route POST /api/auth/resend-verification
+ */
+export const resendVerificationEmail = async (req: Request, res: Response) => {
+  try {
+    const { email, verificationType = 'link' } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ message: 'Email already verified' });
+    }
+
+    let verificationSent = false;
+
+    if (verificationType === 'link') {
+      // Generate new verification token
+      const { token, expires } = emailUtils.generateVerificationToken();
+      
+      user.emailVerificationToken = token;
+      user.emailVerificationExpires = expires;
+      user.verificationCode = undefined;
+      user.verificationCodeExpires = undefined;
+      
+      // Send verification email with link
+      verificationSent = await emailUtils.sendVerificationEmail(email, token);
+    } else {
+      // Generate verification code
+      const code = emailUtils.generateVerificationCode();
+      const codeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+      
+      user.verificationCode = code;
+      user.verificationCodeExpires = codeExpires;
+      user.emailVerificationToken = undefined;
+      user.emailVerificationExpires = undefined;
+      
+      // Send verification email with code
+      verificationSent = await emailUtils.sendVerificationCode(email, code);
+    }
+
+    if (!verificationSent) {
+      return res.status(500).json({ message: 'Failed to send verification email. Please try again.' });
+    }
+
+    await user.save();
+
+    res.status(200).json({ 
+      message: `Verification email sent successfully${verificationType === 'code' ? '. Check your email for a 6-digit verification code.' : '.'}`,
+      verificationType
+    });
+  } catch (error) {
+    console.error('Resend verification email error:', error);
+    res.status(500).json({ message: 'Failed to resend verification email' });
   }
 };
 
@@ -92,61 +376,109 @@ export const loginUser = async (req: Request, res: Response) => {
   try {
     const { email, password, rememberMe = false } = req.body;
 
-    // Validate input
+    // Validate inputs
     if (!email || !password) {
-      return res.status(400).json({ message: 'Please provide email and password' });
+      return res.status(400).json({ message: 'Email and password are required' });
     }
 
     // Find user by email
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
+    // Check if user has a Google account and suggest Google sign-in
+    if (user.googleId && !user.password) {
+      return res.status(403).json({ 
+        message: 'This account uses Google Sign-In. Please sign in with Google instead.',
+        useGoogle: true,
+        email: user.email
+      });
+    }
+
+    // Check if password matches
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      return res.status(403).json({ 
+        message: 'Please verify your email address before logging in',
+        requiresVerification: true,
+        email: user.email
+      });
     }
 
     // Generate a unique session ID for this login
     const sessionId = generateSessionId();
 
-    // Update online status to true and set lastAuthMethod
-    user.isOnline = true;
-    user.lastActive = new Date();
-    user.lastAuthMethod = 'password'; // Track that this login was via password
-    user.uniqueSessionId = sessionId; // Set the unique session ID
-    await user.save();
+    // Check if another user with the same email is already online
+    // If so, mark them as offline to prevent duplicate online status
+    await User.updateMany(
+      { email, isOnline: true },
+      { 
+        $set: { 
+          isOnline: false,
+          lastActive: new Date()
+        } 
+      }
+    );
 
-    // Generate JWT
+    // Update online status and session ID using direct database access for reliability
+    const result = await mongoose.connection.db.collection('users').updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          isOnline: true,
+          lastActive: new Date(),
+          lastAuthMethod: 'password',
+          uniqueSessionId: sessionId
+        }
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      console.log(`User ${user._id} (${user.email}) marked as online successfully`);
+      
+      // Get the io instance from the req.app to broadcast the update
+      const io = (req as any).app?.get('io');
+      if (io) {
+        // Broadcast to all clients that user is online
+        io.emit('user_status_changed', {
+          userId: user._id,
+          isOnline: true
+        });
+      }
+    }
+
+    // Create JWT token
     const token = jwt.sign(
       {
         _id: user._id,
-        id: user._id, // Add id field for compatibility
+        firstName: user.firstName,
+        lastName: user.lastName,
         email: user.email,
         role: user.role,
-        authMethod: 'password', // Add authMethod to token
-        sessionId: sessionId // Add sessionId to token for verification
+        authMethod: 'password',
+        sessionId: sessionId
       },
       process.env.JWT_SECRET || 'defaultsecret',
-      { expiresIn: rememberMe ? '30d' : '7d' }
+      { expiresIn: rememberMe ? '30d' : '1d' }
     );
 
     // Return token and user info (excluding password)
     const userResponse = user.toObject();
-    const { password: _, ...userWithoutPassword } = userResponse;
+    const userWithoutPassword = { ...userResponse, password: undefined };
 
-    res.json({
+    res.status(200).json({
       token,
       user: userWithoutPassword
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({
-      message: 'Server error',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    res.status(500).json({ message: 'Login failed', error: error instanceof Error ? error.message : 'Unknown error' });
   }
 };
 
@@ -536,125 +868,46 @@ export const setUserOffline = async (req: AuthRequest, res: Response) => {
 
     // If the request doesn't have a user object, use the userId from the body
     const userIdToUpdate = req.user?._id || userId;
-
-    // Check if this is a Google user and log the source
-    const isGoogleUser = authMethod === 'google';
-    const sourceInfo = source ? ` (Source: ${source})` : '';
     
-    console.log(`Setting offline status for ${isGoogleUser ? 'Google' : 'regular'} user ${userIdToUpdate}${forceOffline ? ' (FORCE OFFLINE)' : ''}${sourceInfo}`);
+    console.log(`Setting offline status for user ${userIdToUpdate}${forceOffline ? ' (FORCE OFFLINE)' : ''}${source ? ` (Source: ${source})` : ''}`);
 
-    // Get the current user to verify sessionId if provided
-    let currentUser;
-    try {
-      currentUser = await User.findById(userIdToUpdate);
-    } catch (findError) {
-      console.error(`Error finding user ${userIdToUpdate}:`, findError);
-    }
-
-    // Only proceed if:
-    // 1. This is a forced offline request (logout, browser close, etc.), OR
-    // 2. No sessionId provided (backward compatibility), OR
-    // 3. The provided sessionId matches the current one in the database
-    const shouldProceed = forceOffline === true || 
-                          !sessionId || 
-                          !currentUser?.uniqueSessionId || 
-                          sessionId === currentUser?.uniqueSessionId;
-
-    if (!shouldProceed) {
-      console.log(`Ignoring offline request for user ${userIdToUpdate} - session ${sessionId} does not match current session ${currentUser?.uniqueSessionId}`);
-      return res.status(200).json({ message: 'Session ID mismatch, no action taken' });
-    }
-
-    // Critical update - always use direct DB access for all users for reliability
+    // Critical update - use direct database access for reliability
     try {
       const result = await mongoose.connection.db.collection('users').updateOne(
         { _id: new mongoose.Types.ObjectId(userIdToUpdate) },
         { 
           $set: { 
-            isOnline: false, 
-            lastActive: new Date() 
+            isOnline: false,
+            lastActive: new Date(),
+            lastStatusUpdate: Date.now() // Add timestamp for versioning
           } 
         }
       );
-      
-      if (result.modifiedCount > 0) {
-        console.log(`User ${userIdToUpdate} marked offline successfully via direct DB access${sourceInfo}`);
 
+      if (result.modifiedCount > 0) {
         // Get the io instance from the app
         const io = req.app.get('io');
         if (io) {
-          // Broadcast to all clients that user is offline
+          // Broadcast with version number
           io.emit('user_status_changed', {
             userId: userIdToUpdate,
-            isOnline: false
+            isOnline: false,
+            lastActive: new Date(),
+            version: Date.now()
           });
-          console.log(`Broadcast offline status for user ${userIdToUpdate}`);
         }
-      } else {
-        console.log(`User ${userIdToUpdate} not found or already offline (direct DB access)`);
-        
-        // If user wasn't updated, try one more time after a small delay to handle race conditions
-        setTimeout(async () => {
-          try {
-            const retryResult = await mongoose.connection.db.collection('users').updateOne(
-              { _id: new mongoose.Types.ObjectId(userIdToUpdate) },
-              { 
-                $set: { 
-                  isOnline: false, 
-                  lastActive: new Date() 
-                } 
-              }
-            );
-            
-            if (retryResult.modifiedCount > 0) {
-              console.log(`RETRY: User ${userIdToUpdate} marked offline successfully after delay${sourceInfo}`);
 
-              // Get the io instance from the app
-              const io = req.app.get('io');
-              if (io) {
-                // Broadcast to all clients that user is offline
-                io.emit('user_status_changed', {
-                  userId: userIdToUpdate,
-                  isOnline: false
-                });
-              }
-            }
-          } catch (retryError) {
-            console.error(`Error in delayed retry for user ${userIdToUpdate}:`, retryError);
-          }
-        }, 300);
+        // Force a small delay before responding to ensure the offline status is processed
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     } catch (dbError) {
       console.error(`DATABASE ERROR marking user ${userIdToUpdate} as offline:`, dbError);
-      
-      // Fallback to standard Mongoose method if direct DB access fails
-      const updatedUser = await User.findByIdAndUpdate(userIdToUpdate, {
-        isOnline: false,
-        lastActive: new Date()
-      }, { new: true });
-
-      if (updatedUser) {
-        console.log(`FALLBACK: User ${userIdToUpdate} (${updatedUser.email}) has been marked as offline via Mongoose${sourceInfo}`);
-        
-        // Get the io instance from the app
-        const io = req.app.get('io');
-        if (io) {
-          // Broadcast to all clients that user is offline
-          io.emit('user_status_changed', {
-            userId: userIdToUpdate,
-            isOnline: false
-          });
-        }
-      }
     }
 
     res.status(200).json({ message: 'User set as offline successfully' });
   } catch (error) {
     console.error('Error setting user offline:', error);
-    res.status(500).json({
-      message: 'Failed to set user as offline',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    res.status(500).json({ message: 'Failed to set user as offline' });
   }
 };
 
@@ -742,33 +995,106 @@ export const pingUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'User ID is required' });
     }
 
-    // Get the current date/time
     const now = new Date();
+    const currentVersion = Date.now();
 
-    // Validate userId format
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ message: 'Invalid user ID format' });
-    }
-
-    // Use direct database access for maximum performance
-    // This needs to be as fast as possible since it's called frequently
-    await mongoose.connection.collection('users').updateOne(
+    console.log(`Received ping for user ${userId}`);
+    
+    // Use direct database access for maximum performance and reliability
+    const result = await mongoose.connection.db.collection('users').updateOne(
       { _id: new mongoose.Types.ObjectId(userId) },
-      { $set: { lastActive: now } }
+      { 
+        $set: { 
+          isOnline: true,
+          lastActive: now,
+          lastStatusUpdate: currentVersion
+        } 
+      }
     );
 
-    // Only log once per minute to reduce log spam
-    if (now.getSeconds() < 5) {
-      console.log(`Ping received for user ${userId}, updated lastActive at ${now.toISOString()}`);
+    // If user was updated successfully
+    if (result.modifiedCount > 0) {
+      console.log(`User ${userId} marked as ONLINE via ping`);
+      
+      // Get socket.io instance to broadcast the status change
+      const io = (req as any).app?.get('io');
+      if (io) {
+        // Broadcast to all clients that this user is online
+        io.emit('user_status_changed', {
+          userId,
+          isOnline: true,
+          lastActive: now,
+          version: currentVersion
+        });
+        
+        // Also broadcast with simpler format for compatibility
+        io.emit('user_connected', {
+          userId
+        });
+        
+        console.log(`Broadcast online status for user ${userId} to all clients`);
+      } else {
+        console.warn('Socket.io instance not available for broadcasting');
+      }
     }
 
-    // Send minimal response
-    res.status(200).json({ success: true });
+    res.status(200).json({ 
+      success: true,
+      isOnline: true,
+      lastActive: now
+    });
   } catch (error) {
     console.error('Error updating ping status:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+// Update the checkInactiveUsers function to include versioning
+export const checkInactiveUsers = async () => {
+  try {
+    const inactiveThreshold = new Date(Date.now() - 15000);
+    const currentVersion = Date.now();
+    
+    const result = await mongoose.connection.db.collection('users').updateMany(
+      { 
+        isOnline: true,
+        lastActive: { $lt: inactiveThreshold }
+      },
+      {
+        $set: { 
+          isOnline: false,
+          lastActive: new Date(),
+          lastStatusUpdate: currentVersion
+        }
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      // Get the io instance (you'll need to make this available)
+      const io = global.io;
+      if (io) {
+        // Broadcast all status changes
+        const users = await mongoose.connection.db.collection('users')
+          .find({ lastStatusUpdate: currentVersion })
+          .toArray();
+        
+        users.forEach(user => {
+          io.emit('user_status_changed', {
+            userId: user._id,
+            isOnline: false,
+            lastActive: user.lastActive,
+            version: currentVersion
+          });
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error checking inactive users:', error);
+  }
+};
+
+// Set up interval to check for inactive users
+setInterval(checkInactiveUsers, 5000); // Check every 5 seconds
 
 /**
  * Handle beacon signals when browser is closed
@@ -1120,5 +1446,97 @@ export const handleBrowserClose = async (req: Request, res: Response) => {
     console.error('Error handling browser close:', error);
     // Always return 200 for browser close calls even on error
     res.status(200).end();
+  }
+};
+
+/**
+ * Request a password reset by sending an email with a reset token
+ * @route POST /api/auth/reset-password-request
+ */
+export const requestPasswordReset = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+    
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      // For security reasons, don't reveal if email exists or not
+      return res.status(200).json({ 
+        message: 'If your email is registered with us, you will receive password reset instructions.' 
+      });
+    }
+    
+    // Generate a reset token and expiry
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    
+    // Save token and expiry to user
+    user.resetToken = token;
+    user.resetTokenExpiry = expires;
+    await user.save();
+    
+    // Send reset email
+    const emailSent = await emailUtils.sendPasswordResetEmail(email, token);
+    
+    if (!emailSent) {
+      return res.status(500).json({ message: 'Failed to send reset email. Please try again.' });
+    }
+    
+    res.status(200).json({ 
+      message: 'Password reset instructions have been sent to your email.' 
+    });
+  } catch (error) {
+    console.error('Password reset request error:', error);
+    res.status(500).json({ 
+      message: 'Server error processing password reset',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+/**
+ * Reset password using token
+ * @route POST /api/auth/reset-password
+ */
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+      return res.status(400).json({ message: 'Token and new password are required' });
+    }
+    
+    // Check if password meets minimum requirements
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+    
+    // Find user with this token
+    const user = await User.findOne({
+      resetToken: token,
+      resetTokenExpiry: { $gt: new Date() }
+    });
+    
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+    
+    // Update password and clear reset token fields
+    user.password = password;
+    user.resetToken = undefined;
+    user.resetTokenExpiry = undefined;
+    await user.save();
+    
+    res.status(200).json({ message: 'Password has been reset successfully. You can now login with your new password.' });
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ 
+      message: 'Server error processing password reset',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }; 

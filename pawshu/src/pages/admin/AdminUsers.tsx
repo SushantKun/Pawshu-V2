@@ -10,6 +10,7 @@ import {
 import type { ComponentType, SVGProps } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import io from 'socket.io-client';
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 const PencilIconComponent = PencilIcon as IconComponent;
@@ -29,6 +30,7 @@ interface User {
   status?: 'active' | 'inactive';
   lastActive?: string;
   isOnline?: boolean;
+  lastStatusUpdate?: number;
 }
 
 interface UserFormData {
@@ -56,6 +58,66 @@ const AdminUsers = () => {
     role: 'user'
   });
 
+  // Initialize Socket.IO connection with version tracking
+  useEffect(() => {
+    const token = localStorage.getItem('adminToken');
+    if (!token) return;
+
+    const socket = io('http://localhost:5000', {
+      auth: { token }
+    });
+
+    socket.on('connect', () => {
+      console.log('Connected to Socket.IO server');
+    });
+
+    // Add a debounce timer for status updates
+    let statusUpdateTimer: NodeJS.Timeout;
+
+    socket.on('user_status_changed', (data: { 
+      userId: string; 
+      isOnline: boolean; 
+      lastActive: string;
+      version: number;
+    }) => {
+      console.log('Received status update:', data);
+      
+      // Clear any pending status update
+      clearTimeout(statusUpdateTimer);
+      
+      // Delay the status update slightly to handle rapid changes
+      statusUpdateTimer = setTimeout(() => {
+        setUsers(prevUsers => 
+          prevUsers.map(user => {
+            if (user._id === data.userId) {
+              // Only update if the incoming version is newer than what we have
+              if (!user.lastStatusUpdate || data.version > user.lastStatusUpdate) {
+                console.log(`Updating status for user ${user.email} to ${data.isOnline ? 'online' : 'offline'} (version: ${data.version})`);
+                return {
+                  ...user,
+                  isOnline: data.isOnline,
+                  lastActive: data.lastActive,
+                  lastStatusUpdate: data.version
+                };
+              }
+              console.log(`Ignoring older status update for user ${user.email} (current: ${user.lastStatusUpdate}, received: ${data.version})`);
+            }
+            return user;
+          })
+        );
+      }, 100); // Small delay to handle race conditions
+    });
+
+    socket.on('error', (error: any) => {
+      console.error('Socket error:', error);
+    });
+
+    return () => {
+      clearTimeout(statusUpdateTimer);
+      socket.disconnect();
+    };
+  }, []);
+
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
@@ -75,11 +137,18 @@ const AdminUsers = () => {
 
       if (response.data) {
         console.log('Users fetched successfully:', response.data.length);
-        // Debug online status
-        response.data.forEach((user: User) => {
-          console.log(`User ${user.name} (${user.email}): isOnline=${user.isOnline}, lastActive=${user.lastActive}`);
+        // Preserve existing version numbers when updating users
+        setUsers(prevUsers => {
+          const newUsers = response.data.map((newUser: User) => {
+            const existingUser = prevUsers.find(u => u._id === newUser._id);
+            return {
+              ...newUser,
+              lastStatusUpdate: existingUser?.lastStatusUpdate || Date.now(),
+              isOnline: existingUser?.isOnline ?? newUser.isOnline
+            };
+          });
+          return newUsers;
         });
-        setUsers(response.data);
         setError('');
       } else {
         console.error('No data received from server');
@@ -89,9 +158,7 @@ const AdminUsers = () => {
       console.error('Error fetching users:', err);
       if (err.response?.status === 401) {
         setError('Admin authentication required. Please log in again.');
-        // Clear invalid token
         localStorage.removeItem('adminToken');
-        // Redirect to admin login
         window.location.href = '/admin/login';
       } else {
         setError(err.response?.data?.message || 'Failed to fetch users');
@@ -104,11 +171,11 @@ const AdminUsers = () => {
   useEffect(() => {
     fetchUsers();
     
-    // Set up a periodic refresh for online status
+    // Set up a periodic refresh with a longer interval
     const statusInterval = setInterval(() => {
       console.log('Refreshing user status...');
       fetchUsers();
-    }, 3000); // Refresh every 3 seconds for more responsive online status updates
+    }, 30000); // Increased to 30 seconds since we have real-time updates
     
     return () => clearInterval(statusInterval);
   }, [fetchUsers]);
@@ -257,6 +324,11 @@ const AdminUsers = () => {
 
   // Filter users based on search term and role filter
   const filteredUsers = users.filter(user => {
+    // Don't show admin users in regular user panel
+    if (!localStorage.getItem('adminToken') && user.role === 'admin') {
+      return false;
+    }
+
     const matchesSearch =
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -315,7 +387,7 @@ const AdminUsers = () => {
           >
             <option value="all">All Roles</option>
             <option value="user">User</option>
-            <option value="admin">Admin</option>
+            {localStorage.getItem('adminToken') && <option value="admin">Admin</option>}
           </select>
         </div>
       </div>
@@ -339,10 +411,11 @@ const AdminUsers = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{user.email}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{user.role}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.isOnline
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                    }`}>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    user.isOnline 
+                      ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100' 
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                  }`}>
                     {user.isOnline ? 'Online' : 'Offline'}
                   </span>
                 </td>
@@ -350,169 +423,28 @@ const AdminUsers = () => {
                   {new Date(user.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => openEditModal(user)}
-                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 mr-4"
-                  >
-                    <PencilIconComponent className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteUser(user._id)}
-                    className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <TrashIconComponent className="h-5 w-5" />
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openEditModal(user)}
+                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                    >
+                      <PencilIconComponent className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(user._id)}
+                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      <TrashIconComponent className="h-5 w-5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      {/* Add User Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Add New User</h2>
-            <form onSubmit={handleAddUser}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                <select
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-4">
-                <button
-                  type="button"
-                  onClick={closeAddModal}
-                  className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-                  disabled={loading}
-                >
-                  {loading ? 'Adding...' : 'Add User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit User Modal */}
-      {showEditModal && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Edit User</h2>
-            <form onSubmit={handleUpdateUser}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password (leave blank to keep current)</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
-                <select
-                  name="role"
-                  value={formData.role}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-4">
-                <button
-                  type="button"
-                  onClick={closeEditModal}
-                  className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-                  disabled={loading}
-                >
-                  {loading ? 'Updating...' : 'Update User'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-export default AdminUsers; 
+export default AdminUsers;

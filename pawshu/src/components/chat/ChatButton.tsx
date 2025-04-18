@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { FaComment, FaTimesCircle, FaPaperPlane, FaCheck } from 'react-icons/fa';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { FaComment, FaTimesCircle, FaPaperPlane, FaCheck, FaInfoCircle } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
-import { io } from 'socket.io-client';
+import io from 'socket.io-client';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
 import UserAvatar from '../UserAvatar';
+import { useNavigate } from 'react-router-dom';
 
 // Create a configured axios instance
 const api = axios.create({
-  baseURL: 'http://localhost:5000',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json'
   }
@@ -72,6 +73,9 @@ let globalSetActiveChat: ((chatId: string | null) => void) | null = null;
 let globalSetActiveChatData: ((data: ChatData) => void) | null = null;
 let globalSetIsChatOpen: ((isOpen: boolean) => void) | null = null;
 
+// Create a global map to track connected users
+let connectedUsers = new Map<string, boolean>();
+
 // Core function to determine if a message is from the current user
 // This handles both string IDs and populated sender objects
 const isMessageFromCurrentUser = (sender: string | { _id: string;[key: string]: any }, currentUserId?: string): boolean => {
@@ -107,6 +111,11 @@ const ChatButton: React.FC = () => {
   const [recipientProfile, setRecipientProfile] = useState<any>(null);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const typingTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const navigate = useNavigate();
+  const [recipientIsOnline, setRecipientIsOnline] = useState(false);
+  const [lastOnlineTime, setLastOnlineTime] = useState<Date | null>(null);
+  const [statusRefreshCounter, setStatusRefreshCounter] = useState(0);
+  const [socketConnected, setSocketConnected] = useState(false);
 
   // When user is available, store their ID in localStorage for later comparison
   useEffect(() => {
@@ -137,7 +146,7 @@ const ChatButton: React.FC = () => {
     try {
       setLoading(true);
       console.log('Fetching all chats for user');
-      const response = await api.get('/api/chats');
+      const response = await api.get('/chats');
       console.log('Received chats:', response.data);
       const enhancedChats = await Promise.all(response.data.map(async (chat: Chat) => {
         if (chat.reportId) {
@@ -154,7 +163,7 @@ const ChatButton: React.FC = () => {
               reportIdStr = String(chat.reportId);
             }
 
-            const reportResponse = await api.get(`/api/lost-found/${reportIdStr}`);
+            const reportResponse = await api.get(`/lost-found/${reportIdStr}`);
             if (reportResponse.data && reportResponse.data.status) {
               // Only set isActive to false if the report is explicitly resolved
               // For open reports, always ensure isActive is true
@@ -194,26 +203,142 @@ const ChatButton: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
+    console.log('Initializing socket connection for user:', user._id);
     const token = localStorage.getItem('token');
-    const newSocket = io('http://localhost:5000', {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || '/';
+    
+    console.log(`Creating socket connection to: ${socketUrl} with auth token: ${token ? 'present' : 'missing'}`);
+    
+    // Create socket with more robust configuration
+    const newSocket = io(socketUrl, {
+      path: '/socket.io',
       auth: {
         token: token
-      }
+      },
+      reconnectionAttempts: 10,     // Try to reconnect 10 times
+      reconnectionDelay: 1000,      // Start with a 1 second delay
+      reconnectionDelayMax: 10000,  // Maximum 10 seconds between attempts
+      timeout: 20000,               // Longer timeout for slow connections
+      transports: ['websocket', 'polling']  // Try websocket first, fallback to polling
     });
 
-    // Set up keep-alive ping to maintain online status
+    // Set up more aggressive keep-alive pings to maintain connection
     const keepAlivePing = setInterval(() => {
       if (newSocket.connected) {
+        console.log(`Sending keep-alive ping for user: ${user._id}`);
         newSocket.emit('ping', { userId: user._id });
+        
+        // Also hit the API endpoint as a backup
+        axios.post('/api/auth/ping', { userId: user._id })
+          .catch(err => console.error('Error sending API ping:', err));
+      } else {
+        console.log('Socket disconnected - attempting to reconnect...');
+        newSocket.connect();
       }
-    }, 30000); // Send a ping every 30 seconds
+    }, 15000); // Ping every 15 seconds (more frequent)
 
+    // Add more detailed connection event handlers
     newSocket.on('connect', () => {
       // Socket connected
+      console.log('Socket connected successfully:', newSocket.id);
+      setSocketConnected(true);
+      
+      // When connected, ask for a list of all online users
+      newSocket.emit('get_online_users');
+      
+      // Also query user status specifically for current recipient
+      if (activeChatData?.recipientId) {
+        newSocket.emit('check_user_status', { userId: activeChatData.recipientId });
+      }
     });
 
-    newSocket.on('connect_error', (error) => {
+    newSocket.on('connect_error', (error: Error) => {
       console.error('Socket connection error:', error);
+      
+      // Log additional debug info
+      console.log('Socket connection state:', {
+        connected: newSocket.connected,
+        disconnected: newSocket.disconnected,
+        clientId: user?._id,
+        tokenAvailable: !!token
+      });
+      
+      // Try to reconnect manually after severe connection errors
+      if (newSocket.disconnected) {
+        setTimeout(() => {
+          console.log('Attempting manual socket reconnection...');
+          newSocket.connect();
+        }, 5000);
+      }
+    });
+
+    // Handle reconnection events
+    newSocket.on('reconnect', (attemptNumber: number) => {
+      console.log(`Socket reconnected after ${attemptNumber} attempts`);
+      
+      // Re-join active chat if available
+      if (activeChat) {
+        newSocket.emit('join_chat', { 
+          chatId: activeChat,
+          userId: user._id 
+        });
+      }
+      
+      // Request updated online users
+      newSocket.emit('get_online_users');
+    });
+
+    newSocket.on('reconnect_error', (error: Error) => {
+      console.error('Socket reconnection error:', error);
+    });
+
+    newSocket.on('reconnect_failed', () => {
+      console.error('Socket reconnection failed after maximum attempts');
+    });
+
+    // Add listener for when users connect
+    newSocket.on('user_connected', (data: { userId: string }) => {
+      console.log('User connected event:', data);
+      connectedUsers.set(data.userId, true);
+      
+      // If this is about our active chat recipient, update their status
+      if (activeChatData && data.userId === activeChatData.recipientId) {
+        console.log(`Setting recipient ${data.userId} as ONLINE`);
+        setRecipientIsOnline(true);
+      }
+    });
+    
+    // Add listener for when users disconnect
+    newSocket.on('user_disconnected', (data: { userId: string }) => {
+      console.log('User disconnected event:', data);
+      connectedUsers.set(data.userId, false);
+      
+      // If this is about our active chat recipient, update their status
+      if (activeChatData && data.userId === activeChatData.recipientId) {
+        console.log(`Setting recipient ${data.userId} as OFFLINE`);
+        setRecipientIsOnline(false);
+        setLastOnlineTime(new Date());
+      }
+    });
+    
+    // Add listener for list of online users
+    newSocket.on('online_users', (data: { users: string[] }) => {
+      console.log('Received online users list:', data.users);
+      
+      // Reset the map
+      connectedUsers.clear();
+      
+      // Add all online users to the map
+      data.users.forEach(userId => {
+        connectedUsers.set(userId, true);
+      });
+      
+      // Update our recipient's status if needed
+      if (activeChatData && activeChatData.recipientId) {
+        const isOnline = connectedUsers.has(activeChatData.recipientId);
+        console.log(`Setting recipient ${activeChatData.recipientId} as ${isOnline ? 'ONLINE' : 'OFFLINE'} from users list`);
+        setRecipientIsOnline(isOnline);
+      }
     });
 
     // Listen for incoming messages globally
@@ -311,7 +436,7 @@ const ChatButton: React.FC = () => {
     });
 
     // Listen for error events
-    newSocket.on('error', (error) => {
+    newSocket.on('error', (error: { message?: string }) => {
       toast.error(error.message || 'An error occurred');
     });
 
@@ -344,6 +469,24 @@ const ChatButton: React.FC = () => {
     newSocket.on('typing_users_updated', (data: { chatId: string, users: string[] }) => {
       if (data.chatId === activeChat) {
         setTypingUsers(data.users.filter(userId => user && userId !== user._id));
+      }
+    });
+
+    // Add listener for user status response
+    newSocket.on('user_status_response', (data: { userId: string, isOnline: boolean, lastActive?: Date }) => {
+      console.log('Received user status response:', data);
+      
+      // Update our connected users map
+      connectedUsers.set(data.userId, data.isOnline);
+      
+      // If this is about our active chat recipient, update their status
+      if (activeChatData && data.userId === activeChatData.recipientId) {
+        console.log(`Setting recipient ${data.userId} status to ${data.isOnline ? 'ONLINE' : 'OFFLINE'} from server response`);
+        setRecipientIsOnline(data.isOnline);
+        
+        if (!data.isOnline && data.lastActive) {
+          setLastOnlineTime(new Date(data.lastActive));
+        }
       }
     });
 
@@ -412,7 +555,7 @@ const ChatButton: React.FC = () => {
         reportIdStr = String(reportId);
       }
 
-      const response = await api.get(`/api/lost-found/${reportIdStr}`);
+      const response = await api.get(`/lost-found/${reportIdStr}`);
       if (response.data && response.data.userId && user) {
         setReportOwnership({
           isReportOwner: response.data.userId._id === user._id,
@@ -436,7 +579,7 @@ const ChatButton: React.FC = () => {
       const token = localStorage.getItem('token');
 
       const response = await api.put(
-        `/api/lost-found/${reportOwnership.reportId}/status`,
+        `/lost-found/${reportOwnership.reportId}/status`,
         { status: 'open' },
         {
           headers: {
@@ -464,7 +607,7 @@ const ChatButton: React.FC = () => {
   const fetchMessages = async (chatId: string) => {
     try {
       setLoading(true);
-      const response = await api.get(`/api/chats/${chatId}/messages`);
+      const response = await api.get(`/chats/${chatId}/messages`);
 
       if (Array.isArray(response.data)) {
         // Preserve the original sender data (could be object or string ID)
@@ -580,7 +723,7 @@ const ChatButton: React.FC = () => {
     setMessages(prev => [...prev, tempMessage]);
 
     // Also post to backend API to ensure persistence
-    api.post(`/api/chats/${activeChat}/message`, { content: messageContent })
+    api.post(`/chats/${activeChat}/message`, { content: messageContent })
       .then(response => {
         // Message successfully saved
       })
@@ -620,7 +763,7 @@ const ChatButton: React.FC = () => {
 
       // If this is a chat related to a report, check if the report is resolved
       if (reportDetails?.reportId) {
-        const reportResponse = await api.get(`/api/lost-found/${reportDetails.reportId}`);
+        const reportResponse = await api.get(`/lost-found/${reportDetails.reportId}`);
         if (reportResponse.data && reportResponse.data.status === 'resolved') {
           toast.error('This report has been resolved. Messaging has been disabled.');
           setLoading(false);
@@ -671,7 +814,7 @@ const ChatButton: React.FC = () => {
 
       // Create new chat
       console.log('Creating new chat with:', recipientId, reportDetails);
-      const response = await api.post('/api/chats', {
+      const response = await api.post('/chats', {
         participantId: recipientId,
         reportId: reportDetails?.reportId
       });
@@ -767,7 +910,7 @@ const ChatButton: React.FC = () => {
 
     try {
       // Try the chat/users endpoint first (from our added endpoint)
-      const response = await api.get(`/api/chats/users/${recipientId}`);
+      const response = await api.get(`/chats/users/${recipientId}`);
       if (response.data) {
         return {
           _id: response.data._id,
@@ -856,6 +999,131 @@ const ChatButton: React.FC = () => {
     }
   };
 
+  // Modify checkRecipientStatus to rely exclusively on socket connections instead of API calls
+  const checkRecipientStatus = async (recipientId: string) => {
+    try {
+      // Make sure recipientId is a valid MongoDB ObjectId format
+      if (!recipientId || recipientId.length !== 24) {
+        console.error(`Invalid recipient ID format: ${recipientId}`);
+        setRecipientIsOnline(false);
+        return;
+      }
+
+      console.log(`Checking online status for recipient: ${recipientId}`);
+      
+      // Check via socket for status detection
+      let isOnlineBySocket = false;
+      
+      // Check via socket if available
+      if (socket && socket.connected) {
+        // Emit a request for this specific user's status
+        socket.emit('check_user_status', { userId: recipientId });
+        
+        // Check if we already know from our local state
+        if (connectedUsers.has(recipientId)) {
+          isOnlineBySocket = !!connectedUsers.get(recipientId);
+          console.log(`User ${recipientId} status from socket cache: ${isOnlineBySocket ? 'ONLINE' : 'OFFLINE'}`);
+        }
+        
+        // Set the status directly from socket information
+        setRecipientIsOnline(isOnlineBySocket);
+      } else {
+        console.log(`Socket not available, marking user ${recipientId} as offline`);
+        setRecipientIsOnline(false);
+      }
+    } catch (error) {
+      console.error('Error checking recipient status:', error);
+      setRecipientIsOnline(false);
+    }
+  };
+
+  // Add polling mechanism for recipient status
+  useEffect(() => {
+    if (!activeChat || !activeChatData?.recipientId || !user) return;
+    
+    // Check if the recipientId is a valid MongoDB ObjectId (24 characters)
+    if (activeChatData.recipientId.length !== 24) {
+      console.error(`Invalid recipient ID in activeChatData: ${activeChatData.recipientId}`);
+      return;
+    }
+    
+    console.log('Setting up status polling for recipient:', activeChatData.recipientId);
+    
+    // Initial check
+    checkRecipientStatus(activeChatData.recipientId);
+    
+    const statusInterval = setInterval(() => {
+      checkRecipientStatus(activeChatData.recipientId);
+    }, 5000); // Check every 5 seconds
+    
+    return () => {
+      console.log('Clearing status polling interval');
+      clearInterval(statusInterval);
+    };
+  }, [activeChat, activeChatData, user, statusRefreshCounter, connectedUsers]);
+
+  // Add visibility change handler
+  useEffect(() => {
+    if (!user) return;
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Tab became visible - refreshing online statuses');
+        
+        // Re-establish socket connection if needed
+        if (socket && !socket.connected) {
+          console.log('Socket disconnected - reconnecting on tab visible');
+          socket.connect();
+        }
+        
+        // Request updated list of online users
+        if (socket && socket.connected) {
+          console.log('Requesting updated online users list');
+          socket.emit('get_online_users');
+          
+          // Also trigger status refresh for active chat recipient
+          if (activeChatData?.recipientId) {
+            console.log(`Refreshing status for active chat recipient: ${activeChatData.recipientId}`);
+            checkRecipientStatus(activeChatData.recipientId);
+          }
+        }
+        
+        // Force a check for the active recipient even if socket is not available
+        if (activeChatData?.recipientId) {
+          checkRecipientStatus(activeChatData.recipientId);
+        }
+      }
+    };
+    
+    // Register the event listener
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Clean up the event listener
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, socket, activeChatData, checkRecipientStatus]);
+
+  // Add function to format last seen time
+  const formatLastOnline = (date: Date | null): string => {
+    if (!date) return 'Unknown';
+    
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHours = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffSec < 60) return 'just now';
+    if (diffMin < 60) return `${diffMin} min ago`;
+    if (diffHours < 24) return `${diffHours} hr ago`;
+    if (diffDays === 1) return 'yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    
+    return date.toLocaleDateString();
+  };
+
   return (
     <>
       <button
@@ -875,7 +1143,7 @@ const ChatButton: React.FC = () => {
                 <div>
                   {activeChat ? (
                     <div className="flex items-center">
-                      <div className="mr-3">
+                      <div className="relative mr-3">
                         {recipientProfile ? (
                           <UserAvatar
                             url={recipientProfile.avatar?.url}
@@ -891,6 +1159,9 @@ const ChatButton: React.FC = () => {
                             bgColor="bg-blue-700"
                           />
                         )}
+                        <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ${
+                          recipientIsOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                        } border-2 border-white`}></span>
                       </div>
                       <div>
                         <h2 className="text-lg font-semibold text-white">
@@ -903,7 +1174,13 @@ const ChatButton: React.FC = () => {
                         {typingUsers.length > 0 ? (
                           <span className="text-xs text-green-200">typing...</span>
                         ) : (
-                          <span className="text-xs text-blue-200">Online</span>
+                          <span className="text-xs text-blue-200">
+                            {recipientIsOnline 
+                              ? 'Online' 
+                              : lastOnlineTime 
+                                ? `Last seen ${formatLastOnline(lastOnlineTime)}` 
+                                : 'Offline'}
+                          </span>
                         )}
                       </div>
                     </div>

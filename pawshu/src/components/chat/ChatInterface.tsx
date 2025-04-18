@@ -55,6 +55,9 @@ const ChatInterface: React.FC<{
   const [socketInstance, setSocketInstance] = useState<any>(null);
   const [typingTimeout, setTypingTimeout] = useState<NodeJS.Timeout | null>(null);
   const [recipientIsOnline, setRecipientIsOnline] = useState(false);
+  const [lastOnlineTime, setLastOnlineTime] = useState<Date | null>(null);
+  const [statusRefreshCounter, setStatusRefreshCounter] = useState(0);
+  const [socketConnected, setSocketConnected] = useState(false);
   
   // Store user ID in localStorage for consistent reference
   useEffect(() => {
@@ -71,22 +74,28 @@ const ChatInterface: React.FC<{
     const token = localStorage.getItem('token');
     console.log('Auth token available:', !!token);
     
-    const socket = io('http://localhost:5000', {
+    const socket = io('/', {
+      path: '/socket.io',
       auth: {
         token: token
-      }
+      },
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000
     });
 
     socket.on('connect', () => {
       console.log('Connected to socket server with socket id:', socket.id);
+      setSocketConnected(true);
       if (chatId) {
         console.log('Joining chat room:', chatId, 'as user:', user._id);
         socket.emit('join_chat', { chatId, userId: user._id });
       }
     });
 
-    socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error: Error) => {
       console.error('Socket connection error:', error);
+      setSocketConnected(false);
     });
 
     socket.on('typing', (data: { chatId: string, userId: string }) => {
@@ -116,18 +125,47 @@ const ChatInterface: React.FC<{
     });
     
     // Handle user online status changes
-    socket.on('user_status_changed', (data: { userId: string, isOnline: boolean }) => {
-      console.log('User status changed:', data);
+    socket.on('user_status_changed', (data: { userId: string, isOnline: boolean, lastActive?: string }) => {
+      console.log('User status changed event received:', data);
       if (data.userId === recipientId) {
+        console.log(`Setting recipient ${recipientId} status to ${data.isOnline ? 'online' : 'offline'}`);
         setRecipientIsOnline(data.isOnline);
+        if (!data.isOnline && data.lastActive) {
+          setLastOnlineTime(new Date(data.lastActive));
+        }
+        // Force refresh counter to trigger the effect
+        setStatusRefreshCounter(prev => prev + 1);
       }
     });
     
     // Handle when a user comes online in the chat
     socket.on('user_online', (data: { userId: string, chatId: string }) => {
-      console.log('User came online in chat:', data);
+      console.log('User came online in chat event received:', data);
       if (data.userId === recipientId && data.chatId === chatId) {
+        console.log(`User ${recipientId} came online in chat ${chatId}`);
         setRecipientIsOnline(true);
+        // Force refresh counter to trigger the effect
+        setStatusRefreshCounter(prev => prev + 1);
+      }
+    });
+
+    // Handle user connected event (simplified approach)
+    socket.on('user_connected', (data: { userId: string }) => {
+      console.log('User connected event received:', data);
+      if (data.userId === recipientId) {
+        console.log(`User ${recipientId} connected`);
+        setRecipientIsOnline(true);
+        setStatusRefreshCounter(prev => prev + 1);
+      }
+    });
+
+    // Handle user disconnected event (simplified approach)
+    socket.on('user_disconnected', (data: { userId: string }) => {
+      console.log('User disconnected event received:', data);
+      if (data.userId === recipientId) {
+        console.log(`User ${recipientId} disconnected`);
+        setRecipientIsOnline(false);
+        setStatusRefreshCounter(prev => prev + 1);
       }
     });
 
@@ -142,8 +180,17 @@ const ChatInterface: React.FC<{
               Authorization: `Bearer ${token}`
             }
           });
-          console.log('Recipient online status:', response.data);
+          console.log('Recipient online status from API:', response.data);
+          
+          // If debug info is available, log it
+          if (response.data.debug) {
+            console.log('Online status debug info:', response.data.debug);
+          }
+          
           setRecipientIsOnline(response.data.isOnline);
+          if (!response.data.isOnline && response.data.lastActive) {
+            setLastOnlineTime(new Date(response.data.lastActive));
+          }
         } catch (error) {
           console.error('Error checking recipient online status:', error);
         }
@@ -155,9 +202,92 @@ const ChatInterface: React.FC<{
     return () => {
       console.log('Disconnecting socket for user:', user._id);
       socket.disconnect();
+      setSocketConnected(false);
     };
   }, [user, chatId, recipientId]);
+
+  // Add a polling mechanism to periodically check recipient's online status
+  useEffect(() => {
+    if (!recipientId || !user) return;
+
+    console.log('Setting up status polling for recipient:', recipientId);
+    
+    const statusInterval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`http://localhost:5000/api/users/${recipientId}/online-status`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        
+        console.log('Polled recipient status:', response.data);
+        setRecipientIsOnline(response.data.isOnline);
+        if (!response.data.isOnline && response.data.lastActive) {
+          setLastOnlineTime(new Date(response.data.lastActive));
+        }
+      } catch (error) {
+        console.error('Error polling recipient status:', error);
+      }
+    }, 5000); // Check every 5 seconds
+    
+    return () => {
+      console.log('Clearing status polling interval');
+      clearInterval(statusInterval);
+    };
+  }, [recipientId, user, statusRefreshCounter]);
+
+  // Add visibility change handler to refresh status when tab becomes visible
+  useEffect(() => {
+    if (!recipientId) return;
+    
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Tab became visible, refreshing online status');
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.get(`http://localhost:5000/api/users/${recipientId}/online-status`, {
+            headers: {
+              Authorization: `Bearer ${token}`
+            }
+          });
+          console.log('Refreshed recipient online status:', response.data);
+          setRecipientIsOnline(response.data.isOnline);
+          if (!response.data.isOnline && response.data.lastActive) {
+            setLastOnlineTime(new Date(response.data.lastActive));
+          }
+        } catch (error) {
+          console.error('Error refreshing recipient status:', error);
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [recipientId]);
   
+  // Keep-alive ping to server
+  useEffect(() => {
+    if (!user || !socketConnected) return;
+    
+    console.log('Setting up keep-alive ping for socket connection');
+    
+    const pingInterval = setInterval(() => {
+      if (socketInstance && socketInstance.connected) {
+        console.log('Sending ping to server');
+        socketInstance.emit('ping', { userId: user._id });
+      }
+    }, 5000); // Every 5 seconds
+    
+    return () => {
+      console.log('Clearing ping interval');
+      clearInterval(pingInterval);
+    };
+  }, [user, socketInstance, socketConnected]);
+
   // Update chat active status based on report status changes
   useEffect(() => {
     const updateChatStatus = async () => {
@@ -493,10 +623,10 @@ const ChatInterface: React.FC<{
       return (
         <UserAvatar 
           url={recipientAvatar.avatarUrl}
-          name={recipientAvatar.firstName || recipientAvatar.name || name || recipientAvatar.email}
+          name={recipientAvatar.firstName || recipientAvatar.name || recipientName}
           email={recipientAvatar.email}
-          size="sm"
-          bgColor="bg-indigo-500"
+          size="md"
+          bgColor="bg-blue-600"
           id={recipientAvatar._id}
         />
       );
@@ -567,208 +697,163 @@ const ChatInterface: React.FC<{
     }
   };
 
+  // Enhance the formatLastOnline function to be more precise
+  const formatLastOnline = (date: Date | null): string => {
+    if (!date) return '';
+    
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    // More precise time display
+    if (diffSecs < 30) return 'just now';
+    if (diffSecs < 60) return `${diffSecs} seconds ago`;
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    
+    return date.toLocaleDateString();
+  };
+
   return (
-    <div className="w-full h-[500px] flex flex-col bg-gray-900 rounded-lg shadow-lg overflow-hidden">
-      {/* Header */}
-      <div className="p-4 bg-blue-600 flex items-center">
-        <div className="mr-3">
-          {recipientId ? getAvatarComponent(recipientId, recipientName) : (
-            <UserAvatar
-              name={recipientName}
-              size="sm"
-              bgColor="bg-blue-700"
-            />
+    <div className="bg-gray-900 text-white flex flex-col h-full max-h-[calc(100vh-8rem)] rounded-lg overflow-hidden">
+      {/* Chat header */}
+      <div className="bg-blue-600 p-4 flex items-center justify-between">
+        <div className="flex items-center">
+          {recipientAvatar && (
+            <div className="mr-3">
+              {getAvatarComponent(recipientAvatar._id, recipientAvatar.firstName)}
+            </div>
           )}
+          <div>
+            <h3 className="font-semibold">{recipientName}</h3>
+            <p className="text-xs text-blue-100">
+              {recipientIsOnline ? (
+                <span className="text-green-400 flex items-center">
+                  <span className="h-2 w-2 rounded-full bg-green-400 inline-block mr-1"></span>
+                  Online
+                </span>
+              ) : (
+                <span className="text-gray-300">
+                  {lastOnlineTime ? formatLastOnline(lastOnlineTime) : 'Offline'}
+                </span>
+              )}
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="font-semibold text-white">{recipientName}</h2>
-          {reportStatus === 'resolved' ? (
-            <span className="text-xs bg-green-500 px-2 py-0.5 rounded-full text-white">Resolved</span>
-          ) : isTyping ? (
-            <span className="text-xs text-green-200">typing...</span>
-          ) : (
-            <span className={`text-xs ${recipientIsOnline ? 'text-green-200' : 'text-gray-300'}`}>
-              {recipientIsOnline ? 'Online' : 'Offline'}
-            </span>
-          )}
-        </div>
-        <button className="ml-auto text-white">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M7.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd" />
+        <button 
+          onClick={() => window.history.back()} 
+          className="p-2 rounded-full hover:bg-blue-700 transition-colors"
+          aria-label="Back"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
       </div>
-
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-900">
+      
+      {/* Messages container */}
+      <div className="flex-1 overflow-y-auto p-4" ref={messagesEndRef}>
         {loading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex justify-center items-center h-full">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
           </div>
-        ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-gray-400 text-center">
-              No messages yet. Start a conversation!
-            </p>
-          </div>
-        ) : (
-          <>
+        ) : messages.length > 0 ? (
+          <div className="space-y-4">
             {groupMessagesByDate().map((group, groupIndex) => (
-              <div key={groupIndex} className="space-y-4">
-                {/* Date separator */}
-                <div className="flex justify-center my-2">
-                  <div className="bg-gray-800 text-gray-400 text-xs px-3 py-1 rounded-full">
-                    {formatMessageDate(group.date)}
-                  </div>
+              <div key={groupIndex} className="message-group">
+                <div className="text-center text-xs text-gray-400 my-2">
+                  {String(group.date)}
                 </div>
-                
-                {/* Messages in this group */}
-                {group.messages.map((message, messageIndex) => {
-                  // Directly check if the sender is the current user
-                  const isFromMe = isMessageFromCurrentUser(message.sender);
-                  const senderId = getSenderId(message.sender);
-                  
-                  // Check if this is a sequence of messages from the same sender
-                  const isSequential = messageIndex > 0 && 
-                    getSenderId(group.messages[messageIndex - 1].sender) === senderId;
-                  
-                  return (
-                    <div 
-                      key={message._id} 
-                      className={`flex ${isFromMe ? "justify-end" : "justify-start"} ${isSequential ? "mt-1" : "mt-4"}`}
-                    >
-                      {/* Avatar for non-sequential other user messages */}
-                      {!isFromMe && !isSequential && (
-                        <div className="flex-shrink-0 mr-2">
-                          {getAvatarComponent(senderId, '')}
-                        </div>
-                      )}
-                      
-                      {/* Message content with conditional styling */}
-                      <div className={`
-                        max-w-[70%] p-3 rounded-lg
-                        ${isFromMe 
-                          ? "bg-blue-500 text-white rounded-br-none" 
-                          : "bg-gray-700 text-white rounded-bl-none"}
-                        ${isSequential && !isFromMe ? "ml-10" : ""}
-                      `}>
-                        <p className="break-words">{message.content}</p>
-                        <div className="flex justify-end items-center mt-1 text-xs opacity-70">
-                          {new Date(message.timestamp).toLocaleTimeString([], { 
-                            hour: '2-digit', 
-                            minute: '2-digit' 
-                          })}
-                          {isFromMe && renderMessageStatus(message.status)}
+                <div className="space-y-2">
+                  {group.messages.map((message) => {
+                    const isMine = isMessageFromCurrentUser(message.sender);
+                    return (
+                      <div 
+                        key={message._id} 
+                        className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div className={`max-w-[75%] rounded-lg px-4 py-2 ${
+                          isMine ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-100'
+                        }`}>
+                          <div className="mb-1">{message.content}</div>
+                          <div className="text-xs text-right flex justify-end items-center">
+                            <span className="opacity-75 mr-1">
+                              {formatMessageDate(new Date(message.timestamp))}
+                            </span>
+                            {isMine && renderMessageStatus(message.status)}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-            
-            {/* Typing indicator */}
-            {isTyping && (
-              <div className="flex justify-start mt-2">
-                <div className="bg-gray-700 px-4 py-2 rounded-full flex items-center">
-                  <div className="mr-2">
-                    {recipientId ? getAvatarComponent(recipientId, recipientName) : (
-                      <UserAvatar
-                        name={recipientName}
-                        size="sm"
-                        bgColor="bg-blue-700"
-                      />
-                    )}
-                  </div>
-                  <div className="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
-            )}
-          </>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <svg className="w-12 h-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p>No messages yet</p>
+            <p className="text-sm mt-2">Be the first to say hello!</p>
+          </div>
+        )}
+        
+        {/* Typing indicator */}
+        {isTyping && (
+          <div className="text-gray-400 text-sm mt-2 animate-pulse">
+            {recipientName} is typing...
+          </div>
         )}
       </div>
-
-      {/* Input Area */}
-      {reportStatus === 'resolved' ? (
-        <div className="p-4 bg-gray-800 border-t border-gray-700 text-center">
-          <div className="bg-green-500 text-white p-3 rounded-md">
-            <p>This issue has been resolved. Thank you for your help!</p>
-            <p className="text-xs mt-1 text-white opacity-80">Messaging for this report has been disabled.</p>
-          </div>
-        </div>
-      ) : (
-        <div className="p-3 bg-gray-800 border-t border-gray-700">
-          <div className="flex items-center gap-2">
+      
+      {/* Message input */}
+      <div className="p-4 border-t border-gray-700">
+        {chatIsActive && reportStatus !== 'resolved' ? (
+          <div className="flex">
             <input
-              ref={inputRef}
               type="text"
+              ref={inputRef}
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => {
+                setNewMessage(e.target.value);
+                handleTyping();
+              }}
               onKeyPress={handleKeyPress}
-              onInput={handleTyping}
               placeholder="Type a message..."
-              className="w-full px-4 py-2 bg-gray-700 text-white border border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-              disabled={loading}
+              className="flex-1 bg-gray-700 text-white border-0 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              disabled={!socketConnected}
             />
             <button
               onClick={handleSendMessage}
-              disabled={!newMessage.trim() || loading}
-              className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              role="send"
+              disabled={!newMessage.trim() || !socketConnected}
+              className={`bg-blue-600 hover:bg-blue-700 text-white px-4 rounded-r-lg flex items-center ${
+                !newMessage.trim() || !socketConnected ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
             >
-              <FaPaperPlane size={18} />
+              <FaPaperPlane />
             </button>
           </div>
-        </div>
-      )}
-      
-      {/* CSS for the typing indicator */}
-      <style>
-        {`
-        .typing-indicator {
-          display: flex;
-          align-items: center;
-        }
+        ) : (
+          <div className="bg-yellow-800 text-yellow-200 p-3 rounded-lg text-sm text-center">
+            This conversation is no longer active because the related report has been resolved.
+          </div>
+        )}
         
-        .typing-indicator span {
-          height: 8px;
-          width: 8px;
-          margin: 0 1px;
-          background-color: #9ca3af;
-          border-radius: 50%;
-          display: inline-block;
-          animation: typing 1.4s infinite ease-in-out both;
-        }
-        
-        .typing-indicator span:nth-child(1) {
-          animation-delay: 0s;
-        }
-        
-        .typing-indicator span:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-        
-        .typing-indicator span:nth-child(3) {
-          animation-delay: 0.4s;
-        }
-        
-        @keyframes typing {
-          0%, 100% {
-            transform: scale(0.7);
-            opacity: 0.5;
-          }
-          50% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        `}
-      </style>
+        {!socketConnected && (
+          <div className="text-red-400 text-xs mt-2">
+            <span className="flex items-center">
+              <span className="h-2 w-2 rounded-full bg-red-500 inline-block mr-1"></span>
+              Disconnected. Please refresh the page.
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

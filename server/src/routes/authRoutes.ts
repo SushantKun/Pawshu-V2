@@ -19,7 +19,12 @@ import {
   pingUser,
   handleBeacon,
   logoutUser,
-  handleBrowserClose
+  handleBrowserClose,
+  verifyEmail,
+  verifyEmailWithCode,
+  resendVerificationEmail,
+  requestPasswordReset,
+  resetPassword
 } from '../controllers/authController';
 import mongoose from 'mongoose';
 import { Response } from 'express';
@@ -31,6 +36,8 @@ const router = express.Router();
 router.post('/register', registerUser);
 router.post('/login', loginUser);
 router.post('/google', googleAuth);
+router.post('/reset-password-request', requestPasswordReset);
+router.post('/reset-password', resetPassword);
 
 // Protected routes
 router.get('/me', verifyToken, getCurrentUser);
@@ -52,6 +59,11 @@ router.post('/browser-closed', handleBrowserClose);
 
 // Logout
 router.post('/logout', logoutUser);
+
+// Email verification routes
+router.get('/verify-email/:token', verifyEmail);
+router.post('/verify-email-code', verifyEmailWithCode);
+router.post('/resend-verification', resendVerificationEmail);
 
 router.get('/profile', verifyToken as any, async (req: AuthRequest, res: Response) => {
   try {

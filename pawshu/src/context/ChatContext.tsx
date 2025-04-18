@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
+import io from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
@@ -73,10 +74,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (user) {
       // Initialize socket connection
-      const newSocket = io('http://localhost:5000', {
+      const newSocket = io('/', {
+        path: '/socket.io',
         auth: {
           token: localStorage.getItem('token')
-        }
+        },
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        timeout: 10000
       });
 
       newSocket.on('connect', () => {

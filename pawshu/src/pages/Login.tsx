@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import GoogleLogin from '../components/GoogleLogin';
+import axios from '../api/axios';
 
 // Flag to hide Google OAuth while troubleshooting
 const HIDE_GOOGLE_LOGIN = false;
@@ -12,6 +13,7 @@ const REMEMBERED_EMAIL_KEY = 'pawshu_remembered_email';
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const { darkMode } = useTheme();
   const [formData, setFormData] = useState({
@@ -21,6 +23,14 @@ const Login = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Check if user was redirected after verification
+  useEffect(() => {
+    if (location.state?.verified) {
+      setSuccessMessage('Your email has been verified successfully! You can now log in.');
+    }
+  }, [location.state]);
 
   // Load saved email and set remember me if it exists
   useEffect(() => {
@@ -34,22 +44,15 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+      const response = await axios.post('/auth/login', {
+        email: formData.email,
+        password: formData.password,
+        rememberMe: rememberMe
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed');
-      }
 
       // Save or remove email from local storage based on remember me
       if (rememberMe) {
@@ -59,13 +62,38 @@ const Login = () => {
       }
 
       // Log the response structure for debugging
-      console.log('Login API response:', data);
+      console.log('Login API response:', response.data);
 
       // Pass both token and user data to login function along with rememberMe setting
-      await login(data.token, data.user, rememberMe);
+      await login(response.data.token, response.data.user, rememberMe);
       navigate('/');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+    } catch (err: any) {
+      console.error('Login error:', err.response?.data);
+      
+      // Handle special cases
+      if (err.response?.status === 403) {
+        const responseData = err.response.data;
+        
+        // Email verification required
+        if (responseData.requiresVerification) {
+          setError('Your email has not been verified yet.');
+          navigate('/verify-email', { 
+            state: { 
+              email: responseData.email,
+              message: 'Please verify your email before logging in.'
+            }
+          });
+          return;
+        }
+        
+        // Google sign-in required
+        if (responseData.useGoogle) {
+          setError('This account uses Google Sign-In. Please sign in with Google instead.');
+          return;
+        }
+      }
+      
+      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -91,6 +119,11 @@ const Login = () => {
     }
   };
 
+  // Handle "Forgot Password" click
+  const handleForgotPassword = () => {
+    navigate('/reset-password', { state: { email: formData.email } });
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
@@ -109,6 +142,12 @@ const Login = () => {
         {error && (
           <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded relative" role="alert">
             <span className="block sm:inline">{error}</span>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-700 text-green-700 dark:text-green-300 px-4 py-3 rounded relative" role="alert">
+            <span className="block sm:inline">{successMessage}</span>
           </div>
         )}
         
@@ -160,9 +199,12 @@ const Login = () => {
             </div>
 
             <div className="text-sm">
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
+              <button 
+                type="button"
+                onClick={handleForgotPassword}
+                className="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300">
                 Forgot your password?
-              </a>
+              </button>
             </div>
           </div>
 

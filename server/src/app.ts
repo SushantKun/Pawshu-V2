@@ -16,11 +16,19 @@ import charityRoutes from './routes/charityRoutes';
 import chatRoutes from './routes/chatRoutes';
 import authRoutes from './routes/authRoutes';
 import jwt from 'jsonwebtoken';
-import bookingRoutes from './routes/bookingRoutes';
-import paymentRoutes from './routes/paymentRoutes';
-import docAuthRoutes from './routes/doctorAuthRoutes';
+// Comment out or remove these imports if these routes don't exist yet
+// import bookingRoutes from './routes/bookingRoutes';
+// import paymentRoutes from './routes/paymentRoutes';
+// import docAuthRoutes from './routes/doctorAuthRoutes';
 import userRoutes from './routes/userRoutes';
-import cookieParser from 'cookie-parser';
+// Comment out or remove cookie-parser if not needed
+// import cookieParser from 'cookie-parser';
+
+// Import models
+import './models/User'; // Import User model to register it
+import './models/Chat'; // Import Chat model to register it
+import './models/LostFound'; // Import LostFound model to register it
+import './models/Charity'; // Import Charity model to register it
 
 dotenv.config();
 
@@ -44,8 +52,12 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
-  }
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
+  },
+  pingTimeout: 60000, // 60 seconds timeout
+  pingInterval: 25000 // 25 seconds ping interval
 });
 
 // Custom CORS middleware to handle all HTTP methods including PATCH
@@ -77,7 +89,7 @@ app.use('/api/auth/set-offline-beacon', express.raw({ type: '*/*' }));
 // Regular middleware setup
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(cookieParser());
+// app.use(cookieParser());
 
 // Log environment status
 console.log('Environment configuration:');
@@ -102,9 +114,10 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
 app.use('/api/charities', charityRoutes);
 app.use('/api/chats', chatRoutes);
-app.use('/api/bookings', bookingRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/doctor-auth', docAuthRoutes);
+// Comment out routes that don't exist yet
+// app.use('/api/bookings', bookingRoutes);
+// app.use('/api/payments', paymentRoutes);
+// app.use('/api/doctor-auth', docAuthRoutes);
 app.use('/api/users', userRoutes);
 
 // Make uploads directory accessible
@@ -114,6 +127,16 @@ app.use('/uploads', express.static('uploads'));
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
   console.log('Socket auth token:', socket.handshake.auth.token ? 'Present' : 'Missing');
+  console.log('Socket connection origin:', socket.handshake.headers.origin);
+  console.log('Socket request URL:', socket.handshake.url);
+
+  socket.on('connect_error', (err) => {
+    console.error('Socket connection error:', err.message);
+  });
+
+  socket.on('error', (err) => {
+    console.error('Socket error:', err);
+  });
 
   // Extract user info from auth token
   const token = socket.handshake.auth.token;
@@ -131,76 +154,141 @@ io.on('connection', (socket) => {
       if (userId) {
         console.log(`User ${userId} is now online (Session: ${sessionId || 'unknown'})`);
 
-        // Only update if this is the most recent session for this user
-        if (sessionId) {
-          // Update user's online status and last active time if this is the current session
-          mongoose.connection.collection('users').updateOne(
-            { 
-              _id: new mongoose.Types.ObjectId(userId),
-              // Only update if this is the current session or no session exists
-              $or: [
-                { uniqueSessionId: sessionId },
-                { uniqueSessionId: { $exists: false } },
-                { uniqueSessionId: null }
-              ]
-            },
-            {
-              $set: {
-                isOnline: true,
-                lastActive: new Date(),
-                uniqueSessionId: sessionId // Always ensure sessionId is set
-              }
+        // ALWAYS update the user's online status immediately to ensure immediate UI feedback
+        mongoose.connection.collection('users').updateOne(
+          { _id: new mongoose.Types.ObjectId(userId) },
+          {
+            $set: {
+              isOnline: true,
+              lastActive: new Date(),
+              uniqueSessionId: sessionId || socket.id // Use sessionId if available, fall back to socket.id
             }
-          ).then(result => {
-            console.log(`User ${userId} online status update result:`, result.modifiedCount > 0 ? 'updated' : 'not updated');
-            
-            // If not updated, this is likely an old session, so don't associate it with this socket
-            if (result.modifiedCount === 0) {
-              console.log(`⚠️ Session ${sessionId} is not current for user ${userId} - not associating with socket`);
-              return;
-            }
-            
-            // Store user ID and session ID in socket data for later use
-            socket.data.userId = userId;
-            socket.data.sessionId = sessionId;
+          }
+        ).then(result => {
+          console.log(`✅ User ${userId} online status updated: ${result.modifiedCount > 0 ? 'updated' : 'already updated'}`);
+          
+          // Store user ID in socket data for later use
+          socket.data.userId = userId;
+          socket.data.sessionId = sessionId || socket.id;
 
-            // Broadcast user's online status to all connected clients
-            socket.broadcast.emit('user_status_changed', {
-              userId,
-              isOnline: true
-            });
-          }).catch(err => {
-            console.error(`Failed to update online status for user ${userId}:`, err);
+          // IMPORTANT: Always broadcast the status change event to ensure UI updates
+          io.emit('user_status_changed', {
+            userId,
+            isOnline: true,
+            lastActive: new Date()
           });
-        } else {
-          console.log(`⚠️ No session ID in token for user ${userId}`);
-        }
+          
+          // Also broadcast simpler event format for better compatibility
+          io.emit('user_connected', {
+            userId
+          });
+        }).catch(err => {
+          console.error(`❌ Failed to update online status for user ${userId}:`, err);
+        });
       } else {
         console.log('Token decoded but no userId found:', decoded);
       }
     } catch (error) {
-      console.error('Error extracting user from token:', error);
-      console.log('Token content that failed to decode:', token.substring(0, 20) + '...');
-
-      // Try to decode without verification to see payload structure
-      try {
-        const [header, payload] = token.split('.');
-        if (payload) {
-          const decodedPayload = JSON.parse(Buffer.from(payload, 'base64').toString());
-          console.log('Decoded payload (without verification):', decodedPayload);
-
-          // Attempt to extract ID even without verification (for debugging only)
-          userId = decodedPayload.id || decodedPayload._id;
-          sessionId = decodedPayload.sessionId;
-          if (userId) {
-            console.log(`Found user ID ${userId} in token payload, but verification failed`);
-          }
-        }
-      } catch (err) {
-        console.error('Could not decode token payload:', err);
-      }
+      console.error('Error handling socket connection:', error);
     }
   }
+
+  // Handle requests for list of currently online users
+  socket.on('get_online_users', async () => {
+    console.log('Client requested online users list');
+    
+    try {
+      // Get all connected sockets and their user IDs
+      const onlineUsers: string[] = [];
+      
+      // Get all connected socket IDs
+      const socketIds = await io.fetchSockets();
+      
+      // Extract user IDs from socket data
+      for (const socket of socketIds) {
+        if (socket.data.userId) {
+          onlineUsers.push(socket.data.userId);
+        }
+      }
+      
+      console.log('Sending online users list:', onlineUsers);
+      
+      // Send the list of online users to the requesting client
+      socket.emit('online_users', {
+        users: onlineUsers
+      });
+    } catch (error) {
+      console.error('Error getting online users list:', error);
+    }
+  });
+
+  // Handle request to check a specific user's online status
+  socket.on('check_user_status', async (data: { userId: string }) => {
+    try {
+      const { userId } = data;
+      console.log(`Socket request to check status for user: ${userId}`);
+      
+      if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+        console.log(`Invalid user ID in status check: ${userId}`);
+        return;
+      }
+      
+      // First check if user has an active socket connection
+      const sockets = await io.fetchSockets();
+      const isConnected = sockets.some(s => s.data.userId === userId);
+      
+      if (isConnected) {
+        console.log(`User ${userId} has active socket connection - reporting as ONLINE`);
+        socket.emit('user_status_response', {
+          userId,
+          isOnline: true
+        });
+        return;
+      }
+      
+      // If no active socket, check database
+      const user = await mongoose.connection.db.collection('users').findOne({
+        _id: new mongoose.Types.ObjectId(userId)
+      });
+      
+      if (!user) {
+        console.log(`User ${userId} not found in database`);
+        socket.emit('user_status_response', {
+          userId,
+          isOnline: false
+        });
+        return;
+      }
+      
+      // MORE LENIENT: Increase threshold for determining if a user is still online
+      const ONLINE_THRESHOLD_MS = 30000; // 30 seconds (increased from 15)
+      
+      // Check if lastActive is recent enough to consider user online
+      const now = new Date();
+      const lastActive = user.lastActive ? new Date(user.lastActive) : null;
+      const timeSinceLastActive = lastActive ? now.getTime() - lastActive.getTime() : Infinity;
+      
+      // User is considered online if flag is true OR recently active
+      const isOnline = user.isOnline === true || (lastActive && timeSinceLastActive < ONLINE_THRESHOLD_MS);
+      
+      console.log(`Database status for ${userId}: ${isOnline ? 'ONLINE' : 'OFFLINE'} (Last active: ${lastActive ? `${Math.floor(timeSinceLastActive / 1000)}s ago` : 'never'})`);
+      
+      socket.emit('user_status_response', {
+        userId,
+        isOnline,
+        lastActive: user.lastActive || null
+      });
+    } catch (error) {
+      console.error(`Error checking user status: ${error}`);
+      // Send a fallback response to avoid client waiting indefinitely
+      if (data.userId) {
+        socket.emit('user_status_response', {
+          userId: data.userId,
+          isOnline: false
+        });
+      }
+    }
+  });
 
   // Track typing status for each chat and user
   const typingUsers = new Map<string, Set<string>>();
@@ -210,24 +298,8 @@ io.on('connection', (socket) => {
     const pingUserId = data.userId || socket.data.userId;
     const pingSessionId = socket.data.sessionId;
     
-    if (pingUserId && pingSessionId) {
-      // Update user's last active time - without excessive logging
-      // Only update if this is still the current session
-      mongoose.connection.collection('users').updateOne(
-        { 
-          _id: new mongoose.Types.ObjectId(pingUserId),
-          uniqueSessionId: pingSessionId
-        },
-        {
-          $set: {
-            isOnline: true,
-            lastActive: new Date()
-          }
-        }
-      );
-    } else if (pingUserId) {
-      // For backward compatibility with clients that don't have sessionId
-      // This will be less reliable but will work for older clients
+    if (pingUserId) {
+      // Update user's last active time
       mongoose.connection.collection('users').updateOne(
         { _id: new mongoose.Types.ObjectId(pingUserId) },
         {
@@ -366,82 +438,35 @@ io.on('connection', (socket) => {
       return;
     }
     
-    console.log(`⚠️⚠️⚠️ CRITICAL: User ${disconnectedUserId} socket disconnected - marking as OFFLINE`);
+    console.log(`⚠️ User ${disconnectedUserId} socket disconnected - marking as OFFLINE`);
     
     try {
-      // First check if this is a Google user for special handling
-      const userDoc = await mongoose.connection.collection('users').findOne({ 
-        _id: new mongoose.Types.ObjectId(disconnectedUserId) 
-      });
+      // SIMPLIFIED: Just mark user as offline, no complicated session tracking
+      const db = mongoose.connection.db;
+      const usersCollection = db.collection('users');
       
-      const isGoogleUser = userDoc?.lastAuthMethod === 'google';
-      if (isGoogleUser) {
-        console.log(`⚠️⚠️⚠️ HIGHEST PRIORITY: Google user ${disconnectedUserId} socket disconnected!`);
-      }
+      const updateResult = await usersCollection.updateOne(
+        { _id: new mongoose.Types.ObjectId(disconnectedUserId) },
+        { $set: { isOnline: false, lastActive: new Date() } }
+      );
       
-      // Only update if this is still the current session ID
-      if (disconnectedSessionId && userDoc?.uniqueSessionId === disconnectedSessionId) {
-        console.log(`Verified session ${disconnectedSessionId} is current for user ${disconnectedUserId}`);
-            
-        // CRITICAL FIX: Use findOneAndUpdate with atomic operation for guaranteed success
-        const db = mongoose.connection.db;
-        const usersCollection = db.collection('users');
+      if (updateResult.modifiedCount > 0) {
+        console.log(`✅ User ${disconnectedUserId} marked as OFFLINE`);
         
-        // Use a simple, direct operation with error handling
-        const updateResult = await usersCollection.findOneAndUpdate(
-          { 
-            _id: new mongoose.Types.ObjectId(disconnectedUserId),
-            uniqueSessionId: disconnectedSessionId
-          },
-          { $set: { isOnline: false, lastActive: new Date() } },
-          { returnDocument: 'after' }
-        );
+        // Broadcast to all clients
+        io.emit('user_status_changed', {
+          userId: disconnectedUserId,
+          isOnline: false,
+          lastActive: new Date()
+        });
         
-        if (updateResult.value) {
-          console.log(`💥 SUCCESS: User ${updateResult.value.email || disconnectedUserId} marked as OFFLINE`);
-          
-          // Broadcast to all clients
-          io.emit('user_status_changed', {
-            userId: disconnectedUserId,
-            isOnline: false
-          });
-        } else {
-          console.log(`⚠️ Failed to update offline status - user ${disconnectedUserId} with session ${disconnectedSessionId} not found or not current`);
-          
-          // For Google users, try one more time with a slight delay to handle race conditions
-          if (isGoogleUser) {
-            console.log(`RETRY: Will attempt a delayed update for Google user ${disconnectedUserId}`);
-            setTimeout(async () => {
-              try {
-                const retryResult = await usersCollection.findOneAndUpdate(
-                  { 
-                    _id: new mongoose.Types.ObjectId(disconnectedUserId),
-                    uniqueSessionId: disconnectedSessionId
-                  },
-                  { $set: { isOnline: false, lastActive: new Date() } },
-                  { returnDocument: 'after' }
-                );
-                
-                if (retryResult.value) {
-                  console.log(`RETRY SUCCESS: Google user ${retryResult.value.email || disconnectedUserId} marked as OFFLINE`);
-                  
-                  // Broadcast to all clients
-                  io.emit('user_status_changed', {
-                    userId: disconnectedUserId,
-                    isOnline: false
-                  });
-                }
-              } catch (retryError) {
-                console.error(`RETRY FAILED: Google user ${disconnectedUserId} could not be marked offline`, retryError);
-              }
-            }, 500);
-          }
-        }
-      } else {
-        console.log(`Session ${disconnectedSessionId} is not current for user ${disconnectedUserId}, not marking offline`);
+        // Also broadcast simpler event format for better compatibility
+        io.emit('user_disconnected', {
+          userId: disconnectedUserId
+        });
       }
     } catch (error) {
-      console.error(`❌ CRITICAL ERROR in socket disconnect handler:`, error);
+      console.error(`❌ Error in socket disconnect handler:`, error);
     }
   });
 });
@@ -484,7 +509,8 @@ setInterval(async () => {
             // Broadcast status change to all clients
             io.emit('user_status_changed', {
               userId: user._id.toString(),
-              isOnline: false
+              isOnline: false,
+              lastActive: new Date()
             });
           }
         }
@@ -524,7 +550,8 @@ setInterval(async () => {
             for (const user of inactiveRegularUsers) {
               io.emit('user_status_changed', {
                 userId: user._id.toString(),
-                isOnline: false
+                isOnline: false,
+                lastActive: new Date()
               });
             }
           }
@@ -542,6 +569,34 @@ setInterval(async () => {
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/pawshu')
   .then(() => {
     console.log('Connected to MongoDB');
+    
+    // Check that required models are registered
+    try {
+      const registeredModels = mongoose.modelNames();
+      console.log('Registered MongoDB models:', registeredModels);
+      
+      // Verify that 'User' model is registered
+      if (registeredModels.includes('User')) {
+        console.log('✅ User model is properly registered');
+        
+        // Verify the User model schema
+        const userModel = mongoose.model('User');
+        const userSchema = userModel.schema;
+        console.log('User model fields:', Object.keys(userSchema.paths));
+        
+        // Verify if isOnline field exists
+        if (userSchema.paths.isOnline) {
+          console.log('✅ isOnline field exists in User model schema');
+        } else {
+          console.error('❌ isOnline field is missing from User model schema');
+        }
+      } else {
+        console.error('❌ User model is not registered');
+      }
+    } catch (error) {
+      console.error('Error checking model registration:', error);
+    }
+    
     const PORT = process.env.PORT || 5000;
     httpServer.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
